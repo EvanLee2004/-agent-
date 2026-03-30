@@ -8,14 +8,18 @@ This is a Python project for a financial assistant CLI application that uses LLM
 .
 ├── main.py                 # CLI 入口
 ├── core/                   # 核心基础设施
-│   └── llm.py             # LLM 调用（MiniMax）
+│   ├── llm.py             # LLM 调用
+│   └── session.py         # Session 管理（SQLite）
 ├── agents/                 # AI 角色
-│   ├── manager.py          # 经理角色（分配任务）
+│   ├── assistant.py       # 基类
+│   ├── manager.py         # 经理角色（分配任务）
 │   └── assistants/         # 具体助手
 │       ├── __init__.py
 │       ├── expense.py      # 报销助手
 │       ├── budget.py       # 预算助手
 │       └── report.py       # 报表助手
+├── sessions/              # SQLite 数据库目录
+│   └── sessions.db        # 数据库文件
 ├── requirements.txt
 └── .env
 ```

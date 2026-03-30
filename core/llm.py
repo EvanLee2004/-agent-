@@ -1,4 +1,4 @@
-"""模型交互模块，支持多种模型提供商"""
+"""LLM 调用模块，支持多种模型提供商"""
 
 import os
 from enum import Enum
@@ -9,14 +9,17 @@ load_dotenv()
 
 
 class ModelProvider(Enum):
+    """模型提供商枚举，定义支持的 LLM 提供商"""
+
     MINIMAX = "minimax"
 
 
+# 提供商配置：api_key（API密钥）、base_url（API地址）、default_model（默认模型）
 PROVIDER_CONFIG: dict[ModelProvider, dict] = {
     ModelProvider.MINIMAX: {
-        "api_key": os.getenv("MINIMAX_API_KEY"),
-        "base_url": "https://api.minimax.chat/v1",
-        "default_model": "MiniMax-M2.7",
+        "api_key": os.getenv("MINIMAX_API_KEY"),  # API 密钥
+        "base_url": "https://api.minimax.chat/v1",  # API 地址
+        "default_model": "MiniMax-M2.7",  # 默认模型
     },
 }
 
@@ -27,8 +30,7 @@ def chat(
     model: str | None = None,
     temperature: float = 0.3,
 ) -> str:
-    """
-    调用 LLM 模型进行对话
+    """调用 LLM 模型进行对话
 
     Args:
         messages: 对话消息列表，格式为 [{"role": "user", "content": "..."}]
@@ -42,6 +44,7 @@ def chat(
     config = PROVIDER_CONFIG[provider]
     model = model or config["default_model"]
 
+    # MiniMax/DeepSeek 等都兼容 OpenAI 格式
     client = OpenAI(api_key=config["api_key"], base_url=config["base_url"])
 
     response = client.chat.completions.create(
