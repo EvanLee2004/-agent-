@@ -35,7 +35,7 @@ class BaseAgent(ABC):
 
     def call_llm(self, messages: list[dict], temperature: float = 0.3) -> str:
         try:
-            return LLMClient().chat(messages, temperature)
+            return LLMClient.get_instance().chat(messages, temperature)
         except Exception as e:
             return f"LLM 调用失败: {e}"
 

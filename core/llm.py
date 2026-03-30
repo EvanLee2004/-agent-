@@ -24,6 +24,8 @@ PROVIDER_CONFIG: dict[ModelProvider, dict] = {
 
 
 class LLMClient:
+    _instance: Optional["LLMClient"] = None
+
     def __init__(
         self,
         provider: ModelProvider = ModelProvider.MINIMAX,
@@ -32,6 +34,12 @@ class LLMClient:
         config = PROVIDER_CONFIG[provider]
         self.model = model or config["default_model"]
         self.client = OpenAI(api_key=config["api_key"], base_url=config["base_url"])
+
+    @classmethod
+    def get_instance(cls) -> "LLMClient":
+        if cls._instance is None:
+            cls._instance = cls()
+        return cls._instance
 
     def chat(self, messages: list[dict], temperature: float = 0.3) -> str:
         response = self.client.chat.completions.create(
