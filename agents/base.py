@@ -1,11 +1,14 @@
 """Agent 基类，提供公共能力"""
 
+import json
 from abc import ABC, abstractmethod
+from dataclasses import asdict
 from datetime import datetime
 
 from core.llm import LLMClient
 from core.memory import read_memory, write_memory
 from core.rules import read_rules
+from core.schemas import ThoughtResult
 
 
 class BaseAgent(ABC):
@@ -19,7 +22,6 @@ class BaseAgent(ABC):
         write_memory(self.NAME, memory)
 
     def update_memory(self, experience: str) -> None:
-        """追加新经验到记忆"""
         memory = self.read_memory()
         memory["experiences"].append(
             {
@@ -56,6 +58,77 @@ class BaseAgent(ABC):
             {"role": "system", "content": system},
             {"role": "user", "content": task},
         ]
+
+    def think(self, task: str, hint: str = "") -> ThoughtResult:
+        """让 LLM 先思考任务，返回结构化分析结果
+
+        Args:
+            task: 用户输入的任务
+            hint: 额外的提示信息
+
+        Returns:
+            ThoughtResult: 包含意图、实体、推理过程的结构化结果
+        """
+        system_hint = hint or (
+            "你是一个任务分析专家。请分析用户输入，返回 JSON 格式结果。"
+            "\n\n返回格式："
+            "\n{"
+            '\n  "intent": "accounting|review|transfer|unknown",'
+            '\n  "entities": {"key": "value", ...},'
+            '\n  "reasoning": "你的分析推理过程",'
+            '\n  "confidence": 0.0-1.0'
+            "}"
+        )
+
+        messages = [
+            {"role": "system", "content": f"{self.SYSTEM_PROMPT}\n\n{system_hint}"},
+            {"role": "user", "content": f"任务：{task}\n\n请分析并返回 JSON。"},
+        ]
+
+        response = self.call_llm(messages)
+        return self._parse_thought(response)
+
+    def _parse_thought(self, raw: str) -> ThoughtResult:
+        """解析 LLM 返回的原始文本为 ThoughtResult"""
+        try:
+            start = raw.find("{")
+            end = raw.rfind("}") + 1
+            if start != -1 and end != 0:
+                data = json.loads(raw[start:end])
+                return ThoughtResult(
+                    intent=data.get("intent", "unknown"),
+                    entities=data.get("entities", {}),
+                    reasoning=data.get("reasoning", ""),
+                    confidence=data.get("confidence", 1.0),
+                )
+        except (json.JSONDecodeError, ValueError):
+            pass
+
+        return ThoughtResult(
+            intent="unknown",
+            entities={},
+            reasoning=raw,
+            confidence=0.0,
+        )
+
+    def execute(self, plan: ThoughtResult, context: dict) -> str:
+        """根据思考结果执行动作（子类实现）"""
+        raise NotImplementedError
+
+    def reflect(self, result: str, feedback: str) -> str:
+        """反思执行结果，如有反馈则尝试修正"""
+        if not feedback:
+            return result
+
+        memory = self.read_memory()
+        memory["experiences"].append(
+            {
+                "context": f"根据反馈修正: {feedback[:100]}",
+                "learned_at": datetime.now().strftime("%Y-%m-%d"),
+            }
+        )
+        self.write_memory(memory)
+        return result
 
     @abstractmethod
     def process(self, task: str) -> str:
