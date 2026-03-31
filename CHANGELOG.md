@@ -1,5 +1,86 @@
 # CHANGELOG
 
+## 2026-03-31 - Skill 系统骨架搭建（模仿 opencode）
+
+### 依据
+
+按照 opencode 的 Skill 系统规范搭建基础设施：
+- Skill = SKILL.md + scripts/
+- 通过 subprocess 调用独立脚本
+- Agent 从 Skill 加载 SYSTEM_PROMPT
+
+### 核心变更
+
+#### 新增 `core/skill_loader.py`
+- `SkillLoader.load()` - 加载 Skill，提取 SYSTEM_PROMPT
+- `SkillLoader.execute_script()` - 通过 subprocess 执行脚本
+- 支持 JSON 输出格式
+- 异常处理和超时控制
+
+#### 新增 `skills/accountant/`
+- `SKILL.md` - 元数据 + SYSTEM_PROMPT
+- `scripts/execute.py` - 记账执行脚本
+- `scripts/detect_anomaly.py` - 异常检测脚本
+- `references/` - 参考文档目录
+
+#### 新增 `skills/auditor/`
+- `SKILL.md` - 元数据 + SYSTEM_PROMPT
+- `scripts/execute.py` - 审核执行脚本
+- `references/` - 参考文档目录
+
+#### 新增 `skills/manager/`（目录结构）
+- `SKILL.md`（待完善）
+- `references/` - 参考文档目录
+
+#### 更新 `agents/accountant.py`
+- 初始化时从 Skill 加载 SYSTEM_PROMPT
+- `process()` 调用 `SkillLoader.execute_script()`
+
+#### 更新 `agents/auditor.py`
+- 初始化时从 Skill 加载 SYSTEM_PROMPT
+- `process()` 调用 `SkillLoader.execute_script()`
+
+#### 更新 `agents/base.py`
+- 添加 `handle()` 方法（之前缺失导致 main.py 调用失败）
+
+#### 更新 `clear_db.sh`
+- 添加 `rm -f memory/*.json` 清除记忆
+
+#### 新增架构文档
+- `docs/opencode-architecture.md` - OpenCode 原生架构
+- `docs/financial-assistant-architecture.md` - 我们项目的架构
+
+### 目录结构
+
+```
+skills/
+├── accountant/
+│   ├── SKILL.md
+│   ├── scripts/
+│   │   ├── __init__.py
+│   │   ├── execute.py
+│   │   └── detect_anomaly.py
+│   └── references/
+├── auditor/
+│   ├── SKILL.md
+│   ├── scripts/
+│   │   ├── __init__.py
+│   │   └── execute.py
+│   └── references/
+└── manager/
+    ├── SKILL.md
+    └── references/
+```
+
+### 下一步
+
+- [ ] 完善 Manager Skill
+- [ ] Agent 实际调用 Skill 脚本进行测试
+- [ ] 端到端测试
+- [ ] 异常处理完善
+
+---
+
 ## 2026-03-31 - 简化架构：回归自然语言交互
 
 ### 依据

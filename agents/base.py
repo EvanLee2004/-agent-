@@ -112,6 +112,19 @@ class BaseAgent(ABC):
         ]
         return self.call_llm(messages)
 
+    def handle(self, task: str) -> str:
+        """处理任务的对外接口。
+
+        内部调用 process() 方法。
+
+        Args:
+            task: 用户任务
+
+        Returns:
+            处理结果字符串
+        """
+        return self.process(task)
+
     @abstractmethod
     def process(self, task: str) -> str:
         """处理任务入口方法。

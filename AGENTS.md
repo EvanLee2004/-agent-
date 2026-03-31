@@ -12,17 +12,35 @@
 │   ├── memory.py           # 记忆读写
 │   ├── rules.py           # 规则读取
 │   ├── ledger.py           # 账目数据库
-│   └── schemas.py          # 数据结构（AuditResult）
+│   ├── schemas.py          # 数据结构（AuditResult）
+│   └── skill_loader.py     # Skill 加载器
 ├── agents/                 # AI 角色
-│   ├── base.py            # Agent 基类（极度简化）
+│   ├── base.py            # Agent 基类
 │   ├── manager.py          # 经理（意图分类 + 协调流程）
 │   ├── accountant.py       # 会计（记账执行）
 │   └── auditor.py          # 审核（审核执行）
+├── skills/                 # Skill 系统（按 opencode 规范）
+│   ├── accountant/
+│   │   ├── SKILL.md       # 元数据 + SYSTEM_PROMPT
+│   │   ├── scripts/       # 可执行脚本
+│   │   │   ├── execute.py
+│   │   │   └── detect_anomaly.py
+│   │   └── references/
+│   ├── auditor/
+│   │   ├── SKILL.md
+│   │   ├── scripts/
+│   │   │   └── execute.py
+│   │   └── references/
+│   └── manager/
+│       ├── SKILL.md
+│       └── references/
 ├── memory/                 # Agent 记忆
 ├── rules/                  # 规则手册
 ├── data/                   # 运行时数据
 ├── sessions/               # 对话历史
-├── skills/                 # Skill 区（未来扩展）
+├── docs/                   # 架构文档
+│   ├── opencode-architecture.md
+│   └── financial-assistant-architecture.md
 ├── requirements.txt
 └── .env
 ```
@@ -30,19 +48,36 @@
 ## 架构原则
 
 - **本质是提示词工程**：Agent 的行为由 SYSTEM_PROMPT 决定
-- **简单优先**：不过度设计，避免 YAGNIA
-- **自然语言交互**：LLM 返回文本而非 JSON，不强制结构化
-- **Skill 可替换**：Skill 系统可以替换 SYSTEM_PROMPT 来改变 Agent 行为
+- **Skill 系统**：模仿 opencode，Skill = SKILL.md + scripts/
+- **多 Agent 协作**：Manager 协调，Accountant/Auditor 执行
+- **自然语言交互**：LLM 返回文本而非 JSON
 
 ## Agent 职责
 
-| Agent | 职责 | 读取规则 | 持有记忆 |
-|-------|------|---------|---------|
-| Manager | 意图分类、协调流程、汇总返回 | 否 | manager.json |
-| Accountant | 记账执行、异常检测、接受反馈修正 | accounting_rules.md | accountant.json |
-| Auditor | 审核执行、问题标注 | accounting_rules.md | auditor.json |
+| Agent | 职责 | Skill | 持有记忆 |
+|-------|------|-------|---------|
+| Manager | 意图分类，协调流程 | manager | manager.json |
+| Accountant | 记账执行，异常检测 | accountant | accountant.json |
+| Auditor | 审核执行，问题标注 | auditor | auditor.json |
 
 ## 核心模块
+
+### core/skill_loader.py - Skill 加载器
+
+按 opencode 规范加载和管理 Skill：
+
+```python
+class SkillLoader:
+    @classmethod
+    def load(cls, skill_name: str) -> dict:
+        """加载 Skill，返回 system_prompt 和路径"""
+        
+    @classmethod
+    def execute_script(
+        cls, skill_name: str, script_name: str, args: list, timeout: int
+    ) -> dict:
+        """通过 subprocess 执行 Skill 脚本"""
+```
 
 ### agents/base.py - Agent 基类
 
@@ -56,50 +91,44 @@ class BaseAgent(ABC):
     def call_llm(messages, temperature) -> str
     def update_memory(experience: str) -> None
     def ask_llm(task: str, context: str = "") -> str
+    def handle(task: str) -> str  # 调用 process
     
     @abstractmethod
     def process(self, task: str) -> str
 ```
 
-**关键设计**：
-- `ask_llm()` - 构造消息并调用 LLM，自动注入记忆上下文
-- `process()` - 抽象方法，子类实现业务逻辑
-- 不再有 `think()`、`reflect()` 等硬编码方法
+### Skill 目录结构
 
-### agents/manager.py - 协调流程
-
-```python
-def process(task: str) -> str:
-    intent = _classify_intent(task)  # LLM 判断意图
-    if intent == "accounting":
-        return _handle_accounting(task)
-    elif intent == "review":
-        return _handle_review()
-    ...
-
-def _handle_accounting(task: str) -> str:
-    # 循环：Accountant 执行 → Auditor 审核 → 反思
-    # 最多 3 轮
+```
+skills/<name>/
+├── SKILL.md           # 元数据 + SYSTEM_PROMPT（必需）
+├── scripts/           # 可执行脚本
+│   ├── __init__.py
+│   ├── execute.py      # 主执行脚本
+│   └── *.py           # 其他脚本
+└── references/        # 参考文档
 ```
 
-### agents/accountant.py - 记账执行
+### SKILL.md 格式
 
-```python
-def process(task: str) -> str:
-    # 用 ask_llm() 提取记账信息
-    # 写入 ledger.db
-    # 返回记账结果
+```yaml
+---
+name: "accountant"
+description: "会计技能..."
+compatibility: "opencode"
+version: "1.0.0"
+---
 
-def reflect(feedback: str) -> None:
-    # 将反馈记录到记忆
-```
+# Accountant Skill
 
-### agents/auditor.py - 审核执行
+## SYSTEM_PROMPT
 
-```python
-def process(record: str) -> str:
-    # 用 ask_llm() 审核记账记录
-    # 返回审核结果
+你是财务会计，负责...
+
+## Capabilities
+
+- execute: 执行记账
+- detect_anomaly: 检测异常
 ```
 
 ## 工作流程
@@ -109,14 +138,14 @@ def process(record: str) -> str:
 ```
 用户输入记账任务
     ↓
-Manager.process() → _classify_intent() 意图分类（accounting）
-    ↓
-Manager._handle_accounting()
+Manager.process() → 意图分类
     ↓
 ┌─────────────────────────────────────────┐
 │  循环最多 3 轮：                         │
 │                                          │
 │  Accountant.process(task)                 │
+│      ↓  SkillLoader.execute_script()      │
+│  scripts/accountant/execute.py           │
 │      ↓                                  │
 │  Auditor.process(record)                 │
 │      ↓                                  │
@@ -124,53 +153,55 @@ Manager._handle_accounting()
 │  else → Accountant.reflect(feedback)    │
 │         修正后继续循环                   │
 └─────────────────────────────────────────┘
-    ↓
-Manager 汇总 → 返回用户
 ```
 
-### 查询流程
+### Skill 脚本调用
 
+```python
+# Agent 调用 Skill 脚本
+result = SkillLoader.execute_script(
+    "accountant",     # Skill 名称
+    "execute",       # 脚本名称
+    [task, "--json"], # 参数
+)
 ```
-用户："查看今天记账"
-    ↓
-Manager.process() → _classify_intent() 意图分类（review）
-    ↓
-Manager._handle_review() → 查询 ledger.db
-    ↓
-表格展示（异常标⚠️）
-```
 
-## 意图分类
+## Skill 系统（模仿 opencode）
 
-Manager 用 LLM 分析用户意图（自然语言判断），分为：
+### scripts/execute.py 标准格式
 
-| Intent | 说明 | 处理函数 |
-|--------|------|---------|
-| accounting | 记账请求 | _handle_accounting() |
-| review | 查询请求 | _handle_review() |
-| transfer | 转账请求 | _handle_transfer() |
-| unknown | 无法理解 | 返回错误提示 |
+```python
+#!/usr/bin/env python3
+"""Skill Execute - 功能描述"""
 
-## 账目数据库
+import argparse
+import json
+import sys
 
-```sql
-CREATE TABLE ledger (
-    id INTEGER PRIMARY KEY,
-    datetime TEXT,
-    type TEXT,              -- 收入/支出/转账
-    amount REAL,
-    description TEXT,
-    recorded_by TEXT,        -- "accountant"
-    status TEXT,             -- pending/approved/rejected
-    anomaly_flag TEXT,       -- high/medium/low
-    anomaly_reason TEXT,
-    reviewed_by TEXT
-);
+def main():
+    parser = argparse.ArgumentParser(description="功能描述")
+    parser.add_argument("task", help="任务描述")
+    parser.add_argument("--json", action="store_true", help="输出 JSON 格式")
+    args = parser.parse_args()
+    
+    result = execute(args.task)
+    
+    if args.json:
+        print(json.dumps(result, ensure_ascii=False))
+    else:
+        print(result.get("message", str(result)))
+
+def execute(task: str) -> dict:
+    """执行逻辑"""
+    return {"status": "ok", "message": "..."}
+
+if __name__ == "__main__":
+    main()
 ```
 
 ## 记忆系统
 
-每个 Agent 独立记忆 JSON 文件，记录经验而非日志。
+每个 Agent 独立记忆 JSON 文件：
 
 ```json
 {
@@ -181,28 +212,6 @@ CREATE TABLE ledger (
   ]
 }
 ```
-
-**更新时机：** Agent 收到反馈时调用 `update_memory()` 写入。
-
-## Skill 区（未来扩展）
-
-基于 Claude Code Skills 标准：
-
-```
-skills/
-├── accountant/
-│   ├── SKILL.md              # Skill 元数据 + SYSTEM_PROMPT
-│   └── skills/
-│       ├── detect_anomaly.py # 异常检测逻辑
-│       └── auto_categorize.py # 自动分类逻辑
-└── auditor/
-    ├── SKILL.md
-    └── skills/
-        ├── flag_issue.py
-        └── compliance_check.py
-```
-
-**本质**：Skill = 提示词模板（SKILL.md）+ 行为模块（skills/*.py）
 
 ## 代码规范
 
@@ -223,36 +232,27 @@ skills/
 
 ### 错误处理
 - 所有 API 调用和 I/O 操作必须包在 try/except 中
-- LLM 返回解析失败时要有降级处理
+- subprocess 执行要有超时控制
+- JSON 解析失败要有降级处理
 
 ## 扩展新 Agent
 
 1. 在 `agents/` 下创建新文件
-2. 继承 `BaseAgent`
-3. 实现 `process()` 方法
-4. 在 `memory/` 下创建对应的 `.json` 文件
+2. 在 `skills/` 下创建对应目录和 SKILL.md
+3. 实现 `execute.py` 等脚本
+4. 继承 `BaseAgent`，使用 `SkillLoader.load()`
 
 ```python
-from agents.base import BaseAgent
-
 class Analyst(BaseAgent):
     NAME = "analyst"
-    SYSTEM_PROMPT = "你是财务分析师..."
-
+    
+    def __init__(self):
+        skill = SkillLoader.load(self.NAME)
+        self.SYSTEM_PROMPT = skill["system_prompt"]
+    
     def process(self, task: str) -> str:
-        # 分析逻辑
-        return self.ask_llm(f"分析：{task}")
-```
-
-## 数据结构
-
-### AuditResult - 审核结果
-
-```python
-@dataclass
-class AuditResult:
-    passed: bool                    # 是否通过
-    comments: str                   # 审核意见
-    anomaly_flag: Optional[str]     # high / medium / low / None
-    anomaly_reason: Optional[str]    # 异常原因
+        result = SkillLoader.execute_script(
+            self.NAME, "execute", [task, "--json"]
+        )
+        return result.get("message", str(result))
 ```
