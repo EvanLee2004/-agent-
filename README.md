@@ -59,7 +59,7 @@ python main.py
 ```
 ├── agents/          # AI Agent 代码（角色）
 ├── core/            # 基础设施（LLM、数据库、记忆）
-├── skills/          # Skill 系统（能力包，按 opencode 规范）
+├── skills/          # Skill 能力包
 │   ├── coordination/  # 协调 Skill
 │   ├── accounting/    # 记账 Skill
 │   └── audit/        # 审计 Skill
@@ -119,7 +119,7 @@ python main.py
                     返回结果
 ```
 
-### Skill 系统（按 opencode 规范）
+### Skill 系统
 
 ```
 Skill = SKILL.md + scripts/*.py
@@ -148,3 +148,10 @@ LLM_API_KEY=sk-xxx
 LLM_BASE_URL=https://api.openai.com/v1
 LLM_MODEL=gpt-4
 ```
+
+## 引用
+
+本项目在设计与实现过程中参考了以下开源项目：
+
+- **opencode** - 一个 AI 编程助手框架，提供了 Skill 系统的设计思路  
+  <https://github.com/anomalyco/opencode>

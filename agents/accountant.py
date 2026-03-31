@@ -1,6 +1,6 @@
-"""会计 Agent，负责记账。
+"""Accountant Agent - 执行记账操作
 
-Accountant 是执行记账的 Agent：
+Accountant 是执行记账的 Agent，负责：
 1. 调用 Skill 获取 prompt
 2. 用 LLM 统一处理
 3. 写账本数据库
@@ -8,6 +8,8 @@ Accountant 是执行记账的 Agent：
 """
 
 import re
+from datetime import datetime
+from typing import Any, Optional
 
 from agents.base import BaseAgent
 from core.ledger import write_entry
@@ -16,25 +18,34 @@ from core.skill_loader import SkillLoader
 
 
 class Accountant(BaseAgent):
-    """会计 Agent。
+    """会计 Agent（执行者）。
 
-    职责：
-    - 根据记账请求执行记账操作
+    负责根据记账请求执行记账操作，包括：
     - 调用 Skill 脚本获取 prompt
     - 统一调 LLM 获取结果
     - 写入账本数据库
     - 根据审核反馈修正错误
 
     Attributes:
-        NAME: Agent 名称
-        SYSTEM_PROMPT: 从 Skill 加载
-        _feedback: 上次审核反馈
+        NAME: Agent 名称标识
+        SYSTEM_PROMPT: 系统提示词，从 Skill 加载
+        _feedback: 上次审核反馈，用于循环修正
+
+    Example:
+        >>> accountant = Accountant()
+        >>> result = accountant.process("报销1000元差旅费")
+        >>> print(result)
+        "[ID:1] 支出 1000.0元 - 差旅费报销"
     """
 
-    NAME = "accounting"
+    NAME: str = "accounting"
 
-    def __init__(self):
-        """初始化时从 Skill 加载 SYSTEM_PROMPT"""
+    def __init__(self) -> None:
+        """初始化 Accountant。
+
+        从 Skill 加载 SYSTEM_PROMPT，如果加载失败则使用默认提示词。
+        初始化反馈为空字符串。
+        """
         try:
             skill = SkillLoader.load(self.NAME)
             self.SYSTEM_PROMPT = skill["system_prompt"]
@@ -47,11 +58,21 @@ class Accountant(BaseAgent):
 
         调用 Skill 获取 prompt，然后用 LLM 统一处理。
 
+        工作流程：
+        1. 调用 SkillLoader.execute_script 获取 prompt
+        2. 构建 messages 调用 LLMClient.chat()
+        3. 解析 LLM 响应
+        4. 写入账本数据库
+        5. 返回格式化结果
+
         Args:
             task: 记账任务描述，如"报销1000元差旅费"
 
         Returns:
-            记账结果字符串
+            记账结果字符串，格式：
+                - 成功: "[ID:x] 类型 金额元 - 说明"
+                - 失败: "执行失败: xxx"
+                - 数据库错误: "数据库写入失败: xxx"
         """
         args = [task, "--json"]
         if self._feedback:
@@ -90,8 +111,6 @@ class Accountant(BaseAgent):
         description = parsed["description"]
         anomaly = parsed["anomaly"]
 
-        from datetime import datetime
-
         try:
             entry_id = write_entry(
                 datetime=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -114,18 +133,30 @@ class Accountant(BaseAgent):
         return msg
 
     @staticmethod
-    def _parse_accounting_response(response: str) -> dict:
-        """从 LLM 响应中解析记账信息。
+    def _parse_accounting_response(response: str) -> dict[str, Any]:
+        """从 LLM 响应文本中解析记账信息。
+
+        使用正则表达式从 LLM 返回的文本中提取金额、类型、说明，
+        并进行异常检测。
 
         Args:
-            response: LLM 返回的文本
+            response: LLM 返回的原始文本
 
         Returns:
-            解析结果字典
+            dict[str, Any]: 包含以下键的字典：
+                - status: "ok" 或 "error"
+                - amount: float | None, 金额
+                - type: str | None, 类型（收入/支出/转账）
+                - description: str | None, 说明
+                - anomaly: dict, 异常信息
+                    - flag: str | None, 异常级别
+                    - reason: str | None, 异常原因
+                - message: str, 错误信息（仅当 status="error" 时）
+                - raw_response: str, 原始响应（仅当 status="error" 时）
         """
-        amount = None
-        type_ = None
-        description = None
+        amount: Optional[float] = None
+        type_: Optional[str] = None
+        description: Optional[str] = None
 
         amount_match = re.search(r"金额[:：]?\s*(\d+(?:\.\d+)?)", response)
         if amount_match:
@@ -149,7 +180,7 @@ class Accountant(BaseAgent):
                 "raw_response": response,
             }
 
-        anomaly: dict = {"flag": None, "reason": None}
+        anomaly: dict[str, Optional[str]] = {"flag": None, "reason": None}
         if amount is not None:
             if amount < 10:
                 anomaly["flag"] = "high"
@@ -171,6 +202,9 @@ class Accountant(BaseAgent):
 
     def reflect(self, feedback: str) -> None:
         """反思审核反馈，记录到记忆并更新内部状态。
+
+        当审核不通过时，Manager 会调用此方法记录反馈，
+        下一次 process() 调用时会将反馈传递给 Skill。
 
         Args:
             feedback: 审核反馈意见

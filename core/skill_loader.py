@@ -1,9 +1,19 @@
-"""Skill 加载器，按 opencode 规范。
+"""Skill Loader Module - Loads and executes Skills per opencode specification.
 
-负责：
-1. 读取 SKILL.md 提取 SYSTEM_PROMPT
-2. 执行 scripts/*.py 脚本（通过 subprocess）
-3. 管理 Skill 的元数据
+This module implements the Skill loading mechanism for the financial
+assistant application, following opencode's convention where:
+- Each Skill resides in a dedicated directory under skills/
+- Each Skill contains a SKILL.md file with metadata and SYSTEM_PROMPT
+- Skill capabilities are exposed via executable scripts in scripts/
+
+The loader provides:
+1. Loading Skill metadata and SYSTEM_PROMPT from SKILL.md
+2. Executing Skill scripts via subprocess with isolation
+3. Supporting JSON output format for structured data exchange
+
+Example:
+    skill_info = SkillLoader.load("accounting")
+    result = SkillLoader.execute_script("accounting", "execute", ["task", "--json"])
 """
 
 import json
@@ -16,38 +26,53 @@ from typing import Any, Optional
 
 
 class SkillLoader:
-    """Skill 加载器。
+    """Skill loader and executor following opencode conventions.
 
-    按 opencode 规范加载和管理 Skill：
-    - 读取 SKILL.md 提取提示词
-    - 通过 subprocess 执行 scripts/ 下的脚本
-    - 支持 --json 输出格式
+    The SkillLoader provides a unified interface for loading Skill
+    metadata and executing Skill scripts. Each Skill operates in
+    isolation via subprocess, receiving input via CLI arguments and
+    environment variables.
 
     Attributes:
-        SKILLS_DIR: Skill 根目录路径
+        SKILLS_DIR: Root directory containing all Skill directories.
+
+    Example:
+        skill = SkillLoader.load("accounting")
+        print(skill["system_prompt"])  # Access loaded system prompt
+
+        result = SkillLoader.execute_script(
+            "accounting",
+            "execute",
+            ["reimburse 1000 travel", "--json"]
+        )
     """
 
     SKILLS_DIR = Path("skills")
 
     @classmethod
     def load(cls, skill_name: str) -> dict[str, Any]:
-        """加载指定 Skill。
+        """Load a Skill by name and extract its metadata.
+
+        Reads the SKILL.md file from the Skill directory and extracts
+        the SYSTEM_PROMPT section using regex. The SKILL.md must contain
+        a "## SYSTEM_PROMPT" section.
 
         Args:
-            skill_name: Skill 名称（对应目录名）
+            skill_name: Name of the Skill directory to load (e.g.,
+                "accounting", "audit", "coordination").
 
         Returns:
-            包含 Skill 信息的字典：
-            {
-                "name": str,
-                "path": str,
-                "system_prompt": str,
-                "scripts_dir": Path
-            }
+            Dictionary containing:
+                - name: Skill name (same as input)
+                - path: Absolute path to Skill directory
+                - system_prompt: Extracted SYSTEM_PROMPT text
+                - scripts_dir: Path to Skill's scripts directory
 
         Raises:
-            FileNotFoundError: Skill 目录或 SKILL.md 不存在
-            ValueError: SKILL.md 格式错误
+            FileNotFoundError: If the Skill directory or SKILL.md
+                does not exist.
+            ValueError: If SYSTEM_PROMPT cannot be extracted from
+                SKILL.md (missing "## SYSTEM_PROMPT" section).
         """
         skill_path = cls.SKILLS_DIR / skill_name
 
@@ -80,28 +105,36 @@ class SkillLoader:
         timeout: int = 30,
         env: Optional[dict[str, str]] = None,
     ) -> dict[str, Any]:
-        """执行 Skill 的脚本。
+        """Execute a Skill script via subprocess.
 
-        通过 subprocess 调用独立脚本，支持 JSON 输出。
+        Runs the specified script with given arguments in an isolated
+        subprocess. The script receives environment variables for
+        sensitive data (e.g., API keys). Output is parsed as JSON
+        if available, otherwise returned as plain text.
 
         Args:
-            skill_name: Skill 名称
-            script_name: 脚本名称（不含 .py）
-            args: 命令行参数列表
-            timeout: 超时时间（秒）
-            env: 传递给脚本的环境变量字典
+            skill_name: Name of the Skill containing the script.
+            script_name: Script filename without .py extension
+                (e.g., "execute", "intent").
+            args: Optional list of CLI arguments to pass to script.
+            timeout: Execution timeout in seconds. Defaults to 30.
+            env: Optional dict of environment variables to pass to
+                the subprocess. Merged with current environment.
 
         Returns:
-            执行结果字典：
-            {
-                "status": "ok" | "error",
-                "message": str,
-                "data": dict | None (可选)
-            }
+            Dictionary with execution results:
+                - status: "ok" on success, "error" on failure
+                - message: Human-readable status or error message
+                - data: Parsed JSON output (if script returned JSON)
+                - returncode: Exit code (only on error)
+
+            On success (status="ok"), one of message or data is present.
+            On error (status="error"), message describes the failure.
 
         Raises:
-            FileNotFoundError: 脚本不存在
-            subprocess.TimeoutExpired: 执行超时
+            FileNotFoundError: If the skill or script does not exist.
+            subprocess.TimeoutExpired: If script exceeds timeout
+                (caught and returned as error status).
         """
         try:
             skill_info = cls.load(skill_name)
@@ -168,10 +201,13 @@ class SkillLoader:
 
     @classmethod
     def get_skill_names(cls) -> list[str]:
-        """获取所有可用的 Skill 名称。
+        """List all available Skill names.
+
+        Scans the SKILLS_DIR for directories containing SKILL.md
+        and returns their names.
 
         Returns:
-            Skill 名称列表
+            List of Skill directory names that have a SKILL.md file.
         """
         if not cls.SKILLS_DIR.exists():
             return []
@@ -183,13 +219,17 @@ class SkillLoader:
 
     @staticmethod
     def _extract_system_prompt(skill_md: str) -> str:
-        """从 SKILL.md 提取 SYSTEM_PROMPT。
+        """Extract SYSTEM_PROMPT content from SKILL.md text.
+
+        Uses regex to find the section starting with "## SYSTEM_PROMPT"
+        and returns its content until the next section or end of file.
 
         Args:
-            skill_md: SKILL.md 文件内容
+            skill_md: Raw text content of SKILL.md file.
 
         Returns:
-            SYSTEM_PROMPT 文本，如果未找到则返回空字符串
+            The SYSTEM_PROMPT section content, stripped of whitespace.
+            Empty string if "## SYSTEM_PROMPT" section not found.
         """
         pattern = r"## SYSTEM_PROMPT\s*\n(.+?)(?=\n##|\Z)"
         match = re.search(pattern, skill_md, re.DOTALL)
