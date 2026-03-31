@@ -12,10 +12,9 @@
 │   ├── memory.py           # 记忆读写
 │   ├── rules.py           # 规则读取
 │   ├── ledger.py           # 账目数据库
-│   ├── schemas.py          # 数据结构（ThoughtResult, AuditResult）
-│   └── workflow.py         # ReAct 工作流（新增）
+│   └── schemas.py          # 数据结构（AuditResult）
 ├── agents/                 # AI 角色
-│   ├── base.py            # Agent 基类（简化后）
+│   ├── base.py            # Agent 基类（极度简化）
 │   ├── manager.py          # 经理（意图分类 + 协调流程）
 │   ├── accountant.py       # 会计（记账执行）
 │   └── auditor.py          # 审核（审核执行）
@@ -30,10 +29,10 @@
 
 ## 架构原则
 
-- **职责分离**：工作流逻辑抽离到 `core/workflow.py`
+- **本质是提示词工程**：Agent 的行为由 SYSTEM_PROMPT 决定
 - **简单优先**：不过度设计，避免 YAGNIA
-- **基础设施下沉**：`core/` 下的模块是通用能力
-- **Agent 专注业务**：每个 Agent 只实现自己的业务逻辑
+- **自然语言交互**：LLM 返回文本而非 JSON，不强制结构化
+- **Skill 可替换**：Skill 系统可以替换 SYSTEM_PROMPT 来改变 Agent 行为
 
 ## Agent 职责
 
@@ -45,45 +44,62 @@
 
 ## 核心模块
 
-### core/workflow.py - ReAct 工作流
-
-将 ReAct 循环逻辑抽离出来，实现工作流与业务逻辑的分离：
-
-```python
-class ReActWorkflow:
-    def __init__(self, agent: BaseAgent, auditor: Optional[Auditor] = None, max_rounds: int = 3)
-    def run(self, task: str, hint: str = "") -> str
-```
-
-**工作流程：**
-```
-think() → execute() → (audit) → (reflect) → 循环
-```
-
 ### agents/base.py - Agent 基类
 
-只定义接口和公共工具方法：
+极度简化，只保留核心能力：
 
 ```python
 class BaseAgent(ABC):
     NAME: str = ""
     SYSTEM_PROMPT: str = ""
     
-    # 工具方法
-    def read_memory() -> dict
-    def write_memory(memory: dict) -> None
+    def call_llm(messages, temperature) -> str
     def update_memory(experience: str) -> None
-    def read_rules(filename: str) -> str
-    def call_llm(messages: list, temperature: float) -> str
-    def build_messages(task: str, extra_context: str) -> list
+    def ask_llm(task: str, context: str = "") -> str
     
-    # ReAct 步骤
-    def think(task: str, hint: str = "") -> ThoughtResult
-    def reflect(result: str, feedback: str) -> str
-    
-    # 抽象方法
-    def execute(plan: ThoughtResult, context: dict) -> str
-    def process(task: str) -> str
+    @abstractmethod
+    def process(self, task: str) -> str
+```
+
+**关键设计**：
+- `ask_llm()` - 构造消息并调用 LLM，自动注入记忆上下文
+- `process()` - 抽象方法，子类实现业务逻辑
+- 不再有 `think()`、`reflect()` 等硬编码方法
+
+### agents/manager.py - 协调流程
+
+```python
+def process(task: str) -> str:
+    intent = _classify_intent(task)  # LLM 判断意图
+    if intent == "accounting":
+        return _handle_accounting(task)
+    elif intent == "review":
+        return _handle_review()
+    ...
+
+def _handle_accounting(task: str) -> str:
+    # 循环：Accountant 执行 → Auditor 审核 → 反思
+    # 最多 3 轮
+```
+
+### agents/accountant.py - 记账执行
+
+```python
+def process(task: str) -> str:
+    # 用 ask_llm() 提取记账信息
+    # 写入 ledger.db
+    # 返回记账结果
+
+def reflect(feedback: str) -> None:
+    # 将反馈记录到记忆
+```
+
+### agents/auditor.py - 审核执行
+
+```python
+def process(record: str) -> str:
+    # 用 ask_llm() 审核记账记录
+    # 返回审核结果
 ```
 
 ## 工作流程
@@ -93,21 +109,19 @@ class BaseAgent(ABC):
 ```
 用户输入记账任务
     ↓
-Manager.process() → think() 意图分类（accounting）
+Manager.process() → _classify_intent() 意图分类（accounting）
     ↓
 Manager._handle_accounting()
-    ↓
-ReActWorkflow.run() ← Accountant + Auditor
     ↓
 ┌─────────────────────────────────────────┐
 │  循环最多 3 轮：                         │
 │                                          │
-│  Accountant.execute(thought)             │
+│  Accountant.process(task)                 │
 │      ↓                                  │
-│  Auditor._audit(thought, {record})     │
+│  Auditor.process(record)                 │
 │      ↓                                  │
-│  if passed → 返回结果                    │
-│  else → Accountant.reflect(result, 反馈) │
+│  if 通过 → 返回结果                       │
+│  else → Accountant.reflect(feedback)    │
 │         修正后继续循环                   │
 └─────────────────────────────────────────┘
     ↓
@@ -119,18 +133,16 @@ Manager 汇总 → 返回用户
 ```
 用户："查看今天记账"
     ↓
-Manager.process() → think() 意图分类（review）
+Manager.process() → _classify_intent() 意图分类（review）
     ↓
 Manager._handle_review() → 查询 ledger.db
     ↓
 表格展示（异常标⚠️）
-    ↓
-用户指出问题 → 触发纠错
 ```
 
 ## 意图分类
 
-Manager 用 LLM 分析用户意图，分为：
+Manager 用 LLM 分析用户意图（自然语言判断），分为：
 
 | Intent | 说明 | 处理函数 |
 |--------|------|---------|
@@ -163,14 +175,14 @@ CREATE TABLE ledger (
 ```json
 {
   "agent": "accountant",
-  "last_updated": "2026-03-30",
+  "last_updated": "2026-03-31",
   "experiences": [
-    {"context": "审核反馈: 金额过大需确认", "learned_at": "2026-03-30"}
+    {"context": "审核反馈: 金额过大需确认", "learned_at": "2026-03-31"}
   ]
 }
 ```
 
-**更新时机：** Agent 收到反馈时自动调用 `update_memory()` 写入。
+**更新时机：** Agent 收到反馈时调用 `update_memory()` 写入。
 
 ## Skill 区（未来扩展）
 
@@ -178,22 +190,19 @@ CREATE TABLE ledger (
 
 ```
 skills/
-├── manager/
-│   ├── SKILL.md
-│   └── skills/
-│       ├── daily_report.py
-│       └── generate_summary.py
 ├── accountant/
-│   ├── SKILL.md
+│   ├── SKILL.md              # Skill 元数据 + SYSTEM_PROMPT
 │   └── skills/
-│       ├── detect_anomaly.py
-│       └── auto_categorize.py
+│       ├── detect_anomaly.py # 异常检测逻辑
+│       └── auto_categorize.py # 自动分类逻辑
 └── auditor/
     ├── SKILL.md
     └── skills/
         ├── flag_issue.py
         └── compliance_check.py
 ```
+
+**本质**：Skill = 提示词模板（SKILL.md）+ 行为模块（skills/*.py）
 
 ## 代码规范
 
@@ -210,7 +219,7 @@ skills/
 | 类 | PascalCase | `LLMClient` |
 | 函数/变量 | snake_case | `get_client` |
 | 常量 | UPPER_SNAKE_CASE | `LEDGER_DB` |
-| dataclass | PascalCase | `ThoughtResult` |
+| dataclass | PascalCase | `AuditResult` |
 
 ### 错误处理
 - 所有 API 调用和 I/O 操作必须包在 try/except 中
@@ -220,38 +229,22 @@ skills/
 
 1. 在 `agents/` 下创建新文件
 2. 继承 `BaseAgent`
-3. 实现 `execute()` 和 `process()` 方法
+3. 实现 `process()` 方法
 4. 在 `memory/` 下创建对应的 `.json` 文件
 
 ```python
 from agents.base import BaseAgent
-from core.schemas import ThoughtResult
 
 class Analyst(BaseAgent):
     NAME = "analyst"
     SYSTEM_PROMPT = "你是财务分析师..."
 
-    def execute(self, plan: ThoughtResult, context: dict) -> str:
-        # 分析逻辑
-        ...
-
     def process(self, task: str) -> str:
-        # 入口逻辑
-        ...
+        # 分析逻辑
+        return self.ask_llm(f"分析：{task}")
 ```
 
 ## 数据结构
-
-### ThoughtResult - LLM 思考结果
-
-```python
-@dataclass
-class ThoughtResult:
-    intent: str              # accounting / review / transfer / unknown
-    entities: dict           # 提取的实体 {"amount": 500, "type": "支出"}
-    reasoning: str           # 思考推理过程
-    confidence: float = 1.0  # 置信度
-```
 
 ### AuditResult - 审核结果
 

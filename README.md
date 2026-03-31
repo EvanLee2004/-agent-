@@ -59,7 +59,7 @@ python main.py
 
 ```
 ├── agents/          # AI Agent 代码
-├── core/            # 基础设施（LLM、数据库、记忆、工作流）
+├── core/            # 基础设施（LLM、数据库、记忆）
 ├── memory/          # Agent 记忆
 ├── rules/          # 记账规则
 └── data/           # 账目数据库
@@ -71,26 +71,37 @@ python main.py
 
 | 模块 | 职责 |
 |------|------|
-| `core/workflow.py` | ReAct 工作流循环（抽离了流程逻辑） |
 | `agents/base.py` | Agent 基类（公共工具方法） |
 | `agents/manager.py` | 意图分类 + 协调流程 |
 | `agents/accountant.py` | 记账执行 |
 | `agents/auditor.py` | 审核执行 |
 
-### ReAct 工作流
+### 设计理念
+
+**本质是提示词工程**：每个 Agent 的行为由 `SYSTEM_PROMPT` 决定，通过 `ask_llm()` 方法与 LLM 自然语言交互。
+
+### 工作流程
 
 ```
-think() → execute() → audit() → reflect() → 循环（最多3轮）
+用户输入 → Manager 意图分类 → Accountant 记账 → Auditor 审核(最多3轮)
+                                                        ↓
+                                                   通过 → 写入 ledger.db
+                                                        ↓
+                                                   Manager 汇总 → 用户
 ```
-
-Manager 协调 Accountant 和 Auditor，通过 `ReActWorkflow` 实现循环审核。
 
 ### 数据流
 
 ```
-用户 → Manager → ReActWorkflow → Accountant 记账 → Auditor 审核(3轮)
-                                            ↓
-                                       通过 → 写入 ledger.db
-                                            ↓
-                                       Manager 汇总 → 用户
+用户 → Manager.process() → _classify_intent() → 路由
+                                              ↓
+                          ┌───────────────────┼───────────────────┐
+                          ↓                   ↓                   ↓
+              _handle_accounting()   _handle_review()   _handle_transfer()
+                          ↓                   ↓
+                    Accountant ←→ Auditor   查询 ledger.db
+                          ↓
+                    写入 ledger.db
+                          ↓
+                    返回结果
 ```

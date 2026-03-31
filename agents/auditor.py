@@ -1,16 +1,16 @@
 """审核 Agent，负责审查记账结果。
 
 Auditor 是审核记账的 Agent：
-1. 用 think() 分析记账结果
-2. 用 execute() 执行审核，检查是否符合规则
+1. 用 LLM 理解记账结果
+2. 检查是否符合规则
 3. 返回审核结果
 """
 
-import json
-from typing import Optional
+import re
 
 from agents.base import BaseAgent
-from core.schemas import AuditResult, ThoughtResult
+from core.rules import read_rules
+from core.schemas import AuditResult
 
 
 class Auditor(BaseAgent):
@@ -28,139 +28,72 @@ class Auditor(BaseAgent):
 
     NAME = "auditor"
     SYSTEM_PROMPT = (
-        "你是财务审核，负责审查会计的记账结果是否符合规则。"
+        "你是财务审核，负责审查会计的记账结果是否符合规则。\n"
         "发现问题时要标注，让会计主动修改，不要直接打回。"
     )
 
     def process(self, task: str) -> str:
         """处理审核任务。
 
-        如果直接调用 process()，会走完整的流程。
+        审查记账结果，返回审核结果字符串。
 
         Args:
-            task: 待审核的记账结果
+            task: 待审核的记账记录
 
         Returns:
             审核结果字符串
         """
-        thought = self.think(task)
-        result = self._audit(thought, {})
+        rules = read_rules()
+
+        prompt = (
+            f"审查以下记账结果是否符合规则：\n{task}\n\n"
+            f"规则：\n{rules}\n\n"
+            "审查要求：\n"
+            "1. 逐条检查是否符合规则\n"
+            "2. 如发现问题，详细说明\n"
+            '3. 如无问题，说"审核通过"\n'
+            "4. 不要直接说'打回'，而是标注问题让对方主动修改\n\n"
+            "回答："
+        )
+
+        response = self.ask_llm(prompt)
+        result = self._parse_response(response)
         if result.passed:
             return "审核通过"
         return result.comments
 
-    def execute(self, plan: ThoughtResult, context: dict) -> str:
-        """执行审核（对外接口）。
+    def _parse_response(self, response: str) -> AuditResult:
+        """从 LLM 响应中解析审核结果。
 
-        根据 plan 和 context 中的记账记录进行审核。
-        返回审核结果的字符串形式。
-
-        Args:
-            plan: think() 返回的结构化思考结果
-            context: 额外上下文
-
-        Returns:
-            审核结果字符串
-        """
-        result = self._audit(plan, context)
-        if result.passed:
-            return "审核通过"
-        return result.comments
-
-    def _audit(self, plan: ThoughtResult, context: dict) -> AuditResult:
-        """执行审核（内部方法）。
-
-        根据 plan 和 context 中的记账记录进行审核。
+        用简单规则匹配判断是否通过。
 
         Args:
-            plan: think() 返回的结构化思考结果
-            context: 额外上下文
+            response: LLM 返回的文本
 
         Returns:
             AuditResult 结构化审核结果
         """
-        rules = self.read_rules()
-        record = context.get("record", "")
+        passed = False
+        comments = response
+        anomaly_flag = None
+        anomaly_reason = None
 
-        prompt = (
-            f"审查以下记账结果是否符合规则：\n{record}\n\n"
-            f"规则：\n{rules}\n\n"
-            "审查要求：\n"
-            "1. 逐条检查是否符合规则\n"
-            "2. 如发现问题，在 comments 中详细说明\n"
-            "3. 如无问题，设置 passed=true\n"
-            "4. 不要直接说'打回'，而是标注问题让对方主动修改\n\n"
-            '返回 JSON 格式：\n{"passed": true/false, '
-            '"comments": "审核意见", '
-            '"anomaly_flag": "high|medium|low|null", '
-            '"anomaly_reason": "原因"}'
+        if "通过" in response and "不" not in response:
+            passed = True
+            comments = "审核通过"
+        else:
+            passed = False
+
+            flag_match = re.search(r"(high|medium|low)", response.lower())
+            if flag_match:
+                anomaly_flag = flag_match.group(1)
+
+            if "金额过" in response or "金额大" in response:
+                anomaly_reason = "金额异常"
+
+        return AuditResult(
+            passed=passed,
+            comments=comments,
+            anomaly_flag=anomaly_flag,
+            anomaly_reason=anomaly_reason,
         )
-
-        messages = self.build_messages(prompt)
-        response = self.call_llm(messages)
-
-        return self._parse_response(response)
-
-    def think(self, task: str, hint: str = "") -> ThoughtResult:
-        """重写 think 方法，针对审核场景。
-
-        审核场景下的 think 不做意图分类，而是分析记账结果是否有问题。
-
-        Args:
-            task: 待审核的记账结果
-            hint: 额外提示
-
-        Returns:
-            ThoughtResult 结构化结果
-        """
-        system_hint = hint or (
-            "你是一个财务审核专家。分析以下记账结果，判断是否合规。"
-            "\n\n返回格式："
-            "\n{"
-            '\n  "intent": "audit",'
-            '\n  "entities": {"record": "...", "issues": []},'
-            '\n  "reasoning": "审核推理过程",'
-            '\n  "confidence": 0.0-1.0'
-            "}"
-        )
-
-        messages = [
-            {
-                "role": "system",
-                "content": f"{self.SYSTEM_PROMPT}\n\n{system_hint}",
-            },
-            {
-                "role": "user",
-                "content": f"记账结果：{task}\n\n请分析并返回 JSON。",
-            },
-        ]
-
-        response = self.call_llm(messages)
-        return self._parse_thought(response)
-
-    def _parse_response(self, raw: str) -> AuditResult:
-        """解析 LLM 返回为 AuditResult。
-
-        Args:
-            raw: LLM 返回的原始文本
-
-        Returns:
-            解析后的 AuditResult，解析失败时返回降级结果
-        """
-        try:
-            start = raw.find("{")
-            end = raw.rfind("}") + 1
-            if start != -1 and end != 0:
-                data = json.loads(raw[start:end])
-                return AuditResult(
-                    passed=data.get("passed", False),
-                    comments=data.get("comments", ""),
-                    anomaly_flag=data.get("anomaly_flag"),
-                    anomaly_reason=data.get("anomaly_reason"),
-                )
-        except (json.JSONDecodeError, ValueError):
-            pass
-
-        if "通过" in raw or "pass" in raw.lower():
-            return AuditResult(passed=True, comments="审核通过")
-        return AuditResult(passed=False, comments=raw)

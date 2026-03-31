@@ -2,19 +2,17 @@
 
 Manager 是整个系统的入口和协调者：
 1. 接收用户输入
-2. 用 think() 分析用户意图（accounting / review / transfer）
+2. 用 LLM 分析用户意图（accounting / review / transfer）
 3. 根据意图路由到不同的处理函数
-4. 使用 ReActWorkflow 协调 Accountant 和 Auditor 的工作流程
+4. 协调 Accountant 和 Auditor 的工作流程
 """
 
-from typing import Optional
+import re
 
 from agents.base import BaseAgent
 from agents.accountant import Accountant
 from agents.auditor import Auditor
 from core.ledger import get_entries, init_ledger_db
-from core.schemas import ThoughtResult
-from core.workflow import ReActWorkflow
 
 
 class Manager(BaseAgent):
@@ -40,7 +38,7 @@ class Manager(BaseAgent):
 
         工作流程：
         1. 确保账目数据库已初始化
-        2. 用 think() 让 LLM 分析用户意图
+        2. 用 LLM 分析用户意图
         3. 根据意图类型路由到不同的处理函数
 
         Args:
@@ -51,44 +49,51 @@ class Manager(BaseAgent):
         """
         init_ledger_db()
 
-        thought = self.think(
-            task,
-            hint=(
-                "分析用户的财务意图，返回 JSON：\n"
-                '{intent: "accounting"|"review"|"transfer"|"unknown", '
-                'entities: {}, reasoning: "", confidence: 0.0-1.0}'
-            ),
-        )
+        intent = self._classify_intent(task)
 
-        if thought.intent == "accounting":
-            return self._handle_accounting(task, thought)
-        elif thought.intent == "review":
-            return self._handle_review(thought)
-        elif thought.intent == "transfer":
-            return self._handle_transfer(task, thought)
+        if intent == "accounting":
+            return self._handle_accounting(task)
+        elif intent == "review":
+            return self._handle_review()
+        elif intent == "transfer":
+            return self._handle_transfer(task)
         else:
-            return f"🤔 无法理解您的意图：{thought.reasoning}"
+            return f"🤔 无法理解您的意图"
 
-    def execute(self, plan: ThoughtResult, context: dict) -> str:
-        """Manager 不执行具体动作，由 process 路由。
+    def _classify_intent(self, task: str) -> str:
+        """用 LLM 分析用户意图。
 
         Args:
-            plan: think() 结果
-            context: 上下文
+            task: 用户任务
 
         Returns:
-            不返回有用结果
+            意图类型：accounting / review / transfer / unknown
         """
-        return "请使用 process() 方法"
+        prompt = (
+            f"分析用户输入，判断意图：\n{task}\n\n"
+            "选项：\n"
+            "1. accounting - 记账相关（报销、收入、支出等）\n"
+            "2. review - 查看账目记录\n"
+            "3. transfer - 转账\n"
+            "4. unknown - 无法判断\n\n"
+            "直接回答选项编号或名称："
+        )
 
-    def _handle_accounting(
-        self,
-        task: str,
-        thought: ThoughtResult,
-    ) -> str:
+        response = self.ask_llm(prompt)
+
+        if "review" in response.lower() or "查看" in response or "记录" in response:
+            return "review"
+        elif "transfer" in response.lower() or "转账" in response:
+            return "transfer"
+        elif "accounting" in response.lower() or "记账" in response:
+            return "accounting"
+        else:
+            return "unknown"
+
+    def _handle_accounting(self, task: str) -> str:
         """处理记账请求。
 
-        使用 ReActWorkflow 协调 Accountant 和 Auditor：
+        协调 Accountant 和 Auditor：
         1. Accountant 执行记账
         2. Auditor 审核检查
         3. 如果有问题，Accountant 反思修正
@@ -96,37 +101,33 @@ class Manager(BaseAgent):
 
         Args:
             task: 原始用户任务
-            thought: think() 分析出的结构化结果
 
         Returns:
             处理结果字符串
         """
         accountant = Accountant()
         auditor = Auditor()
+        max_rounds = 3
 
-        workflow = ReActWorkflow(
-            agent=accountant,
-            auditor=auditor,
-            max_rounds=3,
-        )
+        last_result = ""
+        last_audit = ""
 
-        hint = (
-            "分析记账任务，提取：\n"
-            '{"amount": 金额, "type": "收入"|"支出"|"转账", '
-            '"description": "描述"}'
-        )
+        for _ in range(max_rounds):
+            last_result = accountant.process(task)
+            last_audit = auditor.process(last_result)
 
-        result = workflow.run(task, hint=hint)
-        return f"✅ 审核通过\n\n{result}"
+            if "通过" in last_audit:
+                return f"✅ {last_result}"
 
-    def _handle_review(self, thought: ThoughtResult) -> str:
+            accountant.reflect(last_audit)
+
+        return f"⚠️ 经过{max_rounds}轮讨论仍有问题，需人工确认\n\n审核意见：{last_audit}"
+
+    def _handle_review(self) -> str:
         """处理查询请求。
 
         从数据库读取账目记录，以表格形式展示给用户。
         异常记录会标记 ⚠️。
-
-        Args:
-            thought: think() 分析出的结果（可能包含查询条件）
 
         Returns:
             格式化的账目表格
@@ -164,24 +165,19 @@ class Manager(BaseAgent):
 
         return "\n".join(lines)
 
-    def _handle_transfer(
-        self,
-        task: str,
-        thought: ThoughtResult,
-    ) -> str:
+    def _handle_transfer(self, task: str) -> str:
         """处理转账请求。
 
         转账是一种特殊的记账（一方支出、一方收入）。
-        目前作为记账请求处理，未来可以扩展为独立逻辑。
+        目前作为记账请求处理。
 
         Args:
             task: 原始用户任务
-            thought: think() 分析出的结果
 
         Returns:
             处理结果字符串
         """
-        return self._handle_accounting(task, thought)
+        return self._handle_accounting(task)
 
 
 manager = Manager()

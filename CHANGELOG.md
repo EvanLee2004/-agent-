@@ -1,5 +1,60 @@
 # CHANGELOG
 
+## 2026-03-31 - 简化架构：回归自然语言交互
+
+### 依据
+
+**本质是提示词工程**：Agent 的行为由 SYSTEM_PROMPT 决定，不应被固定的方法名束缚。
+
+### 核心变更
+
+#### 简化 `agents/base.py`
+- 移除 `think()`、`_parse_thought()`、`reflect()` 等硬编码方法
+- 移除 `execute()`、`build_messages()`、`read_rules()` 等
+- 只保留核心方法：`call_llm()`、`update_memory()`、`ask_llm()`
+- **本质**：`ask_llm()` 就是用提示词引导 LLM 推理
+
+#### 简化 `agents/accountant.py`
+- `process(task)` 用 `ask_llm()` 直接理解任务
+- 用正则匹配代替 JSON 解析
+- 保留 `_detect_anomaly()` 异常检测逻辑
+- `reflect(feedback)` 简化为只记录记忆
+
+#### 简化 `agents/auditor.py`
+- `process(task)` 用 `ask_llm()` 直接审核
+- 用正则匹配判断是否通过
+- 移除 `_audit()` 内部方法
+
+#### 简化 `agents/manager.py`
+- `_classify_intent()` 用 `ask_llm()` 自然语言判断意图
+- 移除 `ThoughtResult` 依赖
+- `_handle_accounting()` 直接在 Manager 内循环
+
+#### 删除 `core/workflow.py`
+- 循环逻辑太简单，直接内联到 Manager
+
+#### 简化 `core/schemas.py`
+- 移除 `ThoughtResult`（不再需要）
+- 只保留 `AuditResult`
+
+### 设计理念
+
+| 之前 | 之后 |
+|------|------|
+| 强制 LLM 返回 JSON | 直接用自然语言交互 |
+| 多个固定方法（think/execute/reflect） | 一个 `ask_llm()` + 提示词模板 |
+| 复杂的工作流类 | 简单直接的循环 |
+| 结构化解析（JSON） | 简单的正则匹配 |
+
+### Skill 系统准备
+
+简化后的架构更利于 Skill 扩展：
+- Skill 的提示词模板直接替换 `SYSTEM_PROMPT`
+- Skill 的 Python 模块被 `process()` 调用
+- 不再有硬编码的方法名限制
+
+---
+
 ## 2026-03-31 - 架构重构：workflow.py 抽离
 
 ### 依据

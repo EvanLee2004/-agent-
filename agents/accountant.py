@@ -1,18 +1,17 @@
 """会计 Agent，负责记账。
 
 Accountant 是执行记账的 Agent：
-1. 用 think() 分析记账需求
-2. 用 execute() 执行记账（写入数据库）
-3. 用 reflect() 反思审核反馈，尝试自我修正
+1. 用 LLM 理解记账需求
+2. 写入数据库
+3. 记录反馈到记忆
 """
 
-import json
 from datetime import datetime
 from typing import Any, Optional
 
 from agents.base import BaseAgent
 from core.ledger import write_entry
-from core.schemas import ThoughtResult
+from core.rules import read_rules
 
 
 class Accountant(BaseAgent):
@@ -29,131 +28,103 @@ class Accountant(BaseAgent):
     """
 
     NAME = "accountant"
-    SYSTEM_PROMPT = "你是财务会计，负责根据记账守则执行记账操作。"
+    SYSTEM_PROMPT = (
+        "你是财务会计，负责根据记账守则执行记账操作。\n规则：\n" + read_rules()
+    )
 
     def process(self, task: str) -> str:
-        """处理记账任务（兼容旧接口）。
+        """处理记账任务。
 
-        如果直接调用 process()，会走完整的 think → execute 流程。
+        用 LLM 理解任务，提取记账信息，写入数据库。
 
         Args:
-            task: 记账任务描述
+            task: 记账任务描述，如"报销1000元差旅费"
 
         Returns:
             记账结果字符串
         """
-        thought = self.think(task)
-        return self.execute(thought, {})
+        rules = read_rules()
 
-    def execute(self, plan: ThoughtResult, context: dict) -> str:
-        """执行记账。
+        prompt = (
+            f"从以下任务中提取记账信息，直接回答：\n"
+            f"任务：{task}\n\n"
+            f"提取：金额（数字）、类型（收入/支出/转账）、说明\n"
+            f"规则：\n{rules}\n\n"
+            f"回答格式：金额:xxx, 类型:xxx, 说明:xxx"
+        )
 
-        根据 plan.entities 里的信息执行记账操作：
-        - 从 entities 提取金额、类型、说明
-        - 写入数据库
-        - 检测异常
+        response = self.ask_llm(prompt)
 
-        Args:
-            plan: think() 返回的结构化思考结果，包含：
-                - intent: accounting
-                - entities: {"amount": 500, "type": "支出",
-                             "description": "午餐"}
-            context: 额外上下文（当前未使用）
+        amount, type_, description = self._parse_response(response)
 
-        Returns:
-            记账结果描述字符串
-        """
-        self.read_rules()
-        entities = plan.entities
-
-        amount = entities.get("amount")
-        type_ = entities.get("type", "支出")
-        description = entities.get("description", "")
-
-        if not amount or not description:
-            amount, type_, description = self._extract_from_llm(
-                plan.reasoning or str(entities)
-            )
-
-        record_desc = f"{type_} {amount}元"
-        if description:
-            record_desc += f" - {description}"
+        if not amount or not type_:
+            return f"无法理解记账信息：{response}"
 
         anomaly = self._detect_anomaly(amount, type_ or "", description or "")
 
-        if amount and type_:
-            entry_id = write_entry(
-                datetime=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                type_=type_,
-                amount=float(amount),
-                description=description or record_desc,
-                recorded_by=self.NAME,
-                anomaly_flag=anomaly.get("flag"),
-                anomaly_reason=anomaly.get("reason"),
-            )
-            result = f"[ID:{entry_id}] {record_desc}"
-            if anomaly.get("flag"):
-                result += f" ⚠️ 异常: {anomaly['reason']}"
-            return result
+        entry_id = write_entry(
+            datetime=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            type_=type_,
+            amount=float(amount),
+            description=description or f"{type_} {amount}元",
+            recorded_by=self.NAME,
+            anomaly_flag=anomaly.get("flag"),
+            anomaly_reason=anomaly.get("reason"),
+        )
 
-        return "无法理解记账信息，请检查输入"
+        result = f"[ID:{entry_id}] {type_} {amount}元"
+        if description:
+            result += f" - {description}"
+        if anomaly.get("flag"):
+            result += f" ⚠️ 异常: {anomaly['reason']}"
 
-    def _extract_from_llm(
-        self,
-        text: str,
-    ) -> tuple[Optional[float], Optional[str], Optional[str]]:
-        """从 LLM 提取记账信息。
+        return result
+
+    def reflect(self, feedback: str) -> None:
+        """反思审核反馈，记录到记忆。
 
         Args:
-            text: 原始文本
+            feedback: 审核反馈意见
+        """
+        if feedback:
+            self.update_memory(f"审核反馈: {feedback[:200]}")
+
+    def _parse_response(
+        self,
+        response: str,
+    ) -> tuple[Optional[float], Optional[str], Optional[str]]:
+        """从 LLM 响应中解析记账信息。
+
+        用简单规则匹配，而非 JSON 解析。
+
+        Args:
+            response: LLM 返回的文本
 
         Returns:
             (amount, type_, description) 元组
         """
-        messages = self.build_messages(
-            f"从以下任务中提取记账信息（金额、类型、说明）：\n{text}",
-            extra_context=(
-                "返回 JSON 格式：\n"
-                '{"amount": 数字, "type": "收入"|"支出"|"转账", '
-                '"description": "描述"}'
-            ),
-        )
-        raw = self.call_llm(messages)
+        import re
 
-        try:
-            start = raw.find("{")
-            end = raw.rfind("}") + 1
-            if start != -1 and end != 0:
-                data = json.loads(raw[start:end])
-                return (
-                    data.get("amount"),
-                    data.get("type", "支出"),
-                    data.get("description"),
-                )
-        except (json.JSONDecodeError, ValueError):
-            pass
+        amount = None
+        type_ = None
+        description = None
 
-        return None, None, None
+        amount_match = re.search(r"金额[:：]?\s*(\d+(?:\.\d+)?)", response)
+        if amount_match:
+            amount = float(amount_match.group(1))
 
-    def reflect(self, result: str, feedback: str) -> str:
-        """反思审核反馈，尝试自我修正。
+        if "支出" in response:
+            type_ = "支出"
+        elif "收入" in response:
+            type_ = "收入"
+        elif "转账" in response:
+            type_ = "转账"
 
-        当审核发现问题时调用此方法：
-        1. 将反馈记录到记忆
-        2. 尝试理解错误原因
+        desc_match = re.search(r"说明[:：]?\s*(.+?)(?:\n|$)", response)
+        if desc_match:
+            description = desc_match.group(1).strip()
 
-        Args:
-            result: 之前的记账结果
-            feedback: 审核反馈意见
-
-        Returns:
-            修正后的结果（如果能修正），否则返回原结果
-        """
-        if not feedback:
-            return result
-
-        self.update_memory(f"审核反馈: {feedback[:200]}")
-        return result
+        return amount, type_, description
 
     def _detect_anomaly(
         self,
