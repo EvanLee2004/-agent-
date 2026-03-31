@@ -6,6 +6,8 @@ Auditor 是审核记账的 Agent：
 3. 返回审核结果
 """
 
+import os
+
 from agents.base import BaseAgent
 from core.skill_loader import SkillLoader
 
@@ -22,7 +24,7 @@ class Auditor(BaseAgent):
         SYSTEM_PROMPT: 从 Skill 加载
     """
 
-    NAME = "auditor"
+    NAME = "audit"
 
     def __init__(self):
         """初始化时从 Skill 加载 SYSTEM_PROMPT"""
@@ -44,9 +46,10 @@ class Auditor(BaseAgent):
             审核结果字符串
         """
         result = SkillLoader.execute_script(
-            self.NAME,
+            "audit",
             "execute",
             [task, "--json"],
+            env={"LLM_API_KEY": os.environ.get("LLM_API_KEY", "")},
         )
 
         if result.get("status") == "ok":

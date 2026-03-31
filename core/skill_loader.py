@@ -7,6 +7,7 @@
 """
 
 import json
+import os
 import re
 import subprocess
 import sys
@@ -77,6 +78,7 @@ class SkillLoader:
         script_name: str,
         args: Optional[list[str]] = None,
         timeout: int = 30,
+        env: Optional[dict[str, str]] = None,
     ) -> dict[str, Any]:
         """执行 Skill 的脚本。
 
@@ -87,6 +89,7 @@ class SkillLoader:
             script_name: 脚本名称（不含 .py）
             args: 命令行参数列表
             timeout: 超时时间（秒）
+            env: 传递给脚本的环境变量字典
 
         Returns:
             执行结果字典：
@@ -117,13 +120,18 @@ class SkillLoader:
         if args:
             cmd_args.extend(args)
 
+        exec_env = None
+        if env:
+            exec_env = os.environ.copy()
+            exec_env.update(env)
+
         try:
             process = subprocess.run(
                 cmd_args,
                 capture_output=True,
                 text=True,
                 timeout=timeout,
-                cwd=str(script_path.parent),
+                env=exec_env,
             )
 
             if process.returncode == 0:

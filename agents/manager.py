@@ -7,12 +7,14 @@ Manager 是整个系统的入口和协调者：
 4. 协调 Accountant 和 Auditor 的工作流程
 """
 
+import os
 import re
 
 from agents.base import BaseAgent
 from agents.accountant import Accountant
 from agents.auditor import Auditor
 from core.ledger import get_entries, init_ledger_db
+from core.skill_loader import SkillLoader
 
 
 class Manager(BaseAgent):
@@ -25,13 +27,21 @@ class Manager(BaseAgent):
 
     Attributes:
         NAME: Agent 名称
-        SYSTEM_PROMPT: 系统提示词
+        SYSTEM_PROMPT: 从 Skill 加载
     """
 
-    NAME = "manager"
-    SYSTEM_PROMPT = (
-        "你是财务部门的经理，负责理解用户意图，协调会计和审核的工作、汇总结果返回用户。"
-    )
+    NAME = "coordination"
+
+    def __init__(self):
+        """初始化时从 Skill 加载 SYSTEM_PROMPT"""
+        try:
+            skill = SkillLoader.load(self.NAME)
+            self.SYSTEM_PROMPT = skill["system_prompt"]
+        except FileNotFoundError:
+            self.SYSTEM_PROMPT = (
+                "你是财务部门的经理，负责理解用户意图，"
+                "协调会计和审核的工作、汇总结果返回用户。"
+            )
 
     def process(self, task: str) -> str:
         """处理用户任务的入口方法。
@@ -69,26 +79,17 @@ class Manager(BaseAgent):
         Returns:
             意图类型：accounting / review / transfer / unknown
         """
-        prompt = (
-            f"分析用户输入，判断意图：\n{task}\n\n"
-            "选项：\n"
-            "1. accounting - 记账相关（报销、收入、支出等）\n"
-            "2. review - 查看账目记录\n"
-            "3. transfer - 转账\n"
-            "4. unknown - 无法判断\n\n"
-            "直接回答选项编号或名称："
+        result = SkillLoader.execute_script(
+            "coordination",
+            "intent",
+            [task, "--json"],
+            env={"LLM_API_KEY": os.environ.get("LLM_API_KEY", "")},
         )
 
-        response = self.ask_llm(prompt)
+        if result.get("status") == "ok":
+            return result.get("message", "unknown")
 
-        if "review" in response.lower() or "查看" in response or "记录" in response:
-            return "review"
-        elif "transfer" in response.lower() or "转账" in response:
-            return "transfer"
-        elif "accounting" in response.lower() or "记账" in response:
-            return "accounting"
-        else:
-            return "unknown"
+        return "unknown"
 
     def _handle_accounting(self, task: str) -> str:
         """处理记账请求。

@@ -14,7 +14,6 @@ from datetime import datetime
 from pathlib import Path
 
 from core.llm import LLMClient
-from core.schemas import AuditResult
 
 
 def read_memory(agent_name: str) -> dict:

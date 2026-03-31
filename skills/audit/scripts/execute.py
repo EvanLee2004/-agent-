@@ -17,11 +17,43 @@ import json
 import os
 import re
 import sys
-from pathlib import Path
+from typing import Any
 
-sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
+from openai import OpenAI
 
-from core.rules import read_rules
+
+AUDIT_RULES = """# 记账守则
+
+## 基本原则
+
+1. 所有收支必须记录日期、金额、类型（收入/支出）、说明
+2. 发票或凭证必须妥善保存
+3. 大额支出（>5000元）需提前申请
+
+## 收入记录
+
+- 类型填写"收入"
+- 说明写明来源（如：客户付款、销售收入）
+- 金额为正数
+
+## 支出记录
+
+- 类型填写"支出"
+- 说明写明用途（如：办公用品、差旅费）
+- 金额为正数
+- 需附发票
+
+## 转账记录
+
+- 类型填写"转账"
+- 说明写明转账双方和原因
+- 金额为正数
+
+## 审批流程
+
+1. 会计初录
+2. 审核复核
+3. 通过后正式入账"""
 
 
 def parse_response(response: str) -> dict:
@@ -68,11 +100,17 @@ def execute_audit(record: str) -> dict:
     Returns:
         执行结果字典
     """
-    rules = read_rules()
+    api_key = os.environ.get("LLM_API_KEY")
+    base_url = os.environ.get("LLM_BASE_URL", "https://api.minimax.chat/v1")
+    model = os.environ.get("LLM_MODEL", "MiniMax-M2.7")
+    temperature = float(os.environ.get("LLM_TEMPERATURE", "0.3"))
+
+    if not api_key:
+        return {"status": "error", "message": "LLM_API_KEY not set"}
 
     prompt = (
         f"审查以下记账结果是否符合规则：\n{record}\n\n"
-        f"规则：\n{rules}\n\n"
+        f"规则：\n{AUDIT_RULES}\n\n"
         "审查要求：\n"
         "1. 逐条检查是否符合规则\n"
         "2. 如发现问题，详细说明\n"
@@ -81,14 +119,9 @@ def execute_audit(record: str) -> dict:
         "回答："
     )
 
-    api_key = os.environ.get("MINIMAX_API_KEY")
-    if not api_key:
-        return {"status": "error", "message": "MINIMAX_API_KEY not set"}
-
     try:
-        from core.llm import LLMClient
-
-        messages = [
+        client = OpenAI(api_key=api_key, base_url=base_url)
+        messages: list[dict[str, str]] = [
             {
                 "role": "system",
                 "content": (
@@ -99,11 +132,16 @@ def execute_audit(record: str) -> dict:
             {"role": "user", "content": prompt},
         ]
 
-        response = LLMClient.get_instance().chat(messages)
+        response = client.chat.completions.create(
+            model=model,
+            messages=messages,  # type: ignore[arg-type]
+            temperature=temperature,
+        )
+        llm_response = response.choices[0].message.content or ""
     except Exception as e:
         return {"status": "error", "message": f"LLM call failed: {str(e)}"}
 
-    result = parse_response(response)
+    result = parse_response(llm_response)
 
     return {
         "status": "ok",

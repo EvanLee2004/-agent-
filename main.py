@@ -1,5 +1,9 @@
 """财务助手 CLI"""
 
+from dotenv import load_dotenv
+
+load_dotenv()
+
 from agents.manager import manager
 
 
