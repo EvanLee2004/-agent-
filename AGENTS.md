@@ -9,30 +9,31 @@
 ├── main.py                 # CLI 入口
 ├── core/                   # 核心基础设施
 │   ├── llm.py             # LLM 调用（单例模式）
-│   ├── session.py         # 对话历史（SQLite）
-│   ├── memory.py          # 记忆读写
+│   ├── memory.py           # 记忆读写
 │   ├── rules.py           # 规则读取
-│   ├── ledger.py          # 账目数据库
-│   └── schemas.py         # 数据结构（ThoughtResult, AuditResult）
+│   ├── ledger.py           # 账目数据库
+│   ├── schemas.py          # 数据结构（ThoughtResult, AuditResult）
+│   └── workflow.py         # ReAct 工作流（新增）
 ├── agents/                 # AI 角色
-│   ├── base.py            # Agent 基类（think/execute/reflect）
-│   ├── manager.py         # 经理（意图分类 + 协调流程）
-│   ├── accountant.py      # 会计（记账执行）
-│   └── auditor.py         # 审核（审核执行）
+│   ├── base.py            # Agent 基类（简化后）
+│   ├── manager.py          # 经理（意图分类 + 协调流程）
+│   ├── accountant.py       # 会计（记账执行）
+│   └── auditor.py          # 审核（审核执行）
 ├── memory/                 # Agent 记忆
-│   ├── manager.json
-│   ├── accountant.json
-│   └── auditor.json
 ├── rules/                  # 规则手册
-│   └── accounting_rules.md
 ├── data/                   # 运行时数据
-│   └── ledger.db
 ├── sessions/               # 对话历史
-│   └── sessions.db
 ├── skills/                 # Skill 区（未来扩展）
 ├── requirements.txt
 └── .env
 ```
+
+## 架构原则
+
+- **职责分离**：工作流逻辑抽离到 `core/workflow.py`
+- **简单优先**：不过度设计，避免 YAGNIA
+- **基础设施下沉**：`core/` 下的模块是通用能力
+- **Agent 专注业务**：每个 Agent 只实现自己的业务逻辑
 
 ## Agent 职责
 
@@ -42,63 +43,68 @@
 | Accountant | 记账执行、异常检测、接受反馈修正 | accounting_rules.md | accountant.json |
 | Auditor | 审核执行、问题标注 | accounting_rules.md | auditor.json |
 
-## 核心方法（ReAct 模式）
+## 核心模块
 
-每个 Agent 继承 BaseAgent，拥有以下方法：
+### core/workflow.py - ReAct 工作流
+
+将 ReAct 循环逻辑抽离出来，实现工作流与业务逻辑的分离：
+
+```python
+class ReActWorkflow:
+    def __init__(self, agent: BaseAgent, auditor: Optional[Auditor] = None, max_rounds: int = 3)
+    def run(self, task: str, hint: str = "") -> str
+```
+
+**工作流程：**
+```
+think() → execute() → (audit) → (reflect) → 循环
+```
+
+### agents/base.py - Agent 基类
+
+只定义接口和公共工具方法：
 
 ```python
 class BaseAgent(ABC):
-    def think(self, task: str, hint: str = "") -> ThoughtResult:
-        """先思考：用 LLM 分析任务，返回结构化结果"""
-        
-    def execute(self, plan: ThoughtResult, context: dict) -> str:
-        """根据思考结果执行动作（子类实现）"""
-        
-    def reflect(self, result: str, feedback: str) -> str:
-        """反思结果，如有反馈则尝试修正"""
-```
-
-## 数据结构
-
-### ThoughtResult - LLM 思考结果
-
-```python
-@dataclass
-class ThoughtResult:
-    intent: str              # accounting / review / transfer / unknown
-    entities: dict           # 提取的实体 {"amount": 500, "type": "支出"}
-    reasoning: str           # 思考推理过程
-    confidence: float = 1.0  # 置信度
-```
-
-### AuditResult - 审核结果
-
-```python
-@dataclass
-class AuditResult:
-    passed: bool                    # 是否通过
-    comments: str                   # 审核意见
-    anomaly_flag: Optional[str]     # high / medium / low / None
-    anomaly_reason: Optional[str]    # 异常原因
+    NAME: str = ""
+    SYSTEM_PROMPT: str = ""
+    
+    # 工具方法
+    def read_memory() -> dict
+    def write_memory(memory: dict) -> None
+    def update_memory(experience: str) -> None
+    def read_rules(filename: str) -> str
+    def call_llm(messages: list, temperature: float) -> str
+    def build_messages(task: str, extra_context: str) -> list
+    
+    # ReAct 步骤
+    def think(task: str, hint: str = "") -> ThoughtResult
+    def reflect(result: str, feedback: str) -> str
+    
+    # 抽象方法
+    def execute(plan: ThoughtResult, context: dict) -> str
+    def process(task: str) -> str
 ```
 
 ## 工作流程
 
-### 记账流程（ReAct 循环）
+### 记账流程（Manager 协调）
 
 ```
 用户输入记账任务
     ↓
-Manager.think() → 意图分类（accounting）
+Manager.process() → think() 意图分类（accounting）
     ↓
-Manager 路由到 _handle_accounting()
+Manager._handle_accounting()
+    ↓
+ReActWorkflow.run() ← Accountant + Auditor
     ↓
 ┌─────────────────────────────────────────┐
 │  循环最多 3 轮：                         │
 │                                          │
 │  Accountant.execute(thought)             │
 │      ↓                                  │
-│  Auditor.execute(thought, {record})     │
+│  Auditor._audit(thought, {record})     │
 │      ↓                                  │
 │  if passed → 返回结果                    │
 │  else → Accountant.reflect(result, 反馈) │
@@ -113,7 +119,7 @@ Manager 汇总 → 返回用户
 ```
 用户："查看今天记账"
     ↓
-Manager.think() → 意图分类（review）
+Manager.process() → think() 意图分类（review）
     ↓
 Manager._handle_review() → 查询 ledger.db
     ↓
@@ -164,7 +170,7 @@ CREATE TABLE ledger (
 }
 ```
 
-**更新时机：** 对话结束后 Agent 自行决定是否写入。
+**更新时机：** Agent 收到反馈时自动调用 `update_memory()` 写入。
 
 ## Skill 区（未来扩展）
 
@@ -214,7 +220,7 @@ skills/
 
 1. 在 `agents/` 下创建新文件
 2. 继承 `BaseAgent`
-3. 实现 `execute()` 方法
+3. 实现 `execute()` 和 `process()` 方法
 4. 在 `memory/` 下创建对应的 `.json` 文件
 
 ```python
@@ -228,4 +234,32 @@ class Analyst(BaseAgent):
     def execute(self, plan: ThoughtResult, context: dict) -> str:
         # 分析逻辑
         ...
+
+    def process(self, task: str) -> str:
+        # 入口逻辑
+        ...
+```
+
+## 数据结构
+
+### ThoughtResult - LLM 思考结果
+
+```python
+@dataclass
+class ThoughtResult:
+    intent: str              # accounting / review / transfer / unknown
+    entities: dict           # 提取的实体 {"amount": 500, "type": "支出"}
+    reasoning: str           # 思考推理过程
+    confidence: float = 1.0  # 置信度
+```
+
+### AuditResult - 审核结果
+
+```python
+@dataclass
+class AuditResult:
+    passed: bool                    # 是否通过
+    comments: str                   # 审核意见
+    anomaly_flag: Optional[str]     # high / medium / low / None
+    anomaly_reason: Optional[str]    # 异常原因
 ```

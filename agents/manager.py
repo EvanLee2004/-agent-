@@ -4,7 +4,7 @@ Manager 是整个系统的入口和协调者：
 1. 接收用户输入
 2. 用 think() 分析用户意图（accounting / review / transfer）
 3. 根据意图路由到不同的处理函数
-4. 协调 Accountant 和 Auditor 的工作流程
+4. 使用 ReActWorkflow 协调 Accountant 和 Auditor 的工作流程
 """
 
 from typing import Optional
@@ -13,7 +13,8 @@ from agents.base import BaseAgent
 from agents.accountant import Accountant
 from agents.auditor import Auditor
 from core.ledger import get_entries, init_ledger_db
-from core.schemas import AuditResult, ThoughtResult
+from core.schemas import ThoughtResult
+from core.workflow import ReActWorkflow
 
 
 class Manager(BaseAgent):
@@ -68,6 +69,18 @@ class Manager(BaseAgent):
         else:
             return f"🤔 无法理解您的意图：{thought.reasoning}"
 
+    def execute(self, plan: ThoughtResult, context: dict) -> str:
+        """Manager 不执行具体动作，由 process 路由。
+
+        Args:
+            plan: think() 结果
+            context: 上下文
+
+        Returns:
+            不返回有用结果
+        """
+        return "请使用 process() 方法"
+
     def _handle_accounting(
         self,
         task: str,
@@ -75,10 +88,10 @@ class Manager(BaseAgent):
     ) -> str:
         """处理记账请求。
 
-        工作流程（最多3轮）：
+        使用 ReActWorkflow 协调 Accountant 和 Auditor：
         1. Accountant 执行记账
         2. Auditor 审核检查
-        3. 如果有问题，反馈给 Accountant 修正
+        3. 如果有问题，Accountant 反思修正
         4. 循环直到审核通过或达到最大轮数
 
         Args:
@@ -90,18 +103,21 @@ class Manager(BaseAgent):
         """
         accountant = Accountant()
         auditor = Auditor()
-        audit_result: AuditResult = AuditResult(passed=False, comments="")
 
-        for _ in range(3):
-            result = accountant.execute(thought, {})
-            audit_result = auditor._audit(thought, {"record": result})
+        workflow = ReActWorkflow(
+            agent=accountant,
+            auditor=auditor,
+            max_rounds=3,
+        )
 
-            if audit_result.passed:
-                return f"✅ 审核通过\n\n{result}"
+        hint = (
+            "分析记账任务，提取：\n"
+            '{"amount": 金额, "type": "收入"|"支出"|"转账", '
+            '"description": "描述"}'
+        )
 
-            accountant.reflect(result, audit_result.comments)
-
-        return f"⚠️ 经过3轮讨论仍有问题，需人工确认\n\n审核意见：{audit_result.comments}"
+        result = workflow.run(task, hint=hint)
+        return f"✅ 审核通过\n\n{result}"
 
     def _handle_review(self, thought: ThoughtResult) -> str:
         """处理查询请求。
@@ -168,5 +184,4 @@ class Manager(BaseAgent):
         return self._handle_accounting(task, thought)
 
 
-# 全局单例，供 main.py 直接导入使用
 manager = Manager()

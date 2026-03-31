@@ -59,7 +59,7 @@ python main.py
 
 ```
 ├── agents/          # AI Agent 代码
-├── core/            # 基础设施（LLM、数据库、记忆）
+├── core/            # 基础设施（LLM、数据库、记忆、工作流）
 ├── memory/          # Agent 记忆
 ├── rules/          # 记账规则
 └── data/           # 账目数据库
@@ -67,10 +67,30 @@ python main.py
 
 ## 架构说明
 
+### 核心模块
+
+| 模块 | 职责 |
+|------|------|
+| `core/workflow.py` | ReAct 工作流循环（抽离了流程逻辑） |
+| `agents/base.py` | Agent 基类（公共工具方法） |
+| `agents/manager.py` | 意图分类 + 协调流程 |
+| `agents/accountant.py` | 记账执行 |
+| `agents/auditor.py` | 审核执行 |
+
+### ReAct 工作流
+
 ```
-用户 → Manager → Accountant 记账 → Auditor 审核(3轮)
-                               ↓
-                          通过 → 写入 ledger.db
-                               ↓
-                          Manager 汇总 → 用户
+think() → execute() → audit() → reflect() → 循环（最多3轮）
+```
+
+Manager 协调 Accountant 和 Auditor，通过 `ReActWorkflow` 实现循环审核。
+
+### 数据流
+
+```
+用户 → Manager → ReActWorkflow → Accountant 记账 → Auditor 审核(3轮)
+                                            ↓
+                                       通过 → 写入 ledger.db
+                                            ↓
+                                       Manager 汇总 → 用户
 ```

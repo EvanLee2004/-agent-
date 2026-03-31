@@ -1,11 +1,12 @@
-"""Agent 基类，提供公共能力。
+"""Agent 基类。
 
-所有 Agent（Manager、Accountant、Auditor）都继承自此类。
-负责：
-- LLM 调用
-- 记忆管理
-- 规则读取
-- think/execute/reflect 公共方法
+职责：
+- 定义 Agent 接口（NAME, SYSTEM_PROMPT, process）
+- 提供公共工具方法（LLM调用、记忆管理、规则读取）
+
+注意：
+- ReAct 循环逻辑已抽离到 core/workflow.py
+- 各 Agent 只实现业务逻辑
 """
 
 import json
@@ -27,14 +28,6 @@ class BaseAgent(ABC):
     Attributes:
         NAME: Agent 名称标识
         SYSTEM_PROMPT: 系统提示词
-
-    Example:
-        class MyAgent(BaseAgent):
-            NAME = "my_agent"
-            SYSTEM_PROMPT = "你是 ..."
-
-            def process(self, task: str) -> str:
-                return f"处理了: {task}"
     """
 
     NAME: str = ""
@@ -63,10 +56,12 @@ class BaseAgent(ABC):
             experience: 经验描述
         """
         memory = self.read_memory()
-        memory["experiences"].append({
-            "context": experience,
-            "learned_at": datetime.now().strftime("%Y-%m-%d"),
-        })
+        memory["experiences"].append(
+            {
+                "context": experience,
+                "learned_at": datetime.now().strftime("%Y-%m-%d"),
+            }
+        )
         memory["last_updated"] = datetime.now().strftime("%Y-%m-%d")
         self.write_memory(memory)
 
@@ -136,8 +131,6 @@ class BaseAgent(ABC):
     def think(self, task: str, hint: str = "") -> ThoughtResult:
         """让 LLM 先思考任务，返回结构化分析结果。
 
-        这是 ReAct 模式的第一步：推理。
-
         Args:
             task: 用户输入的任务
             hint: 额外的提示信息，用于指导 LLM 分析
@@ -199,24 +192,9 @@ class BaseAgent(ABC):
             confidence=0.0,
         )
 
-    def execute(self, plan: ThoughtResult, context: dict) -> str:
-        """根据思考结果执行动作。
-
-        这是 ReAct 模式的第二步：执行。
-
-        Args:
-            plan: think() 返回的结构化思考结果
-            context: 执行上下文
-
-        Returns:
-            执行结果字符串
-        """
-        raise NotImplementedError
-
     def reflect(self, result: str, feedback: str) -> str:
         """反思执行结果，如有反馈则尝试修正。
 
-        这是 ReAct 模式的第三步：反思。
         将反馈记录到记忆中，供后续参考。
 
         Args:
@@ -231,6 +209,21 @@ class BaseAgent(ABC):
 
         self.update_memory(f"反馈: {feedback[:100]}")
         return result
+
+    @abstractmethod
+    def execute(self, plan: ThoughtResult, context: dict) -> str:
+        """根据思考结果执行动作。
+
+        这是 ReAct 模式的执行步骤。
+
+        Args:
+            plan: think() 返回的结构化思考结果
+            context: 执行上下文
+
+        Returns:
+            执行结果字符串
+        """
+        pass
 
     @abstractmethod
     def process(self, task: str) -> str:

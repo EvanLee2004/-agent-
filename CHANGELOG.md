@@ -1,5 +1,43 @@
 # CHANGELOG
 
+## 2026-03-31 - 架构重构：workflow.py 抽离
+
+### 依据
+
+职责分离原则：将 ReAct 循环逻辑从 Agent 抽离到 `core/workflow.py`
+
+### 核心变更
+
+#### 新增 `core/workflow.py`
+- `ReActWorkflow` 类封装循环逻辑
+- `run()` 方法：think → execute → audit → reflect 循环
+- 最多 3 轮，审核通过或达到最大轮数退出
+
+#### 简化 `agents/base.py`
+- 移除 execute/reflect 的默认实现（改为抽象方法）
+- 保留公共工具方法（call_llm, read_memory, build_messages 等）
+- BaseAgent 只负责接口定义和公共能力
+
+#### 更新 `agents/manager.py`
+- `_handle_accounting()` 使用 `ReActWorkflow` 协调流程
+- 职责更清晰：只做意图分类和路由
+
+### 架构对比
+
+| 之前 | 之后 |
+|------|------|
+| BaseAgent 包含 think/execute/reflect | BaseAgent 只定义接口 |
+| Agent 内部管理 ReAct 循环 | ReActWorkflow 统一管理循环 |
+| 职责不清 | 单一职责原则 |
+
+### 下一步
+
+- [ ] 实现 Skills 插件系统
+- [ ] 单元测试
+- [ ] 端到端测试
+
+---
+
 ## 2026-03-31 - 代码规范重构
 
 ### 依据
