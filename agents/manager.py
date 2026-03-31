@@ -8,7 +8,6 @@ Manager 是整个系统的入口和协调者：
 """
 
 import os
-import re
 
 from agents.base import BaseAgent
 from agents.accountant import Accountant
