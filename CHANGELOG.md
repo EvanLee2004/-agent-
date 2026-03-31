@@ -1,4 +1,39 @@
-# CHANGELOG - 架构重构
+# CHANGELOG
+
+## 2026-03-31 - 代码规范重构
+
+### 依据
+
+按照 [Google Python Style Guide](https://google.github.io/styleguide/pyguide.html) 重构代码。
+
+### 改动
+
+#### `core/schemas.py`
+- 完善 docstrings，添加 Attributes 说明
+- 保持现有数据结构不变
+
+#### `agents/base.py`
+- 完善所有函数的 docstrings
+- 修正类型注解（`list[dict[str, str]]` 等）
+- 改进注释格式
+
+#### `agents/manager.py`
+- 完善 docstrings
+- 行长度控制在 80 字符内
+- 移除无用的 `current_task` 变量
+
+#### `agents/accountant.py`
+- 完善 docstrings
+- 将 `import json` 移到文件顶部
+- 提取 `_extract_from_llm()` 辅助方法
+- 行长度控制在 80 字符内
+
+#### `agents/auditor.py`
+- 统一 `execute()` 返回类型为 `str`（兼容基类）
+- 新增 `_audit()` 内部方法返回 `AuditResult`
+- 完善 docstrings
+
+---
 
 ## 2026-03-30 - ReAct 架构改造
 
