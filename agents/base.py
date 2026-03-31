@@ -63,12 +63,10 @@ class BaseAgent(ABC):
             experience: 经验描述
         """
         memory = self.read_memory()
-        memory["experiences"].append(
-            {
-                "context": experience,
-                "learned_at": datetime.now().strftime("%Y-%m-%d"),
-            }
-        )
+        memory["experiences"].append({
+            "context": experience,
+            "learned_at": datetime.now().strftime("%Y-%m-%d"),
+        })
         memory["last_updated"] = datetime.now().strftime("%Y-%m-%d")
         self.write_memory(memory)
 
