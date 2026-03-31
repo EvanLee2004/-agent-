@@ -1,5 +1,45 @@
 # CHANGELOG
 
+## 2026-04-01 - LLM 调用中心化重构（学 opencode）
+
+### 依据
+
+参考 opencode 的架构，LLM 调用应该中心化，Skill 只返回 prompt 数据。
+
+### 核心变更
+
+#### Skill 脚本改为只返回 prompt
+
+Skill 脚本不再调用 LLM，只返回结构化 prompt 数据：
+
+- `skills/coordination/scripts/intent.py` - 返回 `{"system", "prompt"}`
+- `skills/accounting/scripts/execute.py` - 返回 `{"system", "prompt", "task", "feedback"}`
+- `skills/audit/scripts/execute.py` - 返回 `{"system", "prompt", "record"}`
+
+#### Agent 层统一调 LLM
+
+Agent 负责调用 LLM：
+
+- `agents/manager.py` - `_classify_intent()` 调 LLM
+- `agents/accountant.py` - `process()` 调 LLM
+- `agents/auditor.py` - `process()` 调 LLM
+
+#### SkillLoader 返回格式统一
+
+`SkillLoader.execute_script()` 返回：
+- `{"status": "ok", "data": {...}}` - 脚本返回 dict
+- `{"status": "ok", "message": str}` - 脚本返回 string
+
+### 架构变化
+
+| 方面 | 之前 | 现在 |
+|------|------|------|
+| LLM 调用 | Skill 各自调 | Agent 统一调 |
+| Skill 职责 | 调 LLM + 返回结果 | 只返回 prompt |
+| LLM 入口 | 分散 | **唯一**：LLMClient.chat() |
+
+---
+
 ## 2026-04-01 - Skill 系统独立化重构（按 opencode 规范）
 
 ### 依据
@@ -18,10 +58,10 @@ Skill 脚本应该完全独立，不依赖 core/ 模块。参考 opencode 的 Sk
 
 #### Skill 脚本独立化
 
-所有 Skill 脚本不再依赖 core/ 模块，只使用标准库 + openai SDK：
+所有 Skill 脚本不再依赖 core/ 模块，只使用标准库：
 
-- `skills/accounting/scripts/execute.py` - 规则内联，LLM 直调
-- `skills/audit/scripts/execute.py` - 规则内联，LLM 直调
+- `skills/accounting/scripts/execute.py` - 规则内联
+- `skills/audit/scripts/execute.py` - 规则内联
 - `skills/coordination/scripts/intent.py` - LLM 直调
 
 #### SkillLoader 支持环境变量

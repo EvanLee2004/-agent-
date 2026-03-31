@@ -7,12 +7,11 @@ Manager 是整个系统的入口和协调者：
 4. 协调 Accountant 和 Auditor 的工作流程
 """
 
-import os
-
 from agents.base import BaseAgent
 from agents.accountant import Accountant
 from agents.auditor import Auditor
 from core.ledger import get_entries, init_ledger_db
+from core.llm import LLMClient
 from core.skill_loader import SkillLoader
 
 
@@ -67,7 +66,7 @@ class Manager(BaseAgent):
         elif intent == "transfer":
             return self._handle_transfer(task)
         else:
-            return f"🤔 无法理解您的意图"
+            return "🤔 无法理解您的意图"
 
     def _classify_intent(self, task: str) -> str:
         """用 LLM 分析用户意图。
@@ -82,13 +81,53 @@ class Manager(BaseAgent):
             "coordination",
             "intent",
             [task, "--json"],
-            env={"LLM_API_KEY": os.environ.get("LLM_API_KEY", "")},
         )
 
-        if result.get("status") == "ok":
-            return result.get("message", "unknown")
+        if result.get("status") != "ok":
+            return "unknown"
 
-        return "unknown"
+        data = result.get("data")
+        if not data:
+            return "unknown"
+
+        messages = [
+            {"role": "system", "content": data.get("system", "")},
+            {"role": "user", "content": data.get("prompt", "")},
+        ]
+
+        try:
+            response = LLMClient.get_instance().chat(messages)
+        except Exception:
+            return "unknown"
+
+        return self._parse_intent_response(response)
+
+    @staticmethod
+    def _parse_intent_response(response: str) -> str:
+        """从 LLM 响应中解析意图。
+
+        Args:
+            response: LLM 返回的文本
+
+        Returns:
+            意图类型
+        """
+        response_lower = response.lower().strip()
+        response_num = response_lower.split(".")[0].strip()
+
+        if response_num == "2":
+            return "review"
+        elif response_num == "3":
+            return "transfer"
+        elif (
+            response_num == "1"
+            or "accounting" in response_lower
+            or "记账" in response
+            or "报销" in response
+        ):
+            return "accounting"
+        else:
+            return "unknown"
 
     def _handle_accounting(self, task: str) -> str:
         """处理记账请求。

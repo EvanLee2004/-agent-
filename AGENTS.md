@@ -49,14 +49,15 @@
 - **Skill 系统**：模仿 opencode，Skill = SKILL.md + scripts/
 - **多 Agent 协作**：Manager 协调，Accountant/Auditor 执行
 - **自然语言交互**：LLM 返回文本而非 JSON
-- **Skill 独立化**：Skill 脚本不依赖 core/，只用标准库 + openai SDK
+- **Skill 独立化**：Skill 脚本不依赖 core/，只用标准库
+- **LLM 中心化**：Agent 统一调 LLM，Skill 只返回 prompt 数据
 
 ## Agent vs Skill
 
 | 概念 | 说明 |
 |------|------|
-| Agent（角色） | 在 `agents/` 目录，负责业务逻辑（写库、流程控制） |
-| Skill（能力包） | 在 `skills/` 目录，被 Agent 调用，负责纯计算（LLM 调用、规则检查） |
+| Agent（角色） | 在 `agents/` 目录，负责业务逻辑（写库、流程控制、调用 LLM） |
+| Skill（能力包） | 在 `skills/` 目录，被 Agent 调用，负责纯计算（返回 prompt 数据） |
 
 ## Agent 职责
 
@@ -166,20 +167,26 @@ Manager._classify_intent()
 ### Skill 脚本调用
 
 ```python
-# Agent 调用 Skill 脚本
+# Agent 调用 Skill 脚本，获取 prompt 数据
 result = SkillLoader.execute_script(
-    "accounting",    # Skill 名称
+    "accounting",     # Skill 名称
     "execute",       # 脚本名称
     [task, "--json"], # 参数
-    env={"LLM_API_KEY": os.environ.get("LLM_API_KEY", "")},
 )
+
+# Agent 统一调 LLM
+messages = [
+    {"role": "system", "content": result["data"]["system"]},
+    {"role": "user", "content": result["data"]["prompt"]},
+]
+response = LLMClient.get_instance().chat(messages)
 ```
 
 ## Skill 系统（模仿 opencode）
 
 ### Skill 脚本独立性
 
-**关键原则**：Skill 脚本完全独立，不依赖 core/ 模块
+**关键原则**：Skill 脚本完全独立，不依赖 core/ 模块，只返回 prompt 数据
 
 ```python
 #!/usr/bin/env python3
@@ -187,27 +194,18 @@ result = SkillLoader.execute_script(
 
 import argparse
 import json
-import os
 
-from openai import OpenAI  # 只需 openai SDK
+SYSTEM_PROMPT = "你是记账专家，负责..."
+PROMPT_TEMPLATE = "从以下任务中提取记账信息：{task}..."
 
-# 规则内联，不依赖外部文件
-ACCOUNTING_RULES = """
-# 记账守则
-...
-"""
-
-def execute_accounting(task: str, feedback: str = "") -> dict:
-    # 从环境变量读取配置
-    api_key = os.environ.get("LLM_API_KEY")
-    base_url = os.environ.get("LLM_BASE_URL", "https://api.minimax.chat/v1")
-    model = os.environ.get("LLM_MODEL", "MiniMax-M2.7")
-
-    # 直接调用 LLM
-    client = OpenAI(api_key=api_key, base_url=base_url)
-    response = client.chat.completions.create(model=model, messages=[...])
-
-    return {"status": "ok", "message": "...", "data": {...}}
+def build_prompt(task: str, feedback: str = "") -> dict:
+    # 只返回 prompt 数据，不调 LLM
+    return {
+        "system": SYSTEM_PROMPT,
+        "prompt": PROMPT_TEMPLATE.format(task=task),
+        "task": task,
+        "feedback": feedback,
+    }
 
 def main():
     parser = argparse.ArgumentParser()
@@ -216,7 +214,7 @@ def main():
     parser.add_argument("--feedback", "-f", default="")
     args = parser.parse_args()
 
-    result = execute_accounting(args.task, args.feedback)
+    result = build_prompt(args.task, args.feedback)
 
     if args.json:
         print(json.dumps(result, ensure_ascii=False))

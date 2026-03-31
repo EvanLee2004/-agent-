@@ -74,8 +74,8 @@ python main.py
 
 | 概念 | 说明 |
 |------|------|
-| Agent（角色） | 在 `agents/`，负责业务逻辑（写库、流程控制） |
-| Skill（能力包） | 在 `skills/`，被 Agent 调用，负责纯计算（LLM 调用、规则检查） |
+| Agent（角色） | 在 `agents/`，负责业务逻辑（写库、流程控制、调用 LLM） |
+| Skill（能力包） | 在 `skills/`，被 Agent 调用，负责纯计算（返回 prompt 数据） |
 
 ### 核心模块
 

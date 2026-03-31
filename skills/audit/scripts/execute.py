@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Auditor Execute - 执行审核操作
+"""Audit Execute - 执行审核操作
 
 Usage:
     python execute.py <record> [--json]
@@ -9,17 +9,13 @@ Examples:
     python execute.py "[ID:2] 支出 999999元 - 备用金" --json
 
 Author: 财务助手
-Version: 1.0.0
+Version: 2.0.0
 """
 
 import argparse
 import json
-import os
 import re
 import sys
-from typing import Any
-
-from openai import OpenAI
 
 
 AUDIT_RULES = """# 记账守则
@@ -54,6 +50,23 @@ AUDIT_RULES = """# 记账守则
 1. 会计初录
 2. 审核复核
 3. 通过后正式入账"""
+
+SYSTEM_PROMPT = """你是财务审核，负责审查会计的记账结果是否符合规则。
+发现问题时要标注，让会计主动修改，不要直接打回。"""
+
+PROMPT_TEMPLATE = """审查以下记账结果是否符合规则：
+{record}
+
+规则：
+{AUDIT_RULES}
+
+审查要求：
+1. 逐条检查是否符合规则
+2. 如发现问题，详细说明
+3. 如无问题，说"审核通过"
+4. 不要直接说'打回'，而是标注问题让对方主动修改
+
+回答："""
 
 
 def parse_response(response: str) -> dict:
@@ -91,56 +104,32 @@ def parse_response(response: str) -> dict:
     }
 
 
-def execute_audit(record: str) -> dict:
-    """执行审核操作。
+def build_prompt(record: str) -> dict:
+    """构建审核的 prompt 数据。
 
     Args:
         record: 记账记录
 
     Returns:
-        执行结果字典
+        包含 system 和 prompt 的字典
     """
-    api_key = os.environ.get("LLM_API_KEY")
-    base_url = os.environ.get("LLM_BASE_URL", "https://api.minimax.chat/v1")
-    model = os.environ.get("LLM_MODEL", "MiniMax-M2.7")
-    temperature = float(os.environ.get("LLM_TEMPERATURE", "0.3"))
+    return {
+        "system": SYSTEM_PROMPT,
+        "prompt": PROMPT_TEMPLATE.format(record=record, AUDIT_RULES=AUDIT_RULES),
+        "record": record,
+    }
 
-    if not api_key:
-        return {"status": "error", "message": "LLM_API_KEY not set"}
 
-    prompt = (
-        f"审查以下记账结果是否符合规则：\n{record}\n\n"
-        f"规则：\n{AUDIT_RULES}\n\n"
-        "审查要求：\n"
-        "1. 逐条检查是否符合规则\n"
-        "2. 如发现问题，详细说明\n"
-        '3. 如无问题，说"审核通过"\n'
-        "4. 不要直接说'打回'，而是标注问题让对方主动修改\n\n"
-        "回答："
-    )
+def parse_and_build_result(record: str, llm_response: str) -> dict:
+    """解析 LLM 响应并构建结果。
 
-    try:
-        client = OpenAI(api_key=api_key, base_url=base_url)
-        messages: list[dict[str, str]] = [
-            {
-                "role": "system",
-                "content": (
-                    "你是财务审核，负责审查会计的记账结果是否符合规则。\n"
-                    "发现问题时要标注，让会计主动修改，不要直接打回。"
-                ),
-            },
-            {"role": "user", "content": prompt},
-        ]
+    Args:
+        record: 原始记录
+        llm_response: LLM 返回的文本
 
-        response = client.chat.completions.create(
-            model=model,
-            messages=messages,  # type: ignore[arg-type]
-            temperature=temperature,
-        )
-        llm_response = response.choices[0].message.content or ""
-    except Exception as e:
-        return {"status": "error", "message": f"LLM call failed: {str(e)}"}
-
+    Returns:
+        审核结果字典
+    """
     result = parse_response(llm_response)
 
     return {
@@ -149,6 +138,7 @@ def execute_audit(record: str) -> dict:
         "message": result["comments"],
         "anomaly_flag": result["anomaly_flag"],
         "anomaly_reason": result["anomaly_reason"],
+        "record": record,
     }
 
 
@@ -158,16 +148,12 @@ def main():
     parser.add_argument("--json", action="store_true", help="输出 JSON 格式")
     args = parser.parse_args()
 
-    result = execute_audit(args.record)
+    result = build_prompt(args.record)
 
     if args.json:
         print(json.dumps(result, ensure_ascii=False))
     else:
-        if result.get("status") == "ok":
-            print(result.get("message"))
-        else:
-            print(f"错误: {result.get('message')}", file=sys.stderr)
-            sys.exit(1)
+        print(result["prompt"])
 
 
 if __name__ == "__main__":

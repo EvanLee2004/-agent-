@@ -139,6 +139,9 @@ class SkillLoader:
                     output = json.loads(process.stdout)
                     if isinstance(output, str):
                         output = {"status": "ok", "message": output}
+                    elif isinstance(output, dict):
+                        if "status" not in output:
+                            output = {"status": "ok", "data": output}
                 except json.JSONDecodeError:
                     output = {
                         "status": "ok",

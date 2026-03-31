@@ -1,14 +1,15 @@
 """审核 Agent，负责审查记账结果。
 
 Auditor 是审核记账的 Agent：
-1. 用 Skill 理解记账结果
-2. 调用 Skill 脚本执行审核
+1. 调用 Skill 获取 prompt
+2. 用 LLM 统一处理
 3. 返回审核结果
 """
 
-import os
+import re
 
 from agents.base import BaseAgent
+from core.llm import LLMClient
 from core.skill_loader import SkillLoader
 
 
@@ -37,7 +38,7 @@ class Auditor(BaseAgent):
     def process(self, task: str) -> str:
         """处理审核任务。
 
-        调用 Skill 脚本执行审核。
+        调用 Skill 获取 prompt，然后用 LLM 统一处理。
 
         Args:
             task: 待审核的记账记录
@@ -49,10 +50,38 @@ class Auditor(BaseAgent):
             "audit",
             "execute",
             [task, "--json"],
-            env={"LLM_API_KEY": os.environ.get("LLM_API_KEY", "")},
         )
 
-        if result.get("status") == "ok":
-            return result.get("message", str(result))
+        if result.get("status") != "ok":
+            return f"审核失败: {result.get('message')}"
 
-        return f"审核失败: {result.get('message')}"
+        data = result.get("data")
+        if not data:
+            return f"审核失败: {result.get('message')}"
+
+        messages = [
+            {"role": "system", "content": data.get("system", "")},
+            {"role": "user", "content": data.get("prompt", "")},
+        ]
+
+        try:
+            llm_response = LLMClient.get_instance().chat(messages)
+        except Exception as e:
+            return f"LLM 调用失败: {str(e)}"
+
+        return self._parse_audit_response(llm_response)
+
+    @staticmethod
+    def _parse_audit_response(response: str) -> str:
+        """从 LLM 响应中解析审核结果。
+
+        Args:
+            response: LLM 返回的文本
+
+        Returns:
+            审核结果字符串
+        """
+        if "通过" in response and "不" not in response:
+            return "审核通过"
+
+        return response

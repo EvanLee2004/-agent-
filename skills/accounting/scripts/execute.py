@@ -1,26 +1,24 @@
 #!/usr/bin/env python3
-"""Accountant Execute - 执行记账操作
+"""Accounting Execute - 执行记账操作
 
 Usage:
-    python execute.py <task> [--json]
+    python execute.py <task> [--json] [--feedback]
 
 Examples:
     python execute.py "报销1000元差旅费"
     python execute.py "收到货款5000元" --json
+    python execute.py "报销500元" --feedback "金额过小"
 
 Author: 财务助手
-Version: 1.0.0
+Version: 2.0.0
 """
 
 import argparse
 import json
-import os
 import re
 import sys
 from datetime import datetime
-from typing import Any, Optional
-
-from openai import OpenAI
+from typing import Optional
 
 
 ACCOUNTING_RULES = """# 记账守则
@@ -55,6 +53,19 @@ ACCOUNTING_RULES = """# 记账守则
 1. 会计初录
 2. 审核复核
 3. 通过后正式入账"""
+
+SYSTEM_PROMPT = f"""你是财务会计，负责根据记账守则执行记账操作。
+规则：
+{ACCOUNTING_RULES}"""
+
+PROMPT_TEMPLATE = """从以下任务中提取记账信息，直接回答：
+任务：{task}
+
+提取：金额（数字）、类型（收入/支出/转账）、说明{correction}
+规则：
+{ACCOUNTING_RULES}
+
+回答格式：金额:xxx, 类型:xxx, 说明:xxx"""
 
 
 def detect_anomaly(
@@ -126,24 +137,16 @@ def parse_response(response: str) -> tuple:
     return amount, type_, description
 
 
-def execute_accounting(task: str, feedback: str = "") -> dict:
-    """执行记账操作。
+def build_prompt(task: str, feedback: str = "") -> dict:
+    """构建记账的 prompt 数据。
 
     Args:
         task: 记账任务描述
         feedback: 可选的审核反馈，用于修正错误
 
     Returns:
-        执行结果字典（包含记账数据，Agent 层负责写入数据库）
+        包含 system 和 prompt 的字典
     """
-    api_key = os.environ.get("LLM_API_KEY")
-    base_url = os.environ.get("LLM_BASE_URL", "https://api.minimax.chat/v1")
-    model = os.environ.get("LLM_MODEL", "MiniMax-M2.7")
-    temperature = float(os.environ.get("LLM_TEMPERATURE", "0.3"))
-
-    if not api_key:
-        return {"status": "error", "message": "LLM_API_KEY not set"}
-
     correction = ""
     if feedback:
         correction = f"\n\n重要：请根据以下审核反馈修正记账信息：\n{feedback}"
@@ -156,25 +159,25 @@ def execute_accounting(task: str, feedback: str = "") -> dict:
         f"回答格式：金额:xxx, 类型:xxx, 说明:xxx"
     )
 
-    try:
-        client = OpenAI(api_key=api_key, base_url=base_url)
-        messages = [
-            {
-                "role": "system",
-                "content": f"你是财务会计，负责根据记账守则执行记账操作。\n规则：\n{ACCOUNTING_RULES}",
-            },
-            {"role": "user", "content": prompt},
-        ]
+    return {
+        "system": SYSTEM_PROMPT,
+        "prompt": prompt,
+        "task": task,
+        "feedback": feedback,
+    }
 
-        response = client.chat.completions.create(
-            model=model,
-            messages=messages,  # type: ignore[arg-type]
-            temperature=temperature,
-        )
-        llm_response = response.choices[0].message.content or ""
-    except Exception as e:
-        return {"status": "error", "message": f"LLM call failed: {str(e)}"}
 
+def parse_and_build_result(task: str, llm_response: str, feedback: str = "") -> dict:
+    """解析 LLM 响应并构建结果。
+
+    Args:
+        task: 原始任务
+        llm_response: LLM 返回的文本
+        feedback: 反馈
+
+    Returns:
+        记账结果字典
+    """
     amount, type_, description = parse_response(llm_response)
 
     if not amount or not type_:
@@ -195,7 +198,9 @@ def execute_accounting(task: str, feedback: str = "") -> dict:
             "description": description or f"{type_} {amount}元",
             "anomaly": anomaly,
             "datetime": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "recorded_by": "accountant",
+            "recorded_by": "accounting",
+            "task": task,
+            "feedback": feedback,
         },
     }
 
@@ -207,16 +212,12 @@ def main():
     parser.add_argument("--feedback", "-f", default="", help="审核反馈，用于修正错误")
     args = parser.parse_args()
 
-    result = execute_accounting(args.task, args.feedback)
+    result = build_prompt(args.task, args.feedback)
 
     if args.json:
         print(json.dumps(result, ensure_ascii=False))
     else:
-        if result.get("status") == "ok":
-            print(result.get("message"))
-        else:
-            print(f"错误: {result.get('message')}", file=sys.stderr)
-            sys.exit(1)
+        print(result["prompt"])
 
 
 if __name__ == "__main__":
