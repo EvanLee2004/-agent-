@@ -23,9 +23,11 @@ pip install -r requirements.txt
 ### 2. 配置环境变量
 
 ```bash
-cp .env.example .env
 # 编辑 .env，填入你的 API Key
-MINIMAX_API_KEY=your_key_here
+LLM_API_KEY=your_key_here
+LLM_BASE_URL=https://api.minimax.chat/v1
+LLM_MODEL=MiniMax-M2.7
+LLM_TEMPERATURE=0.3
 ```
 
 ### 3. 运行
@@ -38,14 +40,11 @@ python main.py
 
 ```
 你: 报销1000元差旅费
-助手: ✅ 通过
-      类型：支出
-      金额：1000元
-      说明：差旅费
+助手: ✅ [ID:1] 支出 1000.0元 - 差旅费报销
 
 你: 查看今天记账
 助手: ID   时间                 类型   金额       说明          状态
-      1    2026-03-30 15:30   支出   ¥1000.00   差旅费        ✅
+      1    2026-04-01 15:30   支出   ¥1000.00   差旅费        ✅
       收入: ¥0.00  支出: ¥1000.00  结余: ¥-1000.00
 ```
 
@@ -58,8 +57,12 @@ python main.py
 ## 项目结构
 
 ```
-├── agents/          # AI Agent 代码
+├── agents/          # AI Agent 代码（角色）
 ├── core/            # 基础设施（LLM、数据库、记忆）
+├── skills/          # Skill 系统（能力包，按 opencode 规范）
+│   ├── coordination/  # 协调 Skill
+│   ├── accounting/    # 记账 Skill
+│   └── audit/        # 审计 Skill
 ├── memory/          # Agent 记忆
 ├── rules/          # 记账规则
 └── data/           # 账目数据库
@@ -67,18 +70,28 @@ python main.py
 
 ## 架构说明
 
+### Agent vs Skill
+
+| 概念 | 说明 |
+|------|------|
+| Agent（角色） | 在 `agents/`，负责业务逻辑（写库、流程控制） |
+| Skill（能力包） | 在 `skills/`，被 Agent 调用，负责纯计算（LLM 调用、规则检查） |
+
 ### 核心模块
 
 | 模块 | 职责 |
 |------|------|
 | `agents/base.py` | Agent 基类（公共工具方法） |
-| `agents/manager.py` | 意图分类 + 协调流程 |
+| `agents/manager.py` | 协调流程 |
 | `agents/accountant.py` | 记账执行 |
 | `agents/auditor.py` | 审核执行 |
+| `core/skill_loader.py` | Skill 加载器 |
 
 ### 设计理念
 
-**本质是提示词工程**：每个 Agent 的行为由 `SYSTEM_PROMPT` 决定，通过 `ask_llm()` 方法与 LLM 自然语言交互。
+**本质是提示词工程**：每个 Agent 的行为由 `SYSTEM_PROMPT` 决定。
+
+**Skill 独立化**：Skill 脚本不依赖 core/，只用标准库 + openai SDK，换模型只需改 `.env`。
 
 ### 工作流程
 
@@ -104,4 +117,34 @@ python main.py
                     写入 ledger.db
                           ↓
                     返回结果
+```
+
+### Skill 系统（按 opencode 规范）
+
+```
+Skill = SKILL.md + scripts/*.py
+
+skills/coordination/
+├── SKILL.md           # SYSTEM_PROMPT
+└── scripts/
+    └── intent.py     # 意图分类
+
+skills/accounting/
+├── SKILL.md
+└── scripts/
+    └── execute.py    # 记账执行
+
+skills/audit/
+├── SKILL.md
+└── scripts/
+    └── execute.py    # 审核执行
+```
+
+换模型只需修改 `.env`：
+
+```bash
+LLM_PROVIDER=openai
+LLM_API_KEY=sk-xxx
+LLM_BASE_URL=https://api.openai.com/v1
+LLM_MODEL=gpt-4
 ```

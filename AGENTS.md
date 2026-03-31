@@ -12,37 +12,35 @@
 │   ├── memory.py           # 记忆读写
 │   ├── rules.py           # 规则读取
 │   ├── ledger.py           # 账目数据库
-│   ├── schemas.py          # 数据结构（AuditResult）
+│   ├── schemas.py          # 数据结构
+│   ├── session.py          # 会话管理
 │   └── skill_loader.py     # Skill 加载器
-├── agents/                 # AI 角色
+├── agents/                 # AI 角色（业务逻辑）
 │   ├── base.py            # Agent 基类
-│   ├── manager.py          # 经理（意图分类 + 协调流程）
-│   ├── accountant.py       # 会计（记账执行）
-│   └── auditor.py          # 审核（审核执行）
+│   ├── manager.py          # 协调者（意图分类 + 协调流程）
+│   ├── accountant.py       # 执行者（记账执行）
+│   └── auditor.py          # 审核者（审核执行）
 ├── skills/                 # Skill 系统（按 opencode 规范）
-│   ├── accountant/
+│   ├── coordination/       # 协调 Skill
 │   │   ├── SKILL.md       # 元数据 + SYSTEM_PROMPT
-│   │   ├── scripts/       # 可执行脚本
-│   │   │   ├── execute.py
-│   │   │   └── detect_anomaly.py
-│   │   └── references/
-│   ├── auditor/
+│   │   └── scripts/
+│   │       └── intent.py  # 意图分类
+│   ├── accounting/         # 记账 Skill
 │   │   ├── SKILL.md
-│   │   ├── scripts/
-│   │   │   └── execute.py
-│   │   └── references/
-│   └── manager/
+│   │   └── scripts/
+│   │       └── execute.py  # 记账执行
+│   └── audit/              # 审计 Skill
 │       ├── SKILL.md
-│       └── references/
+│       └── scripts/
+│           └── execute.py  # 审核执行
 ├── memory/                 # Agent 记忆
 ├── rules/                  # 规则手册
 ├── data/                   # 运行时数据
 ├── sessions/               # 对话历史
 ├── docs/                   # 架构文档
-│   ├── opencode-architecture.md
-│   └── financial-assistant-architecture.md
+│   └── opencode-architecture.md
 ├── requirements.txt
-└── .env
+└── .env                    # 环境配置（换模型改这里）
 ```
 
 ## 架构原则
@@ -51,14 +49,22 @@
 - **Skill 系统**：模仿 opencode，Skill = SKILL.md + scripts/
 - **多 Agent 协作**：Manager 协调，Accountant/Auditor 执行
 - **自然语言交互**：LLM 返回文本而非 JSON
+- **Skill 独立化**：Skill 脚本不依赖 core/，只用标准库 + openai SDK
+
+## Agent vs Skill
+
+| 概念 | 说明 |
+|------|------|
+| Agent（角色） | 在 `agents/` 目录，负责业务逻辑（写库、流程控制） |
+| Skill（能力包） | 在 `skills/` 目录，被 Agent 调用，负责纯计算（LLM 调用、规则检查） |
 
 ## Agent 职责
 
-| Agent | 职责 | Skill | 持有记忆 |
-|-------|------|-------|---------|
-| Manager | 意图分类，协调流程 | manager | manager.json |
-| Accountant | 记账执行，异常检测 | accountant | accountant.json |
-| Auditor | 审核执行，问题标注 | auditor | auditor.json |
+| Agent | 职责 | 使用 Skill | 记忆文件 |
+|-------|------|-----------|---------|
+| Manager | 意图分类，协调流程 | coordination | manager.json |
+| Accountant | 记账执行，异常检测 | accounting | accountant.json |
+| Auditor | 审核执行，问题标注 | audit | auditor.json |
 
 ## 核心模块
 
@@ -68,15 +74,17 @@
 
 ```python
 class SkillLoader:
+    SKILLS_DIR = Path("skills")
+
     @classmethod
     def load(cls, skill_name: str) -> dict:
         """加载 Skill，返回 system_prompt 和路径"""
-        
+
     @classmethod
     def execute_script(
-        cls, skill_name: str, script_name: str, args: list, timeout: int
+        cls, skill_name: str, script_name: str, args: list, timeout: int, env: dict
     ) -> dict:
-        """通过 subprocess 执行 Skill 脚本"""
+        """通过 subprocess 执行 Skill 脚本，env 传递环境变量"""
 ```
 
 ### agents/base.py - Agent 基类
@@ -87,12 +95,12 @@ class SkillLoader:
 class BaseAgent(ABC):
     NAME: str = ""
     SYSTEM_PROMPT: str = ""
-    
+
     def call_llm(messages, temperature) -> str
     def update_memory(experience: str) -> None
     def ask_llm(task: str, context: str = "") -> str
     def handle(task: str) -> str  # 调用 process
-    
+
     @abstractmethod
     def process(self, task: str) -> str
 ```
@@ -104,8 +112,7 @@ skills/<name>/
 ├── SKILL.md           # 元数据 + SYSTEM_PROMPT（必需）
 ├── scripts/           # 可执行脚本
 │   ├── __init__.py
-│   ├── execute.py      # 主执行脚本
-│   └── *.py           # 其他脚本
+│   └── *.py          # 独立进程，通过 subprocess 调用
 └── references/        # 参考文档
 ```
 
@@ -113,17 +120,17 @@ skills/<name>/
 
 ```yaml
 ---
-name: "accountant"
-description: "会计技能..."
+name: "accounting"
+description: "记账技能..."
 compatibility: "opencode"
 version: "1.0.0"
 ---
 
-# Accountant Skill
+# Accounting Skill
 
 ## SYSTEM_PROMPT
 
-你是财务会计，负责...
+你是记账专家，负责...
 
 ## Capabilities
 
@@ -138,16 +145,17 @@ version: "1.0.0"
 ```
 用户输入记账任务
     ↓
-Manager.process() → 意图分类
+Manager._classify_intent()
+    ↓ Skill: coordination/intent.py
     ↓
 ┌─────────────────────────────────────────┐
 │  循环最多 3 轮：                         │
 │                                          │
 │  Accountant.process(task)                 │
-│      ↓  SkillLoader.execute_script()      │
-│  scripts/accountant/execute.py           │
+│      ↓  Skill: accounting/execute.py      │
 │      ↓                                  │
-│  Auditor.process(record)                 │
+│  Auditor.process(record)                  │
+│      ↓  Skill: audit/execute.py          │
 │      ↓                                  │
 │  if 通过 → 返回结果                       │
 │  else → Accountant.reflect(feedback)    │
@@ -160,43 +168,75 @@ Manager.process() → 意图分类
 ```python
 # Agent 调用 Skill 脚本
 result = SkillLoader.execute_script(
-    "accountant",     # Skill 名称
+    "accounting",    # Skill 名称
     "execute",       # 脚本名称
     [task, "--json"], # 参数
+    env={"LLM_API_KEY": os.environ.get("LLM_API_KEY", "")},
 )
 ```
 
 ## Skill 系统（模仿 opencode）
 
-### scripts/execute.py 标准格式
+### Skill 脚本独立性
+
+**关键原则**：Skill 脚本完全独立，不依赖 core/ 模块
 
 ```python
 #!/usr/bin/env python3
-"""Skill Execute - 功能描述"""
+"""Accounting Execute - 执行记账操作"""
 
 import argparse
 import json
-import sys
+import os
+
+from openai import OpenAI  # 只需 openai SDK
+
+# 规则内联，不依赖外部文件
+ACCOUNTING_RULES = """
+# 记账守则
+...
+"""
+
+def execute_accounting(task: str, feedback: str = "") -> dict:
+    # 从环境变量读取配置
+    api_key = os.environ.get("LLM_API_KEY")
+    base_url = os.environ.get("LLM_BASE_URL", "https://api.minimax.chat/v1")
+    model = os.environ.get("LLM_MODEL", "MiniMax-M2.7")
+
+    # 直接调用 LLM
+    client = OpenAI(api_key=api_key, base_url=base_url)
+    response = client.chat.completions.create(model=model, messages=[...])
+
+    return {"status": "ok", "message": "...", "data": {...}}
 
 def main():
-    parser = argparse.ArgumentParser(description="功能描述")
-    parser.add_argument("task", help="任务描述")
-    parser.add_argument("--json", action="store_true", help="输出 JSON 格式")
+    parser = argparse.ArgumentParser()
+    parser.add_argument("task")
+    parser.add_argument("--json", action="store_true")
+    parser.add_argument("--feedback", "-f", default="")
     args = parser.parse_args()
-    
-    result = execute(args.task)
-    
+
+    result = execute_accounting(args.task, args.feedback)
+
     if args.json:
         print(json.dumps(result, ensure_ascii=False))
     else:
-        print(result.get("message", str(result)))
-
-def execute(task: str) -> dict:
-    """执行逻辑"""
-    return {"status": "ok", "message": "..."}
+        print(result.get("message"))
 
 if __name__ == "__main__":
     main()
+```
+
+## 环境配置
+
+`.env` 文件控制 LLM 配置，换模型只需修改这里：
+
+```bash
+LLM_PROVIDER=minimax
+LLM_API_KEY=sk-xxx
+LLM_BASE_URL=https://api.minimax.chat/v1
+LLM_MODEL=MiniMax-M2.7
+LLM_TEMPERATURE=0.3
 ```
 
 ## 记忆系统
@@ -205,10 +245,10 @@ if __name__ == "__main__":
 
 ```json
 {
-  "agent": "accountant",
-  "last_updated": "2026-03-31",
+  "agent": "accounting",
+  "last_updated": "2026-04-01",
   "experiences": [
-    {"context": "审核反馈: 金额过大需确认", "learned_at": "2026-03-31"}
+    {"context": "审核反馈: 金额过大需确认", "learned_at": "2026-04-01"}
   ]
 }
 ```
@@ -237,22 +277,23 @@ if __name__ == "__main__":
 
 ## 扩展新 Agent
 
-1. 在 `agents/` 下创建新文件
-2. 在 `skills/` 下创建对应目录和 SKILL.md
-3. 实现 `execute.py` 等脚本
+1. 在 `agents/` 下创建 Agent 类
+2. 在 `skills/` 下创建对应 Skill 目录和 SKILL.md
+3. 实现 `scripts/*.py` 脚本（独立，不依赖 core/）
 4. 继承 `BaseAgent`，使用 `SkillLoader.load()`
 
 ```python
 class Analyst(BaseAgent):
-    NAME = "analyst"
-    
+    NAME = "analysis"
+
     def __init__(self):
         skill = SkillLoader.load(self.NAME)
         self.SYSTEM_PROMPT = skill["system_prompt"]
-    
+
     def process(self, task: str) -> str:
         result = SkillLoader.execute_script(
-            self.NAME, "execute", [task, "--json"]
+            self.NAME, "execute", [task, "--json"],
+            env={"LLM_API_KEY": os.environ.get("LLM_API_KEY", "")},
         )
         return result.get("message", str(result))
 ```

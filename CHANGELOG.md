@@ -1,5 +1,85 @@
 # CHANGELOG
 
+## 2026-04-01 - Skill 系统独立化重构（按 opencode 规范）
+
+### 依据
+
+Skill 脚本应该完全独立，不依赖 core/ 模块。参考 opencode 的 Skill 系统设计。
+
+### 核心变更
+
+#### Skill 目录重命名（避免与 Agent 名称混淆）
+
+| 旧名称 | 新名称 |
+|--------|--------|
+| skills/manager/ | skills/coordination/ |
+| skills/accountant/ | skills/accounting/ |
+| skills/auditor/ | skills/audit/ |
+
+#### Skill 脚本独立化
+
+所有 Skill 脚本不再依赖 core/ 模块，只使用标准库 + openai SDK：
+
+- `skills/accounting/scripts/execute.py` - 规则内联，LLM 直调
+- `skills/audit/scripts/execute.py` - 规则内联，LLM 直调
+- `skills/coordination/scripts/intent.py` - LLM 直调
+
+#### SkillLoader 支持环境变量
+
+`SkillLoader.execute_script()` 新增 `env` 参数，通过 subprocess 传递给脚本：
+
+```python
+SkillLoader.execute_script(
+    "accounting",
+    "execute",
+    [task, "--json"],
+    env={"LLM_API_KEY": os.environ.get("LLM_API_KEY", "")},
+)
+```
+
+#### Agent 层处理数据流
+
+- `accountant.py` - 调用 Skill 获取记账数据，写入数据库
+- `accountant.process()` - 支持 `--feedback` 参数实现循环修正
+- 移除 `core/utils.py`（detect_anomaly 已内联到 Skill）
+
+#### 环境配置结构
+
+`.env` 支持灵活配置：
+
+```bash
+LLM_PROVIDER=minimax
+LLM_API_KEY=sk-xxx
+LLM_BASE_URL=https://api.minimax.chat/v1
+LLM_MODEL=MiniMax-M2.7
+LLM_TEMPERATURE=0.3
+```
+
+换模型只需修改 `.env`，无需改代码。
+
+### 架构
+
+```
+Agent 层（业务逻辑）
+├── Manager   → Skill: coordination
+├── Accountant → Skill: accounting → 写 ledger.db
+└── Auditor  → Skill: audit
+
+Skill 层（纯计算，独立）
+├── coordination/scripts/intent.py
+├── accounting/scripts/execute.py  ← 规则内联，LLM 直调
+└── audit/scripts/execute.py       ← 规则内联，LLM 直调
+```
+
+### 代码清理
+
+- 移除 `skills/accountant/scripts/detect_anomaly.py`（重复代码）
+- 移除 `core/utils.py`（备用代码）
+- 移除 `agents/base.py` 中未使用的 `AuditResult` 导入
+- import 移到模块级（不在方法内联）
+
+---
+
 ## 2026-03-31 - Skill 系统骨架搭建（模仿 opencode）
 
 ### 依据
