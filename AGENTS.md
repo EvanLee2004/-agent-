@@ -6,7 +6,7 @@
 
 ```
 .
-├── main.py                 # CLI 入口
+├── main.py                 # CLI 入口（多轮会话支持）
 ├── agents/                 # AI Agent（角色层）
 │   ├── base.py            # Agent 基类（纯抽象接口）
 │   ├── manager.py          # 协调者（意图分类 + 协调流程）
@@ -97,12 +97,15 @@ LLM_MODEL=gpt-4
 ```python
 class ConversationSession:
     session_id: str
-    messages: list[dict]      # 对话历史
-    token_count: int           # 当前 token 估算
+    agent_name: str           # 关联的 Agent 名称（用于记忆查询）
+    messages: list[dict]       # 对话历史
+    token_count: int          # 当前 token 估算
     summary: str | None       # 压缩后的摘要
 
 session_manager = SessionManager()
-session_id, messages = session_manager.get_or_create_session()
+session = session_manager.load_session(session_id)
+# 或创建新会话
+session = ConversationSession(session_id='xxx', agent_name='manager')
 ```
 
 ### `core/compactor.py` - 上下文压缩
@@ -134,62 +137,29 @@ messages = build_messages(
     session=conversation_session,
     memory_limit=20,  # 可配置的记忆数量
 )
-```
 
-## Skill 系统
-
-### Skill 目录结构
-
-```
-skills/<name>/
-├── SKILL.md           # 元数据 + SYSTEM_PROMPT（必需）
-├── scripts/           # 可执行脚本
-│   ├── __init__.py
-│   └── *.py          # 独立进程，通过 subprocess 调用
-└── references/        # 参考文档
-```
-
-### SKILL.md 格式
-
-```yaml
----
-name: "accounting"
-description: "记账技能..."
-compatibility: "opencode"
-version: "1.0.0"
----
-
-# Accounting Skill
-
-## SYSTEM_PROMPT
-
-你是记账专家，负责...
-
-## Capabilities
-
-- execute: 执行记账
-- detect_anomaly: 检测异常
-```
-
-### Skill 脚本独立性
-
-**关键原则**：Skill 脚本完全独立，不依赖 core/ 模块，只返回 prompt 数据
-
-```python
-#!/usr/bin/env python3
-"""Accounting Execute - 执行记账操作"""
-
-def build_prompt(task: str, feedback: str = "") -> dict:
-    # 只返回 prompt 数据，不调 LLM
-    return {
-        "system": SYSTEM_PROMPT,
-        "prompt": PROMPT_TEMPLATE.format(task=task),
-        "task": task,
-        "feedback": feedback,
-    }
+# 检查并执行压缩
+if check_and_compact(session, session_manager):
+    print("上下文已压缩")
 ```
 
 ## 工作流程
+
+### 多轮会话流程（main.py）
+
+```
+用户输入 → session.add_message("user", input)
+              ↓
+         manager.process(task, session)
+              ↓
+         意图分类 / 路由处理
+              ↓
+         session.add_message("assistant", reply)
+              ↓
+         session_manager.add_message()  # 持久化
+              ↓
+         check_and_compact()  # 检查是否需要压缩
+```
 
 ### 记账流程（Manager 协调）
 
@@ -254,6 +224,17 @@ LLM_TEMPERATURE=0.3
   ]
 }
 ```
+
+## 上下文压缩机制
+
+当会话 token 数量达到 context window 的 95% 时自动触发压缩：
+
+1. **触发检查**：`compactor.should_compact(token_count)`
+2. **生成摘要**：调用 LLM 生成对话摘要
+3. **替换历史**：用摘要消息替换原始对话历史
+4. **持久化**：摘要信息存入 sessions 表
+
+压缩后的会话可以继续对话，但之前的历史被压缩成了简短的摘要。
 
 ## 扩展新 Agent
 
