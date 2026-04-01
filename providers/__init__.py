@@ -1,7 +1,7 @@
 """模型提供商定义"""
 
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Optional
 
 
 @dataclass
@@ -30,7 +30,7 @@ PROVIDERS: dict[str, ProviderConfig] = {
 }
 
 
-def get_provider(name: str) -> ProviderConfig | None:
+def get_provider(name: str) -> Optional[ProviderConfig]:
     """获取 provider 配置"""
     return PROVIDERS.get(name)
 

@@ -1,13 +1,16 @@
 """LLM 客户端模块"""
 
 import json
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
+from dotenv import load_dotenv
 from openai import OpenAI
 
 
+load_dotenv()
 CONFIG_FILE = Path("config.json")
 
 
@@ -31,13 +34,16 @@ class LLMClient:
 
     @classmethod
     def get_instance(cls) -> "LLMClient":
-        """获取单例实例，配置从 config.json 读取"""
+        """获取单例实例"""
         if cls._instance is None:
             config = cls._load_config()
             if not config:
                 raise RuntimeError("未配置 LLM，请先运行配置")
+            api_key = os.getenv("LLM_API_KEY", "").strip()
+            if not api_key:
+                raise RuntimeError("未设置 LLM_API_KEY，请在 .env 中配置")
             cls._instance = cls(
-                api_key=config["api_key"],
+                api_key=api_key,
                 base_url=config.get("base_url", "https://api.minimax.chat/v1"),
                 model=config["model"],
             )
