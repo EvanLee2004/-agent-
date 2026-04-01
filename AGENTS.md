@@ -10,14 +10,15 @@
 ├── agents/                 # AI Agent
 │   ├── base.py            # 异步 Agent 基类
 │   ├── reception.py       # 财务专员（意图分类）
-│   ├── manager.py         # 财务主管（协调）
 │   ├── accountant.py      # 会计（执行）
-│   └── auditor.py         # 审计（审核）
-├── core/                   # 核心基础设施
+│   ├── auditor.py         # 审计（审核）
+│   └── registry.py        # 意图注册中心
+├── infrastructure/         # 基础设施
 │   ├── message_bus.py     # 异步消息总线
-│   ├── llm.py            # LLM 客户端
+│   ├── llm.py             # LLM 客户端
 │   ├── ledger.py          # 账目数据库
-│   └── skill_loader.py    # Skill 加载器
+│   ├── skill_loader.py    # Skill 加载器
+│   └── ...
 ├── skills/                # Skill 能力包
 │   ├── coordination/      # 协调 Skill
 │   ├── accounting/       # 记账 Skill
@@ -51,7 +52,6 @@
 | 三省六部 | 财务部门 | 职责 |
 |---------|---------|------|
 | 太子 | 财务专员 | 用户入口，意图理解 |
-| 尚书省 | 财务主管 | 任务协调，流程控制 |
 | 户部 | 会计 | 具体执行 |
 | 门下省 | 审计 | 审核把关，封驳权 |
 
@@ -60,7 +60,6 @@
 | Agent | 职责 | 使用 Skill | 监听队列 |
 |-------|------|-----------|---------|
 | 财务专员 | 意图分类、闲聊处理 | coordination | 财务专员 |
-| 财务主管 | 任务协调、结果汇总 | - | 财务主管 |
 | 会计 | 执行记账、数据库操作 | accounting | 会计 |
 | 审计 | 审核记账、封驳权 | audit | 审计 |
 
@@ -85,8 +84,9 @@ class Message:
 ### 通信模式
 
 ```
-用户 → 财务专员 → 财务主管 → 会计 ↔ 审计 → 财务主管 → 财务专员 → 用户
-                         (按需直接通信)
+用户 → 财务专员 → 会计 ↔ 审计 → 财务专员 → 用户
+            ↑              ↑
+            └── 封驳直连 ──┘
 ```
 
 ## 工作流程
@@ -99,36 +99,28 @@ class Message:
 财务专员:
   - 理解意图 → 记账任务
   - 提取信息 → {金额:500, 类型:支出, 日期:2024-01-15}
-  - 发给 → 财务主管
-    ↓
-财务主管:
-  - 发给 → 会计 执行记账
+  - 查询 registry → 会计
+  - 直接发给 → 会计
     ↓
 会计:
   - 执行 → 写入数据库
   - 返回 → "[ID:1] 支出 500元"
-  - 发给 → 财务主管
-    ↓
-财务主管:
   - 发给 → 审计 审核
     ↓
 审计:
   - 检查 → 发现缺少发票状态
-  - 封驳 → "请补充发票状态"
-  - 发给 → 会计（直接通信）
+  - 封驳 → 直接发回会计（不经过其他人）
     ↓
 会计:
   - 收到封驳 → 补充信息
   - 返回 → "[ID:1] 支出 500元, 发票已附"
-    ↓
-财务主管:
   - 发给 → 审计 再审
     ↓
 审计:
   - 检查 → 通过
   - 准奏 → "审核通过"
     ↓
-财务主管:
+会计:
   - 汇总结果
   - 发给 → 财务专员
     ↓
@@ -160,7 +152,7 @@ class AsyncAgent(ABC):
         await self.bus.reply(original, content)
 ```
 
-### core/message_bus.py - 消息总线
+### infrastructure/message_bus.py - 消息总线
 
 ```python
 class MessageBus:
@@ -173,6 +165,72 @@ class MessageBus:
 
 ## Skill 系统
 
+### 架构原则
+
+Skill 遵循 opencode 的设计原则：
+- **独立性**：Skill 脚本只用标准库 + openai SDK，不依赖 core 模块
+- **配置通过 env**：API key、base_url 等通过环境变量传递
+- **规则内联**：规则内容直接写在脚本里，不依赖外部文件
+- **JSON 输出**：支持 `--json` 参数输出结构化数据
+
+### Skill 脚本标准格式
+
+```python
+#!/usr/bin/env python3
+"""Skill 描述"""
+
+import argparse
+import json
+import os
+
+SYSTEM_PROMPT = "角色定义..."
+PROMPT_TEMPLATE = "任务模板..."
+
+def build_prompt(task: str, feedback: str = "") -> dict:
+    """构建 prompt 数据，返回 {system, prompt, task, feedback}"""
+    return {
+        "system": SYSTEM_PROMPT,
+        "prompt": PROMPT_TEMPLATE.format(task=task),
+        "task": task,
+        "feedback": feedback,
+    }
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("task")
+    parser.add_argument("--json", action="store_true")
+    parser.add_argument("--feedback", "-f", default="")
+    args = parser.parse_args()
+
+    result = build_prompt(args.task, args.feedback)
+    if args.json:
+        print(json.dumps(result, ensure_ascii=False))
+    else:
+        print(result["prompt"])
+
+if __name__ == "__main__":
+    main()
+```
+
+### Agent 与 Skill 的协作流程
+
+```
+Agent                          Skill 脚本
+  │                                  │
+  ├─ SkillLoader.execute_script() ──→│
+  │                            ├─ 返回 {system, prompt, data}
+  │                            │
+  │◄───────────────────────────┤
+  │
+  ├─ 用返回的 prompt 调 LLM
+  │
+  ├─ 解析 LLM 响应
+  │
+  └─ 写库/返回结果
+```
+
+### Skill 目录结构
+
 ```
 Skill = SKILL.md + scripts/*.py
 
@@ -183,9 +241,10 @@ skills/
 ├── accounting/
 │   └── scripts/
 │       └── execute.py    # 记账执行
-└── audit/
-    └── scripts/
-        └── execute.py    # 审核执行
+├── audit/
+│   └── scripts/
+│       └── execute.py    # 审核执行
+```
 ```
 
 ## 环境配置

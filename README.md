@@ -98,10 +98,10 @@ python main.py
 ├── agents/                 # AI Agent 代码
 │   ├── base.py            # Agent 基类
 │   ├── reception.py       # 财务专员（意图分类）
-│   ├── manager.py         # 财务主管（协调）
+│   ├── registry.py        # 意图注册中心
 │   ├── accountant.py      # 会计（执行）
 │   └── auditor.py         # 审计（审核）
-├── core/                   # 基础设施
+├── infrastructure/         # 基础设施
 │   ├── message_bus.py     # 异步消息总线
 │   ├── llm.py            # LLM 客户端
 │   ├── ledger.py         # 账目数据库
@@ -172,8 +172,8 @@ queue = bus.register("accountant")
 
 # 发送消息并等待回复
 reply = await bus.send(Message(
-    sender="manager",
-    recipient="accountant", 
+    sender="reception",  # 财务专员
+    recipient="accountant",
     content="任务内容"
 ))
 

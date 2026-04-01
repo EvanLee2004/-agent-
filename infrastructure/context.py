@@ -11,11 +11,11 @@
 
 from typing import Optional
 
-from core.compactor import Compactor
-from core.memory import read_memory
-from core.models import get_default_model
-from core.session import ConversationSession, SessionManager
-from core.token_counter import TokenCounter
+from infrastructure.compactor import Compactor
+from infrastructure.memory import read_memory
+from infrastructure.models import get_default_model
+from infrastructure.session import ConversationSession, SessionManager
+from infrastructure.token_counter import TokenCounter
 
 
 DEFAULT_MEMORY_LIMIT = 20

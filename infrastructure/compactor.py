@@ -11,8 +11,8 @@
 
 from typing import Optional
 
-from core.llm import LLMClient
-from core.models import get_default_model, get_context_window
+from infrastructure.llm import LLMClient
+from infrastructure.models import get_default_model, get_context_window
 
 
 COMPACTION_THRESHOLD = 0.95

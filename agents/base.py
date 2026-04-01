@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 import asyncio
 from typing import Optional
 
-from core.message_bus import MessageBus, Message
+from infrastructure.message_bus import MessageBus, Message
 
 
 class AsyncAgent(ABC):

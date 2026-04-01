@@ -22,7 +22,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-from core.token_counter import TokenCounter
+from infrastructure.token_counter import TokenCounter
 
 
 class ConversationSession:
@@ -139,7 +139,7 @@ class SessionManager:
         self._init_db()
 
     def _init_db(self) -> None:
-        """Create database tables if they don't exist."""
+        """创建数据库表（如果不存在）"""
         conn = sqlite3.connect(self.db_path)
         conn.execute(
             """

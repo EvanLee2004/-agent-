@@ -5,11 +5,11 @@ import re
 from datetime import datetime
 
 from agents.base import AsyncAgent
-from core.ledger import write_entry
-from core.llm import LLMClient
-from core.memory import read_memory, write_memory
-from core.skill_loader import SkillLoader
-from core.message_bus import Message
+from infrastructure.ledger import write_entry
+from infrastructure.llm import LLMClient
+from infrastructure.memory import read_memory, write_memory
+from infrastructure.skill_loader import SkillLoader
+from infrastructure.message_bus import Message
 
 
 class Accountant(AsyncAgent):
@@ -32,14 +32,33 @@ class Accountant(AsyncAgent):
             self.SYSTEM_PROMPT = "你是记账专家"
 
     async def handle(self, msg: Message):
-        """处理记账任务"""
-        # 使用 \t 分隔，格式：task\tfeedback
-        parts = msg.content.split("\t")
-        task = parts[0]
-        feedback = parts[1] if len(parts) > 1 else ""
+        """处理记账任务或审计封驳"""
+        if msg.msg_type == "rejection":
+            # 收到审计封驳，直接修正后重新发给审计
+            await self._handle_rejection(msg)
+        else:
+            # 正常记账任务
+            parts = msg.content.split("\t")
+            task = parts[0]
+            feedback = parts[1] if len(parts) > 1 else ""
+            result = await asyncio.to_thread(self._process, task, feedback)
+            await self.reply(msg, result, msg_type="result")
 
-        result = await asyncio.to_thread(self._process, task, feedback)
-        await self.reply(msg, result, msg_type="result")
+    async def _handle_rejection(self, msg: Message):
+        """处理审计封驳，修正后重新提交审核"""
+        # 封驳消息格式：原任务ID\t封驳原因
+        parts = msg.content.split("\t")
+        if len(parts) < 2:
+            await self.reply(msg, "无法理解封驳内容", msg_type="error")
+            return
+
+        original_id = parts[0].strip()
+        feedback = parts[1].strip()
+
+        # 重新执行，加上封驳反馈
+        result = await asyncio.to_thread(self._process, original_id, feedback)
+        # 直接发回给审计进行再审
+        await self.send_to("审计", result, msg_type="result", intent="audit")
 
     def _process(self, task: str, feedback: str = "") -> str:
         """同步处理记账"""

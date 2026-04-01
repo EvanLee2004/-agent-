@@ -1,7 +1,7 @@
-"""Model configuration module.
+"""模型配置模块。
 
-Centralized model configuration that supports switching between different models.
-Each model entry contains context_window, max_tokens, and other metadata.
+集中管理模型配置，支持切换不同模型。
+每个模型条目包含 context_window、max_tokens 等元数据。
 
 换模型只需在此文件添加/修改配置，LLMClient 自动读取。
 """
@@ -10,7 +10,7 @@ from typing import Optional, TypedDict
 
 
 class ModelConfig(TypedDict):
-    """Model configuration structure."""
+    """模型配置结构"""
 
     context_window: int
     max_tokens: int

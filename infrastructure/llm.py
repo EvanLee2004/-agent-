@@ -1,17 +1,16 @@
-"""LLM Client Module - Centralized LLM invocation across all Agents.
+"""LLM 客户端模块 - 集中管理所有 Agent 的 LLM 调用。
 
-This module provides a singleton LLMClient that provides a unified LLM calling interface
-and supports multiple model providers. All Agents invoke LLM through LLMClient.chat()
-to ensure centralized LLM configuration management.
+本模块提供单例 LLMClient，统一封装 LLM 调用接口，支持多模型提供商。
+所有 Agent 通过 LLMClient.chat() 调用 LLM，确保配置集中管理。
 
-Configuration is read from environment variables:
-- LLM_API_KEY: API key for the LLM provider
-- LLM_BASE_URL: Base URL for the LLM API endpoint
-- LLM_MODEL: Model name to use (e.g., "MiniMax-M2.7")
+配置从环境变量读取：
+- LLM_API_KEY: API 密钥
+- LLM_BASE_URL: API 基础地址
+- LLM_MODEL: 模型名称（如 "MiniMax-M2.7"）
 
-Example:
+示例：
     client = LLMClient.get_instance()
-    response = client.chat([{"role": "user", "content": "Hello"}])
+    response = client.chat([{"role": "user", "content": "你好"}])
     print(response.content)
     print(response.usage)
 """
@@ -28,7 +27,7 @@ load_dotenv()
 
 
 class ModelProvider(Enum):
-    """Supported LLM model providers."""
+    """支持的 LLM 模型提供商"""
 
     MINIMAX = "minimax"
 

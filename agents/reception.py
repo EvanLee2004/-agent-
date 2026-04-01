@@ -5,19 +5,20 @@ import re
 from typing import Optional
 
 from agents.base import AsyncAgent
-from core.llm import LLMClient
-from core.skill_loader import SkillLoader
-from core.message_bus import Message
+from agents.registry import resolve_handler
+from infrastructure.llm import LLMClient
+from infrastructure.skill_loader import SkillLoader
+from infrastructure.message_bus import Message
 
 
 class Receptionist(AsyncAgent):
     """财务专员 - 用户交互入口
 
     职责：
-    - 理解用户意图（记账/转账/查询/闲聊）
+    - 理解用户意图（记账/转账/查询/审计/闲聊）
     - 构造标准任务消息
     - 直接回复闲聊
-    - 转发任务给财务主管
+    - 通过 SkillRegistry 直接发送任务给对应 Agent（不经 Manager）
     """
 
     def __init__(self, bus=None):
@@ -25,6 +26,7 @@ class Receptionist(AsyncAgent):
         self.skill_name = "coordination"
         try:
             skill = SkillLoader.load(self.skill_name)
+            self.SYSTEM_PROMPT = skill["system_prompt"]
         except FileNotFoundError:
             self.SYSTEM_PROMPT = "你是财务专员，负责理解用户意图"
 
@@ -39,11 +41,12 @@ class Receptionist(AsyncAgent):
             # 闲聊直接回复
             response = await self._handle_chat(content)
             await self.reply(msg, response, msg_type="chat")
-        elif intent in ("accounting", "transfer", "review"):
-            # 任务消息，转发给财务主管
+        elif intent in ("accounting", "transfer", "review", "audit"):
+            # 任务消息，通过 Registry 直接发送给对应的 Agent
             task_msg = self._construct_task(content, intent)
+            target = resolve_handler(intent)
             reply = await self.send_to(
-                recipient="财务主管",
+                recipient=target,
                 content=task_msg,
                 msg_type="task",
                 intent=intent,

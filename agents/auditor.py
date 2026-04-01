@@ -2,11 +2,13 @@
 
 import asyncio
 import re
+from typing import Optional
 
 from agents.base import AsyncAgent
-from core.llm import LLMClient
-from core.skill_loader import SkillLoader
-from core.message_bus import Message
+from infrastructure.llm import LLMClient
+from infrastructure.ledger import update_entry_status
+from infrastructure.skill_loader import SkillLoader
+from infrastructure.message_bus import Message
 
 
 class Auditor(AsyncAgent):
@@ -33,14 +35,7 @@ class Auditor(AsyncAgent):
         result = await asyncio.to_thread(self._process, msg.content)
 
         # 判断是准奏还是封驳
-        # 排除"无法通过"、"不能通过"、"未通过"等
-        if (
-            "通过" in result
-            and "不通过" not in result
-            and "无法通过" not in result
-            and "未通过" not in result
-            and "未通过" not in result
-        ):
+        if result.startswith("审核通过"):
             # 准奏，回复给财务主管
             await self.reply(msg, "准奏: " + result, msg_type="approval")
         else:
@@ -67,9 +62,18 @@ class Auditor(AsyncAgent):
             return f"LLM 调用失败: {e}"
 
         resp = llm_response.content
-        resp = re.sub(r"<think>.*?</think>", "", resp, flags=re.DOTALL).strip()
+        resp = re.sub(r"<extra_thought_token>.*?</extra_thought_token>", "", resp, flags=re.DOTALL).strip()
 
         if "通过" in resp and "不" not in resp:
+            # 审核通过，提取 entry_id 并更新状态
+            entry_id = self._extract_entry_id(record)
+            if entry_id:
+                update_entry_status(entry_id, "approved")
             return "审核通过"
 
         return resp
+
+    def _extract_entry_id(self, record: str) -> Optional[int]:
+        """从记账记录中提取 ID"""
+        match = re.search(r"\[ID:(\d+)\]", record)
+        return int(match.group(1)) if match else None

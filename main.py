@@ -5,10 +5,9 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from core.ledger import init_ledger_db
-from core.message_bus import MessageBus, Message
+from infrastructure.ledger import init_ledger_db
+from infrastructure.message_bus import MessageBus, Message
 from agents.reception import Receptionist
-from agents.manager import FinanceManager
 from agents.accountant import Accountant
 from agents.auditor import Auditor
 
@@ -21,12 +20,10 @@ async def main_async():
 
     # 创建并启动所有 Agent
     reception = Receptionist(bus)
-    manager = FinanceManager(bus)
     accountant = Accountant(bus)
     auditor = Auditor(bus)
 
     await reception.start()
-    await manager.start()
     await accountant.start()
     await auditor.start()
 
@@ -74,7 +71,6 @@ async def main_async():
 
     # 停止所有 Agent
     await reception.stop()
-    await manager.stop()
     await accountant.stop()
     await auditor.stop()
 
