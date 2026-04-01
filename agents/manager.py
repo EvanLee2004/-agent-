@@ -75,12 +75,23 @@ class FinanceManager(AsyncAgent):
                 return f"✅ {acct_reply.content}"
 
             # 提取反馈，准备下一轮
+            # 支持多种格式：markdown 列表项、"请补充"、"缺失" 等
             fb = re.search(r"请补充([^。\n]*)", audit_reply.content)
             if fb:
-                feedback = fb.group(1).strip()  # 只取括号内内容
+                feedback = fb.group(1).strip()
             else:
-                # 没有明确反馈，但没通过
-                return f"⚠️ 第 {round_num + 1} 轮审核未通过：{audit_reply.content[:100]}"
+                # 尝试匹配 markdown 格式的问题项
+                fb = re.search(r"\*\*问题[^:]*:\*\*\s*([^。\n]+)", audit_reply.content)
+                if fb:
+                    feedback = fb.group(1).strip()
+                else:
+                    # 尝试匹配 ❌ 或缺失 标记
+                    fb = re.search(r"[❌✗]\s*([^。\n]+)", audit_reply.content)
+                    if fb:
+                        feedback = fb.group(1).strip()
+                    else:
+                        # 没有明确反馈，但没通过
+                        return f"⚠️ 第 {round_num + 1} 轮审核未通过：{audit_reply.content[:100]}"
 
         return (
             f"⚠️ 经过 {self._max_rounds} 轮仍有问题，需人工确认\n\n审核意见：{feedback}"
