@@ -1,5 +1,36 @@
 # CHANGELOG
 
+## 2026-04-01 - 会计智能体 v1.0
+
+单 Agent 架构，简化设计，集成长期记忆。
+
+### 变更
+
+- 重构为单 Agent：智能会计处理所有任务
+- 简化架构：删除 MessageBus、多 Agent 通信
+- 集成长期记忆：参考 opencode，记录经验到 JSON
+- 删除多余模块：context.py, compactor.py, session.py 等
+
+### 架构
+
+```
+用户 → 智能会计 → LLM 判断意图 → 执行/回复
+```
+
+### 项目结构
+
+```
+├── agents/accountant_agent.py   # 智能会计（单 Agent）
+├── infrastructure/
+│   ├── llm.py                  # LLM 调用
+│   ├── ledger.py               # 数据库
+│   ├── skill_loader.py         # Skill 加载
+│   └── memory.py              # 长期记忆
+└── memory/智能会计.json        # 记忆文件
+```
+
+---
+
 ## 2026-04-01 - LLM 调用中心化重构（学 opencode）
 
 ### 依据
