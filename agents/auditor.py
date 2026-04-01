@@ -33,12 +33,18 @@ class Auditor(AsyncAgent):
         result = await asyncio.to_thread(self._process, msg.content)
 
         # 判断是准奏还是封驳
-        if "通过" in result and "不" not in result:
+        # 排除"无法通过"、"不能通过"、"未通过"等
+        if (
+            "通过" in result
+            and "不通过" not in result
+            and "无法通过" not in result
+            and "未通过" not in result
+            and "未通过" not in result
+        ):
             # 准奏，回复给财务主管
             await self.reply(msg, "准奏: " + result, msg_type="approval")
         else:
-            # 封驳，可以直接发给会计（不需要经过财务主管）
-            # 但为了保持流程一致，还是回复给财务主管，让它转发
+            # 封驳
             await self.reply(msg, result, msg_type="rejection")
 
     def _process(self, record: str) -> str:

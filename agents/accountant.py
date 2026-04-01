@@ -33,7 +33,8 @@ class Accountant(AsyncAgent):
 
     async def handle(self, msg: Message):
         """处理记账任务"""
-        parts = msg.content.split("|")
+        # 使用 \t 分隔，格式：task\tfeedback
+        parts = msg.content.split("\t")
         task = parts[0]
         feedback = parts[1] if len(parts) > 1 else ""
 

@@ -45,9 +45,11 @@ class FinanceManager(AsyncAgent):
 
         for round_num in range(self._max_rounds):
             # 发给会计执行
+            # 使用 \t 分隔，避免 task 内容中的 | 造成解析错误
+            task_content = f"{task}\t{feedback}" if feedback else task
             acct_reply = await self.send_to(
                 recipient="会计",
-                content=f"{task}|{feedback}",
+                content=task_content,
                 msg_type="task",
                 intent="accounting",
                 round=round_num,
@@ -75,7 +77,7 @@ class FinanceManager(AsyncAgent):
             # 提取反馈，准备下一轮
             fb = re.search(r"请补充([^。\n]*)", audit_reply.content)
             if fb:
-                feedback = fb.group(0)
+                feedback = fb.group(1).strip()  # 只取括号内内容
             else:
                 # 没有明确反馈，但没通过
                 return f"⚠️ 第 {round_num + 1} 轮审核未通过：{audit_reply.content[:100]}"
