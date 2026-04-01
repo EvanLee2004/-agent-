@@ -1,5 +1,51 @@
 # CHANGELOG
 
+## 2026-04-01 - Skills 技能完善
+
+### 新增技能
+
+- 新增 `skills/docx/` - Word 文档处理（Anthropic 官方）
+- 新增 `skills/pdf/` - PDF 文档处理（Anthropic 官方）
+- 新增 `skills/pptx/` - PPT 演示文稿处理（Anthropic 官方）
+- 新增 `skills/xlsx/` - Excel 电子表格处理（Anthropic 官方）
+- 新增 `skills/tax/` - 中国税务处理技能（模板占位，待开源替代）
+- 新增 `skills/accounting/reference/beancount/` - 复式记账参考
+- 新增 `skills/accounting/reference/ifrs/` - IFRS 国际准则参考
+
+### 技能版本更新
+
+| 技能 | 版本 | 说明 |
+|------|------|------|
+| rules | 2.0.0 | 重写为中国会计准则 v2.0，包含完整科目表和分录规则 |
+| accounting | 1.0.0 | 智能记账 |
+| audit | 1.0.0 | 账目审核 |
+| tax | 1.0.0 | 模板占位 |
+
+### 技能目录结构
+
+```
+skills/
+├── docx/                   # Word 处理（Anthropic）
+├── pdf/                     # PDF 处理（Anthropic）
+├── pptx/                    # PPT 处理（Anthropic）
+├── xlsx/                    # Excel 处理（Anthropic）
+├── rules/                   # 中国会计准则 v2.0
+├── tax/                    # 中国税务（待开源替代）
+├── audit/                   # 账目审核
+├── accounting/              # 智能记账
+└── accounting/reference/    # 参考资料
+    ├── beancount/          # 复式记账
+    └── ifrs/               # IFRS 准则
+```
+
+### Anthropic 官方技能
+
+从 https://github.com/anthropic/skills 集成，需添加 `## SYSTEM_PROMPT` 标记以兼容 SkillLoader。
+
+> 注意：Anthropic 官方技能为专有软件，仅供毕业项目参考使用。
+
+---
+
 ## 2026-04-01 - Skills 模板化
 
 ### 变更

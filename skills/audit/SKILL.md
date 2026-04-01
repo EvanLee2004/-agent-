@@ -1,11 +1,11 @@
 ---
 name: "audit"
-description: "审计技能模板"
+description: "账目审核技能，检查记账结果是否符合规则"
 compatibility: "opencode"
 version: "1.0.0"
 ---
 
-# Audit Skill
+# Audit Skill - 账目审核
 
 ## 概述
 

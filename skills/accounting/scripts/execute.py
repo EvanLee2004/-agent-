@@ -23,8 +23,9 @@ def main():
         "status": "ok",
         "data": {
             "skill": "accounting",
+            "version": "1.0.0",
             "task": args.task,
-            "message": "Accounting Skill 模板，记账由 AccountantAgent 实现",
+            "message": "Accounting Skill，记账由 AccountantAgent 实现",
         },
     }
 

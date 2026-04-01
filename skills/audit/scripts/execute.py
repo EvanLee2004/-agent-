@@ -23,8 +23,9 @@ def main():
         "status": "ok",
         "data": {
             "skill": "audit",
+            "version": "1.0.0",
             "record": args.record,
-            "message": "Audit Skill 模板，审计由 AccountantAgent 实现",
+            "message": "Audit Skill，审核由 AccountantAgent 实现",
         },
     }
 

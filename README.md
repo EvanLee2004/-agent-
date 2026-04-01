@@ -41,9 +41,15 @@
 │   ├── __init__.py            # Provider 定义（MiniMax/DeepSeek）
 │   └── config.py             # 配置管理（含验证层）
 ├── skills/
-│   ├── accounting/            # 记账 Skill（模板）
-│   ├── audit/                # 审核 Skill（模板）
-│   └── rules/                # 规则 Skill（模板）
+│   ├── docx/                   # Word 文档处理（Anthropic）
+│   ├── pdf/                     # PDF 文档处理（Anthropic）
+│   ├── pptx/                    # PPT 演示文稿处理（Anthropic）
+│   ├── xlsx/                    # Excel 电子表格处理（Anthropic）
+│   ├── rules/                   # 中国会计准则
+│   ├── tax/                    # 中国税务（待开源替代）
+│   ├── audit/                   # 账目审核
+│   ├── accounting/              # 智能记账
+│   └── accounting/reference/    # 参考资料（Beancount, IFRS）
 ├── memory/                     # 记忆存储（JSON）
 ├── data/                       # 账目数据库（SQLite）
 └── config.json                # 模型配置
@@ -95,9 +101,16 @@ python main.py
 - 便于单元测试和模型切换
 
 ### Skill 系统
-- 记账/审核 Skill 可独立执行
-- 通过 subprocess 隔离
+- 8 个可加载技能：docx, pdf, pptx, xlsx, rules, tax, audit, accounting
+- 通过 subprocess 隔离执行
 - 支持 JSON 输出格式
+
+#### 技能分类
+
+| 类别 | 技能 | 说明 |
+|------|------|------|
+| 文档处理 | docx, pdf, pptx, xlsx | Anthropic 官方 |
+| 会计专业 | rules, tax, audit, accounting | 中国会计准则/税务/审核/记账 |
 
 ### Repository 模式
 - 抽象数据库接口

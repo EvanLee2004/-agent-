@@ -23,8 +23,9 @@ def main():
         "status": "ok",
         "data": {
             "skill": "rules",
+            "version": "2.0.0",
             "input": args.input,
-            "message": "Rules Skill 模板，规则由 AccountantAgent 实现",
+            "message": "Rules Skill v2.0 中国会计准则",
         },
     }
 

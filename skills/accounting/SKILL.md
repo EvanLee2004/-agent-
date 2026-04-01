@@ -1,11 +1,11 @@
 ---
 name: "accounting"
-description: "记账技能模板"
+description: "智能记账技能，执行具体的记账操作"
 compatibility: "opencode"
 version: "1.0.0"
 ---
 
-# Accounting Skill
+# Accounting Skill - 智能记账
 
 ## 概述
 

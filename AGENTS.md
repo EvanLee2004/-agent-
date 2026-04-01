@@ -275,14 +275,97 @@ async def handle(user_input: str) -> str:
 ├── providers/
 │   ├── __init__.py            # Provider 配置定义
 │   └── config.py             # 配置管理（含验证层）
-├── skills/
-│   ├── accounting/            # 记账 Skill（模板）
-│   ├── audit/                # 审核 Skill（模板）
-│   └── rules/                # 规则 Skill（模板）
+├── skills/                     # 技能目录（扁平结构）
+│   ├── docx/                   # Word 文档处理（Anthropic 官方）
+│   ├── pdf/                     # PDF 文档处理（Anthropic 官方）
+│   ├── pptx/                    # PPT 演示文稿处理（Anthropic 官方）
+│   ├── xlsx/                    # Excel 电子表格处理（Anthropic 官方）
+│   ├── rules/                   # 中国会计准则
+│   ├── tax/                    # 中国税务（待开源替代）
+│   ├── audit/                   # 账目审核
+│   ├── accounting/              # 智能记账
+│   └── accounting/reference/    # 参考资料（Beancount, IFRS）
 ├── memory/                     # 记忆存储（JSON）
 ├── data/                       # 账目数据库（SQLite）
 └── config.json                # 模型配置
 ```
+
+## 技能系统（Skills）
+
+### 概述
+
+技能系统基于 SkillLoader 实现，支持意图分流和独立执行。每个 Skill 包含：
+- `SKILL.md`：技能定义，包含 `## SYSTEM_PROMPT` 标记的系统提示
+- `scripts/`：可选的执行脚本目录
+
+### 技能分类
+
+#### 文档处理类（documents/）
+
+| 技能 | 用途 | 来源 |
+|------|------|------|
+| docx | Word 文档处理（创建、编辑、提取内容） | Anthropic 官方 |
+| pdf | PDF 处理（提取文本、合并、分割） | Anthropic 官方 |
+| pptx | PowerPoint 演示文稿处理 | Anthropic 官方 |
+| xlsx | Excel 电子表格处理 | Anthropic 官方 |
+
+#### 会计专业类（accounting/）
+
+| 技能 | 用途 | 来源 |
+|------|------|------|
+| rules | 中国企业会计准则参考 | 自定义 v2.0 |
+| tax | 中国税务处理 | **待开源替代** |
+| audit | 账目审核 | 模板 |
+| accounting | 智能记账执行 | 模板 |
+
+### 技能目录规范
+
+```
+skills/                           # 扁平结构，所有技能在同一层级
+├── docx/                        # Word 处理
+│   ├── SKILL.md                # 技能定义
+│   └── scripts/                # 可选脚本
+├── pdf/                         # PDF 处理
+├── pptx/                        # PPT 处理
+├── xlsx/                        # Excel 处理
+├── rules/                       # 中国会计准则
+├── tax/                         # 中国税务（待开源替代）
+├── audit/                       # 账目审核
+├── accounting/                  # 智能记账
+└── accounting/reference/        # 参考资料（只读）
+    ├── beancount/              # Beancount 复式记账
+    └── ifrs/                   # IFRS 国际准则
+```
+
+### SkillLoader 系统提示提取
+
+SkillLoader 使用正则表达式提取系统提示：
+```python
+r"## SYSTEM_PROMPT\s*\n(.+?)(?=\n##|\Z)"
+```
+
+所有自定义技能 **必须** 包含 `## SYSTEM_PROMPT` 标记，否则无法被加载。
+
+### Anthropic 官方技能
+
+Anthropic 官方技能库（https://github.com/anthropic/skills）提供企业级文档处理能力：
+- **docx**：Word 文档创建、编辑、内容提取
+- **pdf**：PDF 文本提取、合并、分割、OCR
+- **pptx**：PowerPoint 创建、编辑
+- **xlsx**：Excel 数据处理、公式计算
+
+> 注意：Anthropic 官方技能为专有软件，仅供毕业项目参考使用。
+
+### 中国税务技能（tax）
+
+中国税务技能目前处于 **模板占位** 状态，等待开源替代品。未找到中国税务相关的开源 AI Skill，如有任何发现请及时更新。
+
+功能范围（待实现）：
+- 增值税（VAT）处理
+- 企业所得税计算
+- 个人所得税代扣代缴
+- 税务申报合规检查
+- 发票验证与管理
 
 ## 核心模块 API
 

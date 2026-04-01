@@ -1,11 +1,11 @@
 ---
 name: "rules"
-description: "记账规则技能，定义业务规则和守则"
+description: "中国会计准则技能，定义中国企业会计准则和复式记账规则"
 compatibility: "opencode"
-version: "1.0.0"
+version: "2.0.0"
 ---
 
-# Rules Skill
+# Rules Skill - 中国会计准则
 
 记账规则技能，定义智能会计的业务规则和守则。
 
