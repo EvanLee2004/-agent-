@@ -1,51 +1,56 @@
-"""Agent base class module.
-
-Provides the abstract interface that all Agents must implement.
-Other responsibilities have been moved to specialized modules:
-
-- Context building and memory: core/context.py, core/memory.py
-- Session management: core/session.py
-- LLM invocation: core/llm.py
-
-Attributes:
-    NAME: Agent identifier (must be set by subclass).
-    SYSTEM_PROMPT: System prompt that defines agent behavior (loaded from Skill).
-"""
+"""异步 Agent 基类"""
 
 from abc import ABC, abstractmethod
+from typing import Optional
+import asyncio
+
+from core.message_bus import MessageBus, Message
 
 
-class BaseAgent(ABC):
-    """Abstract base class for all Agents.
+class AsyncAgent(ABC):
+    """异步 Agent 基类"""
 
-    All concrete Agent classes must inherit from this class
-    and implement the process() method.
+    def __init__(self, name: str, bus: Optional[MessageBus] = None):
+        self.name = name
+        self.bus = bus or MessageBus.get_instance()
+        self._queue = self.bus.register(name)
+        self._task: Optional[asyncio.Task] = None
+        self._running = False
 
-    Attributes:
-        NAME: Agent identifier, corresponds to Skill directory name.
-        SYSTEM_PROMPT: System prompt loaded from Skill's SKILL.md.
+    async def start(self):
+        """启动 Agent"""
+        self._running = True
+        self._task = asyncio.create_task(self._loop())
 
-    Example:
-        class MyAgent(BaseAgent):
-            NAME = "my_agent"
+    async def stop(self):
+        """停止 Agent"""
+        self._running = False
+        if self._task:
+            self._task.cancel()
+            try:
+                await self._task
+            except asyncio.CancelledError:
+                pass
 
-            def process(self, task: str) -> str:
-                return f"Processed: {task}"
-    """
-
-    NAME: str = ""
-    SYSTEM_PROMPT: str = ""
+    async def _loop(self):
+        """消息处理循环"""
+        while self._running:
+            try:
+                msg = await asyncio.wait_for(self._queue.get(), timeout=1.0)
+                await self.handle(msg)
+            except asyncio.TimeoutError:
+                continue
 
     @abstractmethod
-    def process(self, task: str) -> str:
-        """Process a task and return the result.
-
-        Each concrete Agent must implement this method.
-
-        Args:
-            task: The task description or user input.
-
-        Returns:
-            Processing result as a string.
-        """
+    async def handle(self, msg: Message):
+        """处理消息，子类实现"""
         pass
+
+    async def send_to(self, recipient: str, content: str) -> Optional[Message]:
+        """发送消息给其他 Agent"""
+        msg = Message(sender=self.name, recipient=recipient, content=content)
+        return await self.bus.send(msg)
+
+    async def reply(self, original: Message, content: str):
+        """回复消息"""
+        await self.bus.reply(original, content)

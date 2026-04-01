@@ -6,61 +6,100 @@
 
 ```
 .
-├── main.py                 # CLI 入口（多轮会话支持）
-├── agents/                 # AI Agent（角色层）
-│   ├── base.py            # Agent 基类（纯抽象接口）
+├── main.py                 # CLI 入口（异步多轮会话）
+├── agents/                 # AI Agent（异步消息处理）
+│   ├── base.py            # AsyncAgent 基类
 │   ├── manager.py          # 协调者（意图分类 + 协调流程）
 │   ├── accountant.py       # 执行者（记账执行）
 │   └── auditor.py          # 审核者（审核执行）
 ├── core/                   # 核心基础设施
-│   ├── llm.py             # LLM 客户端（中心化，返回 LLMResponse）
-│   ├── models.py           # 模型配置（context_window 等）
-│   ├── token_counter.py    # Token 计数器
-│   ├── session.py          # 会话管理（多轮对话 + SQLite 持久化）
-│   ├── compactor.py        # 上下文压缩器（95% 阈值触发）
-│   ├── context.py          # 上下文构建（记忆注入 + 消息构建）
-│   ├── memory.py           # Agent 记忆（JSON 持久化）
+│   ├── message_bus.py      # 异步消息总线
+│   ├── llm.py             # LLM 客户端（中心化）
 │   ├── ledger.py           # 账目数据库
-│   ├── skill_loader.py     # Skill 加载器
-│   └── schemas.py          # 数据结构
+│   ├── memory.py           # Agent 记忆
+│   ├── session.py          # 会话管理
+│   ├── compactor.py        # 上下文压缩器
+│   ├── context.py          # 上下文构建
+│   ├── token_counter.py    # Token 计数器
+│   ├── models.py           # 模型配置
+│   └── skill_loader.py     # Skill 加载器
 ├── skills/                 # Skill 能力包
 │   ├── coordination/       # 协调 Skill
-│   │   ├── SKILL.md
 │   │   └── scripts/
 │   │       └── intent.py
 │   ├── accounting/         # 记账 Skill
-│   │   ├── SKILL.md
 │   │   └── scripts/
 │   │       └── execute.py
 │   └── audit/              # 审计 Skill
-│       ├── SKILL.md
 │       └── scripts/
 │           └── execute.py
 ├── memory/                 # Agent 记忆文件
 ├── sessions/              # 会话数据库
 ├── data/                  # 账目数据库
-├── docs/                  # 架构文档
-└── .env                   # 环境配置（换模型改这里）
+└── .env                   # 环境配置
 ```
 
 ## 架构原则
 
-- **本质是提示词工程**：每个 Agent 的行为由 `SYSTEM_PROMPT` 决定
-- **Skill 系统**：Skill = SKILL.md + scripts/，Skill 脚本不依赖 core/ 模块
-- **多 Agent 协作**：Manager 协调，Accountant/Auditor 执行
+- **消息总线架构**：Agent 通过异步消息总线通信，解耦各 Agent
+- **异步处理**：所有 Agent 使用 asyncio 并发处理消息
+- **Skill 系统**：Skill = SKILL.md + scripts/，Skill 脚本独立于 core/ 模块
 - **自然语言交互**：LLM 返回文本而非 JSON
-- **LLM 中心化**：Agent 统一调 LLM，Skill 只返回 prompt 数据
-- **多轮会话**：支持会话持久化和上下文压缩（参考 OpenCode）
+- **LLM 中心化**：Agent 统一调用 LLM，Skill 只返回 prompt 数据
 
 ## Agent 职责
 
-| Agent | 职责 | 使用 Skill | 记忆文件 |
+| Agent | 职责 | 使用 Skill | 监听队列 |
 |-------|------|-----------|---------|
-| Manager | 意图分类，协调流程 | coordination | manager.json |
-| Accountant | 记账执行，异常检测 | accounting | accountant.json |
-| Auditor | 审核执行，问题标注 | audit | auditor.json |
+| Manager | 意图分类，协调流程 | coordination | manager |
+| Accountant | 记账执行，异常检测 | accounting | accountant |
+| Auditor | 审核执行，问题标注 | audit | auditor |
 
 ## 核心模块
+
+### `core/message_bus.py` - 异步消息总线
+
+消息总线采用 Request-Reply 模式：
+
+```python
+@dataclass
+class Message:
+    sender: str
+    recipient: str
+    content: str
+    reply_to: Optional[str] = None
+
+# 注册 Agent 队列
+queue = bus.register("accountant")
+
+# 发送消息并等待回复
+reply = await bus.send(Message(sender="manager", recipient="accountant", content="任务"))
+```
+
+### `agents/base.py` - AsyncAgent 基类
+
+```python
+class AsyncAgent(ABC):
+    def __init__(self, name: str, bus: Optional[MessageBus] = None):
+        self.name = name
+        self.bus = bus or MessageBus.get_instance()
+        self._queue = self.bus.register(name)
+
+    async def start(self):
+        self._task = asyncio.create_task(self._loop())
+
+    async def _loop(self):
+        while self._running:
+            msg = await asyncio.wait_for(self._queue.get(), timeout=1.0)
+            await self.handle(msg)
+
+    async def send_to(self, recipient: str, content: str) -> Optional[Message]:
+        msg = Message(sender=self.name, recipient=recipient, content=content)
+        return await self.bus.send(msg)
+
+    async def reply(self, original: Message, content: str):
+        await self.bus.reply(original, content)
+```
 
 ### `core/llm.py` - LLM 客户端
 
@@ -68,97 +107,26 @@
 @dataclass
 class LLMResponse:
     content: str
-    usage: dict  # {"prompt_tokens": x, "completion_tokens": y, "total_tokens": z}
+    usage: dict
     model: str
 
 response = LLMClient.get_instance().chat(messages)
-print(response.content)  # LLM 返回的文本
-print(response.usage)   # Token 使用量
-```
-
-### `core/models.py` - 模型配置
-
-```python
-MODELS = {
-    "MiniMax-M2.7": {"context_window": 204800, "max_tokens": 8192, ...},
-    "gpt-4": {"context_window": 8192, "max_tokens": 2048, ...},
-}
-
-context_window = get_context_window()  # 自动读取 .env 中的 LLM_MODEL
-```
-
-换模型只需修改 `.env`：
-```bash
-LLM_MODEL=gpt-4
-```
-
-### `core/session.py` - 会话管理
-
-```python
-class ConversationSession:
-    session_id: str
-    agent_name: str           # 关联的 Agent 名称（用于记忆查询）
-    messages: list[dict]       # 对话历史
-    token_count: int          # 当前 token 估算
-    summary: str | None       # 压缩后的摘要
-
-session_manager = SessionManager()
-session = session_manager.load_session(session_id)
-# 或创建新会话
-session = ConversationSession(session_id='xxx', agent_name='manager')
-```
-
-### `core/compactor.py` - 上下文压缩
-
-参考 OpenCode 的做法：
-- 阈值：context_window 的 **95%**
-- 当 token 达到阈值时，调用 LLM 生成摘要
-- 用摘要替换历史消息
-
-```python
-compactor = Compactor()
-if compactor.should_compact(token_count):
-    new_messages, summary = compactor.compact(messages)
-```
-
-### `core/token_counter.py` - Token 计数
-
-```python
-count = TokenCounter.estimate_from_text("中文 text")  # 估算
-count = TokenCounter.from_api_response(usage)         # 从 API 响应提取
-```
-
-### `core/context.py` - 上下文构建
-
-```python
-messages = build_messages(
-    system_prompt=agent.SYSTEM_PROMPT,
-    task=user_input,
-    session=conversation_session,
-    memory_limit=20,  # 可配置的记忆数量
-)
-
-# 检查并执行压缩
-if check_and_compact(session, session_manager):
-    print("上下文已压缩")
 ```
 
 ## 工作流程
 
-### 多轮会话流程（main.py）
+### 启动流程（main.py）
 
 ```
-用户输入 → session.add_message("user", input)
-              ↓
-         manager.process(task, session)
-              ↓
-         意图分类 / 路由处理
-              ↓
-         session.add_message("assistant", reply)
-              ↓
-         session_manager.add_message()  # 持久化
-              ↓
-         check_and_compact()  # 检查是否需要压缩
+main.py 启动
+    ↓
+创建 MessageBus 单例
+    ↓
+创建 Manager/Accountant/Auditor 实例（共享 Bus）
+    ↓
+各 Agent 调用 start() 启动消息循环
+    ↓
+进入输入循环，等待用户输入
 ```
 
 ### 记账流程（Manager 协调）
@@ -166,20 +134,28 @@ if check_and_compact(session, session_manager):
 ```
 用户输入记账任务
     ↓
-Manager._classify_intent()
-    ↓ Skill: coordination/intent.py
+Manager.handle() 接收消息
+    ↓
+Manager._classify() 意图分类（Skill: coordination/intent.py）
+    ↓
+意图为 "accounting"
     ↓
 ┌─────────────────────────────────────────┐
-│  循环最多 3 轮：                         │
+│  循环最多 2 轮：                         │
 │                                          │
-│  Accountant.process(task)                 │
-│      ↓  Skill: accounting/execute.py      │
-│      ↓                                  │
-│  Auditor.process(record)                  │
-│      ↓  Skill: audit/execute.py          │
-│      ↓                                  │
-│  if 通过 → 返回结果                       │
-│  else → Accountant.reflect(feedback)     │
+│  Manager → Accountant (send_to)          │
+│      ↓ Skill: accounting/execute.py     │
+│      ↓ LLM 提取记账信息                  │
+│      ↓ 写入账目数据库                    │
+│      ↓ reply() 返回记账结果              │
+│                                          │
+│  Manager → Auditor (send_to)             │
+│      ↓ Skill: audit/execute.py          │
+│      ↓ LLM 审核记账结果                  │
+│      ↓ reply() 返回审核意见              │
+│                                          │
+│  if "通过" in 审核意见 → 返回成功        │
+│  else 提取"请补充X" → 反馈给 Accountant │
 │         修正后继续循环                   │
 └─────────────────────────────────────────┘
 ```
@@ -202,7 +178,7 @@ response = LLMClient.get_instance().chat(messages)
 
 ## 环境配置
 
-`.env` 文件控制 LLM 配置，换模型只需修改这里：
+`.env` 文件控制 LLM 配置：
 
 ```bash
 LLM_PROVIDER=minimax
@@ -212,55 +188,42 @@ LLM_MODEL=MiniMax-M2.7
 LLM_TEMPERATURE=0.3
 ```
 
-## 记忆系统
+## 用户输入格式
 
-每个 Agent 独立记忆 JSON 文件：
+记账任务需要包含完整信息：
 
-```json
-{
-  "agent": "accounting",
-  "experiences": [
-    {"context": "审核反馈: 金额过大需确认", "learned_at": "2026-04-01"}
-  ]
-}
+```
+报销差旅费500元，日期2024-01-15，说明客户拜访交通费，发票已附
 ```
 
-## 上下文压缩机制
-
-当会话 token 数量达到 context window 的 95% 时自动触发压缩：
-
-1. **触发检查**：`compactor.should_compact(token_count)`
-2. **生成摘要**：调用 LLM 生成对话摘要
-3. **替换历史**：用摘要消息替换原始对话历史
-4. **持久化**：摘要信息存入 sessions 表
-
-压缩后的会话可以继续对话，但之前的历史被压缩成了简短的摘要。
+必需字段：
+- **金额**：数字
+- **类型**：收入/支出/转账（从上下文推断）
+- **日期**：YYYY-MM-DD 格式
+- **说明**：用途或来源
+- **发票状态**（支出时）：已附/未附
 
 ## 扩展新 Agent
 
-1. 在 `agents/` 下创建 Agent 类，继承 `BaseAgent`
-2. 在 `skills/` 下创建对应 Skill 目录和 SKILL.md
-3. 实现 `scripts/*.py` 脚本（独立，不依赖 core/）
+1. 在 `agents/` 下创建 Agent 类，继承 `AsyncAgent`
+2. 在 `skills/` 下创建对应 Skill 目录和 `scripts/*.py`
+3. 在 `handle()` 方法中处理消息并调用 `reply()` 回复
 4. 使用 `SkillLoader.load()` 加载系统提示词
 
 ```python
-class Analyst(BaseAgent):
-    NAME = "analysis"
-
-    def __init__(self):
-        skill = SkillLoader.load(self.NAME)
+class Analyst(AsyncAgent):
+    def __init__(self, bus=None):
+        super().__init__("analyst", bus)
+        self.skill_name = "analysis"
+        skill = SkillLoader.load(self.skill_name)
         self.SYSTEM_PROMPT = skill["system_prompt"]
 
-    def process(self, task: str) -> str:
-        result = SkillLoader.execute_script(
-            self.NAME, "execute", [task, "--json"],
-        )
-        return result.get("message", str(result))
+    async def handle(self, msg: Message):
+        result = await asyncio.to_thread(self._process, msg.content)
+        await self.reply(msg, result)
 ```
 
 ## 引用
-
-本项目在设计与实现过程中参考了以下开源项目：
 
 - **opencode** - AI 编程助手框架，提供了 Skill 系统和上下文压缩的设计思路  
   <https://github.com/anomalyco/opencode>

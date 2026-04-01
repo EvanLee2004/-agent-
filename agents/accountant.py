@@ -1,97 +1,50 @@
-"""Accountant Agent - 执行记账操作
+"""Accountant Agent"""
 
-Accountant 是执行记账的 Agent，负责：
-1. 调用 Skill 获取 prompt
-2. 用 LLM 统一处理
-3. 写账本数据库
-4. 记录反馈到记忆
-"""
-
+import asyncio
 import re
 from datetime import datetime
-from typing import Any, Optional
+from typing import Optional
 
-from agents.base import BaseAgent
+from agents.base import AsyncAgent
 from core.ledger import write_entry
 from core.llm import LLMClient
-from core.memory import write_memory, read_memory
+from core.memory import read_memory, write_memory
 from core.skill_loader import SkillLoader
+from core.message_bus import Message
 
 
-class Accountant(BaseAgent):
-    """会计 Agent（执行者）。
+class Accountant(AsyncAgent):
+    """会计 Agent"""
 
-    负责根据记账请求执行记账操作，包括：
-    - 调用 Skill 脚本获取 prompt
-    - 统一调 LLM 获取结果
-    - 写入账本数据库
-    - 根据审核反馈修正错误
-
-    Attributes:
-        NAME: Agent 名称标识
-        SYSTEM_PROMPT: 系统提示词，从 Skill 加载
-        _feedback: 上次审核反馈，用于循环修正
-
-    Example:
-        >>> accountant = Accountant()
-        >>> result = accountant.process("报销1000元差旅费")
-        >>> print(result)
-        "[ID:1] 支出 1000.0元 - 差旅费报销"
-    """
-
-    NAME: str = "accounting"
-
-    def __init__(self) -> None:
-        """初始化 Accountant。
-
-        从 Skill 加载 SYSTEM_PROMPT，如果加载失败则使用默认提示词。
-        初始化反馈为空字符串。
-        """
+    def __init__(self, bus=None):
+        super().__init__("accountant", bus)
+        self.skill_name = "accounting"  # Skill 目录名
         try:
-            skill = SkillLoader.load(self.NAME)
+            skill = SkillLoader.load(self.skill_name)
             self.SYSTEM_PROMPT = skill["system_prompt"]
         except FileNotFoundError:
-            self.SYSTEM_PROMPT = "你是记账专家，负责执行记账操作。"
-        self._feedback: str = ""
+            self.SYSTEM_PROMPT = "你是记账专家"
 
-    def process(self, task: str) -> str:
-        """处理记账任务。
+    async def handle(self, msg: Message):
+        """处理记账任务"""
+        parts = msg.content.split("|")
+        task = parts[0]
+        feedback = parts[1] if len(parts) > 1 else ""
 
-        调用 Skill 获取 prompt，然后用 LLM 统一处理。
+        result = await asyncio.to_thread(self._process, task, feedback)
+        await self.reply(msg, result)
 
-        工作流程：
-        1. 调用 SkillLoader.execute_script 获取 prompt
-        2. 构建 messages 调用 LLMClient.chat()
-        3. 解析 LLM 响应
-        4. 写入账本数据库
-        5. 返回格式化结果
-
-        Args:
-            task: 记账任务描述，如"报销1000元差旅费"
-
-        Returns:
-            记账结果字符串，格式：
-                - 成功: "[ID:x] 类型 金额元 - 说明"
-                - 失败: "执行失败: xxx"
-                - 数据库错误: "数据库写入失败: xxx"
-        """
+    def _process(self, task: str, feedback: str = "") -> str:
+        """同步处理记账"""
         args = [task, "--json"]
-        if self._feedback:
-            args.extend(["--feedback", self._feedback])
+        if feedback:
+            args.extend(["--feedback", feedback])
 
-        result = SkillLoader.execute_script(
-            "accounting",
-            "execute",
-            args,
-        )
-
+        result = SkillLoader.execute_script(self.skill_name, "execute", args)
         if result.get("status") != "ok":
             return f"执行失败: {result.get('message')}"
 
-        data = result.get("data")
-        if not data:
-            return f"执行失败: {result.get('message')}"
-
+        data = result.get("data", {})
         messages = [
             {"role": "system", "content": data.get("system", "")},
             {"role": "user", "content": data.get("prompt", "")},
@@ -100,68 +53,57 @@ class Accountant(BaseAgent):
         try:
             llm_response = LLMClient.get_instance().chat(messages)
         except Exception as e:
-            return f"LLM 调用失败: {str(e)}"
+            return f"LLM 调用失败: {e}"
 
-        parsed = self._parse_accounting_response(llm_response.content)
-
+        resp = llm_response.content
+        resp = re.sub(r"<think>.*?</think>", "", resp, flags=re.DOTALL).strip()
+        parsed = self._parse(resp)
         if parsed["status"] == "error":
             return f"执行失败: {parsed['message']}"
 
-        amount = parsed["amount"]
-        type_ = parsed["type"]
-        description = parsed["description"]
-        anomaly = parsed["anomaly"]
+        if parsed.get("description"):
+            parsed["description"] = re.sub(
+                r"[,，.。\s]*日期[：:]\d{4}-\d{2}-\d{2}[,，.。\s]*",
+                "",
+                parsed["description"],
+            ).strip()
+            parsed["description"] = re.sub(
+                r"[,，.。]+$", "", parsed["description"]
+            ).strip()
 
         try:
+            dt = parsed.get("date") or datetime.now().strftime("%Y-%m-%d")
+            datetime_str = dt + " " + datetime.now().strftime("%H:%M:%S")
             entry_id = write_entry(
-                datetime=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                type_=type_,
-                amount=float(amount),
-                description=description,
-                recorded_by="accounting",
-                anomaly_flag=anomaly.get("flag"),
-                anomaly_reason=anomaly.get("reason"),
+                datetime=datetime_str,
+                type_=parsed["type"],
+                amount=float(parsed["amount"]),
+                description=parsed["description"],
+                recorded_by=self.name,
+                anomaly_flag=parsed["anomaly"].get("flag"),
+                anomaly_reason=parsed["anomaly"].get("reason"),
             )
         except Exception as e:
-            return f"数据库写入失败: {str(e)}"
+            return f"数据库写入失败: {e}"
 
-        msg = f"[ID:{entry_id}] {type_} {amount}元"
-        if description:
-            msg += f" - {description}"
-        if anomaly.get("flag"):
-            msg += f" ⚠️ {anomaly['reason']}"
+        msg = f"[ID:{entry_id}] {parsed['type']} {parsed['amount']}元"
+        if parsed.get("date"):
+            msg += f", 日期:{parsed['date']}"
+        if parsed["description"]:
+            msg += f" - {parsed['description']}"
+
+        if feedback:
+            self._update_memory(feedback)
 
         return msg
 
-    @staticmethod
-    def _parse_accounting_response(response: str) -> dict[str, Any]:
-        """从 LLM 响应文本中解析记账信息。
-
-        使用正则表达式从 LLM 返回的文本中提取金额、类型、说明，
-        并进行异常检测。
-
-        Args:
-            response: LLM 返回的原始文本
-
-        Returns:
-            dict[str, Any]: 包含以下键的字典：
-                - status: "ok" 或 "error"
-                - amount: float | None, 金额
-                - type: str | None, 类型（收入/支出/转账）
-                - description: str | None, 说明
-                - anomaly: dict, 异常信息
-                    - flag: str | None, 异常级别
-                    - reason: str | None, 异常原因
-                - message: str, 错误信息（仅当 status="error" 时）
-                - raw_response: str, 原始响应（仅当 status="error" 时）
-        """
-        amount: Optional[float] = None
-        type_: Optional[str] = None
-        description: Optional[str] = None
+    def _parse(self, response: str) -> dict:
+        """解析 LLM 响应"""
+        date_match = re.search(r"日期[:：]?\s*(\d{4}-\d{2}-\d{2})", response)
+        date = date_match.group(1) if date_match else None
 
         amount_match = re.search(r"金额[:：]?\s*(\d+(?:\.\d+)?)", response)
-        if amount_match:
-            amount = float(amount_match.group(1))
+        amount = float(amount_match.group(1)) if amount_match else None
 
         if "支出" in response:
             type_ = "支出"
@@ -169,54 +111,39 @@ class Accountant(BaseAgent):
             type_ = "收入"
         elif "转账" in response:
             type_ = "转账"
+        else:
+            type_ = None
 
         desc_match = re.search(r"说明[:：]?\s*(.+?)(?:\n|$)", response)
-        if desc_match:
-            description = desc_match.group(1).strip()
+        description = desc_match.group(1).strip() if desc_match else None
 
         if not amount or not type_:
-            return {
-                "status": "error",
-                "message": f"无法理解记账信息：{response}",
-                "raw_response": response,
-            }
+            return {"status": "error", "message": f"无法理解：{response}"}
 
-        anomaly: dict[str, Optional[str]] = {"flag": None, "reason": None}
-        if amount is not None:
-            if amount < 10:
-                anomaly["flag"] = "high"
-                anomaly["reason"] = f"金额过小: {amount}元"
-            elif amount > 100000:
-                anomaly["flag"] = "high"
-                anomaly["reason"] = f"金额过大: {amount}元"
-            elif amount > 50000:
-                anomaly["flag"] = "medium"
-                anomaly["reason"] = f"金额较大: {amount}元，需确认"
+        anomaly = {"flag": None, "reason": None}
+        if amount < 10:
+            anomaly = {"flag": "high", "reason": f"金额过小: {amount}元"}
+        elif amount > 100000:
+            anomaly = {"flag": "high", "reason": f"金额过大: {amount}元"}
+        elif amount > 50000:
+            anomaly = {"flag": "medium", "reason": f"金额较大: {amount}元，需确认"}
 
         return {
             "status": "ok",
+            "date": date,
             "amount": amount,
             "type": type_,
             "description": description,
             "anomaly": anomaly,
         }
 
-    def reflect(self, feedback: str) -> None:
-        """反思审核反馈，记录到记忆并更新内部状态。
-
-        当审核不通过时，Manager 会调用此方法记录反馈，
-        下一次 process() 调用时会将反馈传递给 Skill。
-
-        Args:
-            feedback: 审核反馈意见
-        """
-        if feedback:
-            self._feedback = feedback[:500]
-            memory = read_memory(self.NAME)
-            memory["experiences"].append(
-                {
-                    "context": f"审核反馈: {feedback[:200]}",
-                    "learned_at": datetime.now().strftime("%Y-%m-%d"),
-                }
-            )
-            write_memory(self.NAME, memory)
+    def _update_memory(self, feedback: str):
+        """更新记忆"""
+        memory = read_memory(self.name)
+        memory["experiences"].append(
+            {
+                "context": f"审核反馈: {feedback[:200]}",
+                "learned_at": datetime.now().strftime("%Y-%m-%d"),
+            }
+        )
+        write_memory(self.name, memory)
