@@ -5,3 +5,5 @@ __pycache__/
 *.db
 data/
 sessions/
+memory/*.md
+.opencode/cache/*.sqlite

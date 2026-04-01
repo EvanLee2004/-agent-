@@ -68,10 +68,47 @@ class ConfigValidator:
             )
 
         model = config.get("model", "")
-        if model not in provider.models:
+        if not provider.allow_custom_models and model not in provider.models:
             return ConfigValidationResult(
                 is_valid=False,
                 error_message=f"Provider {provider_name} 不支持模型: {model}，可用: {', '.join(provider.models)}",
+            )
+
+        return ConfigValidationResult(is_valid=True)
+
+    @classmethod
+    def validate_native_tool_calling(cls, config: dict) -> ConfigValidationResult:
+        """验证当前 provider 是否支持原生 function calling。
+
+        当前项目的主流程已经切到原生工具调用，因此该校验结果可以用于：
+        - CLI 启动阶段的能力提示
+        - Agent/runtime 初始化阶段的失败前置
+
+        Args:
+            config: 配置字典。
+
+        Returns:
+            ConfigValidationResult: 校验结果。
+        """
+        base_validation = cls.validate(config)
+        if not base_validation.is_valid:
+            return base_validation
+
+        provider_name = config.get("provider", "")
+        provider = get_provider(provider_name)
+        if not provider:
+            return ConfigValidationResult(
+                is_valid=False,
+                error_message=f"Provider 配置错误: {provider_name}",
+            )
+
+        if not provider.supports_native_tool_calling:
+            return ConfigValidationResult(
+                is_valid=False,
+                error_message=(
+                    f"当前 provider {provider_name} 未声明支持原生 function calling，"
+                    "请切换到支持工具调用的 provider。"
+                ),
             )
 
         return ConfigValidationResult(is_valid=True)

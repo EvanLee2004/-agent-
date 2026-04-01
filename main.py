@@ -1,28 +1,29 @@
-"""财务助手 CLI"""
+"""财务助手 CLI。"""
 
 import asyncio
 
-from infrastructure.ledger import init_ledger_db
-from infrastructure.llm import LLMClient
-from agents.accountant_agent import AccountantAgent
-from providers.config import ensure_config, print_current_config
+from agents.factory import build_accountant_agent
+from bootstrap import bootstrap_default_application
+from providers.config import ConfigValidator, ensure_config, print_current_config
 
 
-def init():
-    """初始化：确保配置存在"""
-    ensure_config()
+def init() -> None:
+    """初始化运行环境。"""
+    config = ensure_config()
+    validation = ConfigValidator.validate_native_tool_calling(config)
+    if not validation.is_valid:
+        raise RuntimeError(validation.error_message or "当前配置不支持原生 function calling")
     print_current_config()
+    bootstrap_default_application()
 
 
-async def main_async():
+async def main_async() -> None:
+    """异步 CLI 主流程。"""
     init()
-    init_ledger_db()
-
-    llm_client = LLMClient.get_instance()
-    agent = AccountantAgent(llm_client)
+    agent = build_accountant_agent()
 
     print("=" * 50)
-    print("智能会计已启动 - 记账/查询（quit 退出）")
+    print("智能会计已启动 - 记账 / 查账 / 税务 / 审核（quit 退出）")
     print("=" * 50 + "\n")
 
     while True:
@@ -42,7 +43,8 @@ async def main_async():
     print("\n再见！")
 
 
-def main():
+def main() -> None:
+    """CLI 入口。"""
     asyncio.run(main_async())
 
 

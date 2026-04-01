@@ -1,19 +1,18 @@
-"""Skill Loader Module - Loads and executes Skills per opencode specification.
+"""Skill Loader 模块。
 
-This module implements the Skill loading mechanism for the financial
-assistant application, following opencode's convention where:
-- Each Skill resides in a dedicated directory under skills/
-- Each Skill contains a SKILL.md file with metadata and SYSTEM_PROMPT
-- Skill capabilities are exposed via executable scripts in scripts/
+该实现尽量向 OpenCode 的 Skill 约定对齐：
+- 优先从 `.opencode/skills/` 发现 Skill
+- 同时兼容 `.claude/skills/`、`.agents/skills/`
+- 为了兼容当前项目历史结构，也保留根目录 `skills/` 作为回退路径
 
-The loader provides:
-1. Loading Skill metadata and SYSTEM_PROMPT from SKILL.md
-2. Executing Skill scripts via subprocess with isolation
-3. Supporting JSON output format for structured data exchange
+在调用范式上，本模块遵循“Prompt 优先、脚本可选”：
+- Skill 的主能力来自 `SKILL.md`
+- `scripts/` 下的脚本只是辅助工具，不应替代主 LLM 流程
 
 Example:
     skill_info = SkillLoader.load("accounting")
-    result = SkillLoader.execute_script("accounting", "execute", ["task", "--json"])
+    system_prompt = SkillLoader.load_system_prompt("accounting")
+    result = SkillLoader.execute_script("docx", "accept_changes", ["file.docx"])
 """
 
 import json
@@ -26,68 +25,56 @@ from typing import Any, Optional
 
 
 class SkillLoader:
-    """Skill loader and executor following opencode conventions.
+    """Skill 加载器。
 
-    The SkillLoader provides a unified interface for loading Skill
-    metadata and executing Skill scripts. Each Skill operates in
-    isolation via subprocess, receiving input via CLI arguments and
-    environment variables.
-
-    Attributes:
-        SKILLS_DIR: Root directory containing all Skill directories.
-
-    Example:
-        skill = SkillLoader.load("accounting")
-        print(skill["system_prompt"])  # Access loaded system prompt
-
-        result = SkillLoader.execute_script(
-            "accounting",
-            "execute",
-            ["reimburse 1000 travel", "--json"]
-        )
+    设计目标：
+    1. 让主 Agent 通过 `SKILL.md` 注入领域能力。
+    2. 让脚本执行退居为“需要时才用的辅助能力”。
+    3. 在目录发现上尽量贴近 OpenCode，同时兼容当前项目已有结构。
     """
 
-    SKILLS_DIR = Path("skills")
+    # 目录顺序体现“先贴近 OpenCode，再兼容旧结构”的策略。
+    # 未来如果你把 Skill 迁移到 `.opencode/skills/`，业务代码无需修改。
+    SKILL_DIR_CANDIDATES = [
+        Path(".opencode/skills"),
+        Path(".claude/skills"),
+        Path(".agents/skills"),
+        Path("skills"),
+    ]
 
     @classmethod
     def load(cls, skill_name: str) -> dict[str, Any]:
-        """Load a Skill by name and extract its metadata.
+        """按名称加载 Skill，并提取其核心提示词。
 
-        Reads the SKILL.md file from the Skill directory and extracts
-        the SYSTEM_PROMPT section using regex. The SKILL.md must contain
-        a "## SYSTEM_PROMPT" section.
+        提取逻辑兼容两种写法：
+        1. 当前项目旧写法：`## SYSTEM_PROMPT` 段落保存核心提示词
+        2. OpenCode 常见写法：frontmatter 之后的正文整体就是 Skill 内容
 
         Args:
-            skill_name: Name of the Skill directory to load (e.g.,
-                "accounting", "audit", "coordination").
+            skill_name: Skill 名称。
 
         Returns:
-            Dictionary containing:
-                - name: Skill name (same as input)
-                - path: Absolute path to Skill directory
-                - system_prompt: Extracted SYSTEM_PROMPT text
-                - scripts_dir: Path to Skill's scripts directory
+            包含 Skill 名称、路径、主提示词和脚本目录的字典。
 
         Raises:
-            FileNotFoundError: If the Skill directory or SKILL.md
-                does not exist.
-            ValueError: If SYSTEM_PROMPT cannot be extracted from
-                SKILL.md (missing "## SYSTEM_PROMPT" section).
+            FileNotFoundError: 未在支持的目录中找到该 Skill。
+            ValueError: 找到了 Skill，但未能从 `SKILL.md` 中提取有效提示词。
         """
-        skill_path = cls.SKILLS_DIR / skill_name
-
-        if not skill_path.exists():
-            raise FileNotFoundError(f"Skill '{skill_name}' not found at {skill_path}")
+        skill_path = cls._find_skill_path(skill_name)
+        if skill_path is None:
+            raise FileNotFoundError(
+                f"Skill '{skill_name}' not found in supported skill directories"
+            )
 
         skill_md_path = skill_path / "SKILL.md"
         if not skill_md_path.exists():
             raise FileNotFoundError(f"SKILL.md not found at {skill_md_path}")
 
         skill_md = skill_md_path.read_text(encoding="utf-8")
-        system_prompt = cls._extract_system_prompt(skill_md)
+        system_prompt = cls._extract_prompt_text(skill_md)
 
         if not system_prompt:
-            raise ValueError(f"Failed to extract SYSTEM_PROMPT from SKILL.md")
+            raise ValueError(f"Failed to extract prompt content from {skill_md_path}")
 
         return {
             "name": skill_name,
@@ -95,6 +82,18 @@ class SkillLoader:
             "system_prompt": system_prompt,
             "scripts_dir": skill_path / "scripts",
         }
+
+    @classmethod
+    def load_system_prompt(cls, skill_name: str) -> str:
+        """只读取 Skill 的主提示词。
+
+        Args:
+            skill_name: Skill 名称。
+
+        Returns:
+            适合直接注入到 LLM system message 的文本内容。
+        """
+        return cls.load(skill_name)["system_prompt"]
 
     @classmethod
     def execute_script(
@@ -105,44 +104,28 @@ class SkillLoader:
         timeout: int = 30,
         env: Optional[dict[str, str]] = None,
     ) -> dict[str, Any]:
-        """Execute a Skill script via subprocess.
+        """通过 subprocess 执行 Skill 的辅助脚本。
 
-        Runs the specified script with given arguments in an isolated
-        subprocess. The script receives environment variables for
-        sensitive data (e.g., API keys). Output is parsed as JSON
-        if available, otherwise returned as plain text.
+        注意：
+        这个接口保留给文档处理、文件转换等“工具型 Skill”使用。
+        对业务类 Skill 来说，首选调用方式仍然是 `load_system_prompt()`。
 
         Args:
-            skill_name: Name of the Skill containing the script.
-            script_name: Script filename without .py extension
-                (e.g., "execute", "intent").
-            args: Optional list of CLI arguments to pass to script.
-            timeout: Execution timeout in seconds. Defaults to 30.
-            env: Optional dict of environment variables to pass to
-                the subprocess. Merged with current environment.
+            skill_name: Skill 名称。
+            script_name: 脚本名，不带 `.py` 后缀。
+            args: 传入脚本的命令行参数列表。
+            timeout: 超时时间，单位秒。
+            env: 额外传给子进程的环境变量。
 
         Returns:
-            Dictionary with execution results:
-                - status: "ok" on success, "error" on failure
-                - message: Human-readable status or error message
-                - data: Parsed JSON output (if script returned JSON)
-                - returncode: Exit code (only on error)
-
-            On success (status="ok"), one of message or data is present.
-            On error (status="error"), message describes the failure.
-
-        Raises:
-            FileNotFoundError: If the skill or script does not exist.
-            subprocess.TimeoutExpired: If script exceeds timeout
-                (caught and returned as error status).
+            统一格式的执行结果字典。
         """
         try:
             skill_info = cls.load(skill_name)
-        except FileNotFoundError:
+        except (FileNotFoundError, ValueError):
             return {"status": "error", "message": f"Skill '{skill_name}' not found"}
 
         script_path = Path(skill_info["scripts_dir"]) / f"{script_name}.py"
-
         if not script_path.exists():
             return {
                 "status": "error",
@@ -172,9 +155,8 @@ class SkillLoader:
                     output = json.loads(process.stdout)
                     if isinstance(output, str):
                         output = {"status": "ok", "message": output}
-                    elif isinstance(output, dict):
-                        if "status" not in output:
-                            output = {"status": "ok", "data": output}
+                    elif isinstance(output, dict) and "status" not in output:
+                        output = {"status": "ok", "data": output}
                 except json.JSONDecodeError:
                     output = {
                         "status": "ok",
@@ -188,49 +170,84 @@ class SkillLoader:
                     or f"Script exited with code {process.returncode}",
                     "returncode": process.returncode,
                 }
-
         except subprocess.TimeoutExpired:
             output = {
                 "status": "error",
                 "message": f"Script timeout after {timeout}s",
             }
-        except Exception as e:
-            output = {"status": "error", "message": str(e)}
+        except Exception as exc:
+            output = {"status": "error", "message": str(exc)}
 
         return output
 
     @classmethod
     def get_skill_names(cls) -> list[str]:
-        """List all available Skill names.
+        """列出当前可发现的 Skill 名称。"""
+        skill_names: set[str] = set()
 
-        Scans the SKILLS_DIR for directories containing SKILL.md
-        and returns their names.
+        for skill_dir in cls.SKILL_DIR_CANDIDATES:
+            if not skill_dir.exists():
+                continue
 
-        Returns:
-            List of Skill directory names that have a SKILL.md file.
-        """
-        if not cls.SKILLS_DIR.exists():
-            return []
-        return [
-            d.name
-            for d in cls.SKILLS_DIR.iterdir()
-            if d.is_dir() and (d / "SKILL.md").exists()
-        ]
+            for path in skill_dir.iterdir():
+                if path.is_dir() and (path / "SKILL.md").exists():
+                    skill_names.add(path.name)
 
-    @staticmethod
-    def _extract_system_prompt(skill_md: str) -> str:
-        """Extract SYSTEM_PROMPT content from SKILL.md text.
+        return sorted(skill_names)
 
-        Uses regex to find the section starting with "## SYSTEM_PROMPT"
-        and returns its content until the next section or end of file.
+    @classmethod
+    def _find_skill_path(cls, skill_name: str) -> Optional[Path]:
+        """在多个候选目录中查找 Skill 路径。
 
         Args:
-            skill_md: Raw text content of SKILL.md file.
+            skill_name: Skill 名称。
 
         Returns:
-            The SYSTEM_PROMPT section content, stripped of whitespace.
-            Empty string if "## SYSTEM_PROMPT" section not found.
+            找到则返回 Skill 目录路径，找不到返回 None。
         """
-        pattern = r"## SYSTEM_PROMPT\s*\n(.+?)(?=\n##|\Z)"
-        match = re.search(pattern, skill_md, re.DOTALL)
-        return match.group(1).strip() if match else ""
+        for skill_dir in cls.SKILL_DIR_CANDIDATES:
+            candidate = skill_dir / skill_name
+            if candidate.exists():
+                return candidate
+        return None
+
+    @staticmethod
+    def _extract_prompt_text(skill_md: str) -> str:
+        """从 `SKILL.md` 中提取主提示词。
+
+        提取顺序：
+        1. 如果存在 `## SYSTEM_PROMPT`，优先使用该段内容。
+        2. 否则，使用 frontmatter 之后的整个正文。
+
+        这样既兼容当前项目，也更贴近 OpenCode 对 Skill 正文的使用方式。
+
+        Args:
+            skill_md: `SKILL.md` 原始文本。
+
+        Returns:
+            可作为 system message 使用的文本；失败返回空字符串。
+        """
+        system_prompt_pattern = r"## SYSTEM_PROMPT\s*\n(.+?)(?=\n##|\Z)"
+        match = re.search(system_prompt_pattern, skill_md, re.DOTALL)
+        if match:
+            return match.group(1).strip()
+
+        body = SkillLoader._strip_frontmatter(skill_md)
+        return body.strip()
+
+    @staticmethod
+    def _strip_frontmatter(skill_md: str) -> str:
+        """移除 YAML frontmatter，返回正文部分。
+
+        OpenCode 的 Skill 常在文件开头使用 frontmatter 描述 `name`、
+        `description` 等元信息。这里不强制解析这些字段，只负责剥离它们，
+        让正文可以直接作为提示词来源。
+
+        Args:
+            skill_md: `SKILL.md` 原始文本。
+
+        Returns:
+            去掉 frontmatter 后的正文。
+        """
+        frontmatter_pattern = r"^---\s*\n.*?\n---\s*\n?"
+        return re.sub(frontmatter_pattern, "", skill_md, count=1, flags=re.DOTALL)

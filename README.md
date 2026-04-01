@@ -1,58 +1,69 @@
 # 智能会计
 
-基于 LLM 的智能会计助手，单 Agent 架构。
+<p align="center">
+  <img src="assets/readme-hero.svg" alt="智能会计项目封面图" width="100%" />
+</p>
+
+基于 LLM 的智能会计助手，单 Agent 架构。  
+当前版本已经从“收入/支出流水账助手”重构为“`skills + native function calling + deterministic services`”驱动的小企业会计系统雏形。
 
 ## 功能
 
-- **记账**：记录收入、支出，自动异常检测
-- **查询**：查看历史账目
-- **记忆**：从交互中学习，积累经验
-- **智能闲聊**：LLM 驱动的自然对话
+- **记账**：把自然语言业务转成标准会计凭证并自动入账
+- **查询**：查看历史凭证和分录
+- **税务计算**：支持小规模纳税人增值税、小型微利企业企业所得税基础计算
+- **审核**：支持基于规则的凭证审核
+- **记忆**：支持长期记忆与每日记忆的显式写入与检索
+- **规则问答**：支持基于项目规则和会计约束的说明性问答
 
 ## 架构
 
-```
-用户 → 智能会计（单 Agent）
-           ↓
-      LLM 判断意图（结构化 JSON 输出）
-           ↓
-      Skill 系统（可选）/ 直接执行
-           ↓
-      Repository 模式数据库
-           ↓
-      长期记忆学习
+```text
+用户
+  ↓
+AccountantAgent
+  ↓
+SkillPromptService（加载 .opencode/skills + 记忆 + 科目目录）
+  ↓
+ToolRuntime（原生 function calling）
+  ↓
+Tool Handlers
+  ↓
+Accounting / Tax / Audit / Memory Services
+  ↓
+Journal / Chart Repository + OpenClaw 风格记忆存储
 ```
 
-**参考 opencode 的设计**：长期记忆 + 模型选择系统 + Skill 系统。
+项目参考 OpenCode 的 skills 目录形态，并结合 OpenClaw 风格记忆实现：  
+`opencode.json` + `.opencode/skills/` + `MEMORY.md` + `memory/YYYY-MM-DD.md`
 
 ## 项目结构
 
-```
-├── main.py                      # CLI 入口
+```text
+├── main.py                         # CLI 入口
+├── bootstrap.py                    # 应用启动引导
 ├── agents/
-│   └── accountant_agent.py      # 智能会计（AccountantAgent 类）
+│   ├── accountant_agent.py         # 智能会计主 Agent
+│   └── factory.py                  # Agent 装配工厂
+├── domain/                         # 领域模型
+├── services/                       # 应用服务层
 ├── infrastructure/
-│   ├── llm.py                  # LLM 调用（重试+异常处理+超时）
-│   ├── ledger.py               # 数据库接口（向后兼容）
-│   ├── ledger_repository.py    # Repository 模式（SQLite 实现）
-│   ├── memory.py               # 长期记忆系统
-│   └── skill_loader.py        # Skill 加载器
-├── providers/
-│   ├── __init__.py            # Provider 定义（MiniMax/DeepSeek）
-│   └── config.py             # 配置管理（含验证层）
-├── skills/
-│   ├── docx/                   # Word 文档处理（Anthropic）
-│   ├── pdf/                     # PDF 文档处理（Anthropic）
-│   ├── pptx/                    # PPT 演示文稿处理（Anthropic）
-│   ├── xlsx/                    # Excel 电子表格处理（Anthropic）
-│   ├── rules/                   # 中国会计准则
-│   ├── tax/                    # 中国税务（待开源替代）
-│   ├── audit/                   # 账目审核
-│   ├── accounting/              # 智能记账
-│   └── accounting/reference/    # 参考资料（Beancount, IFRS）
-├── memory/                     # 记忆存储（JSON）
-├── data/                       # 账目数据库（SQLite）
-└── config.json                # 模型配置
+│   ├── accounting_repository.py    # 凭证、分录、科目 Repository
+│   ├── ledger.py                   # 旧接口兼容层
+│   ├── ledger_repository.py        # 历史 ledger 仓库
+│   ├── llm.py                      # Provider + LLM facade
+│   ├── memory.py                   # OpenClaw 风格记忆存储
+│   ├── memory_index.py             # SQLite FTS 记忆索引
+│   └── skill_loader.py             # Skill 加载器
+├── tools/                          # Tool runtime / registry / handlers
+├── .opencode/
+│   └── skills/                     # 原生 Skills 目录
+├── skills/                         # 文档处理类 legacy helper scripts
+├── MEMORY.md                       # 长期稳定记忆
+├── memory/                         # 每日记忆（YYYY-MM-DD.md）
+├── tests/                          # 自动化测试
+├── opencode.json                   # OpenCode 项目配置
+└── config.json                     # 模型配置
 ```
 
 ## 快速开始
@@ -68,11 +79,12 @@ pip install -r requirements.txt
 ### 2. 配置
 
 首次运行会自动引导配置：
-1. 选择 Provider（MiniMax/DeepSeek）
+1. 选择 Provider（MiniMax / DeepSeek / OpenAI）
 2. 选择 Model
-3. 输入 API Key（保存在 `.env`）
+3. 输入 API Key（保存到 `.env`）
 
-或手动创建 `.env`：
+也可以手动创建 `.env`：
+
 ```bash
 LLM_API_KEY=your_key_here
 ```
@@ -85,68 +97,65 @@ python main.py
 
 ## 核心特性
 
-### LLM 调用稳定性
-- 自动重试（最多 3 次）
-- 指数退避策略
-- 超时控制（30 秒）
-- 网络异常降级处理
+### Native Function Calling
 
-### 结构化意图识别
-- JSON 格式输出
-- 自动降级到正则匹配（兼容旧格式）
-- 意图类型：`accounting` / `query` / `chat`
-
-### 依赖注入架构
-- `AccountantAgent` 类支持自定义 LLM 客户端
-- 便于单元测试和模型切换
+- 主流程不再依赖“模型输出 JSON，再由本地解析执行”的旧链路
+- 第一轮强制调用至少一个工具，避免悄悄退回自由聊天
+- 当前工具：
+  - `record_voucher`
+  - `query_vouchers`
+  - `calculate_tax`
+  - `audit_voucher`
+  - `store_memory`
+  - `search_memory`
+  - `reply_with_rules`
 
 ### Skill 系统
-- 8 个可加载技能：docx, pdf, pptx, xlsx, rules, tax, audit, accounting
-- 通过 subprocess 隔离执行
-- 支持 JSON 输出格式
 
-#### 技能分类
+- Skill 主入口是 `.opencode/skills/<name>/SKILL.md`
+- Skills 现在只负责领域知识、工具使用规则和答复约束
+- 业务类 legacy fallback skill 模板已经移除，避免旧文档和主流程冲突
+- `skills/` 目录当前仅保留文档处理类 helper scripts
 
-| 类别 | 技能 | 说明 |
-|------|------|------|
-| 文档处理 | docx, pdf, pptx, xlsx | Anthropic 官方 |
-| 会计专业 | rules, tax, audit, accounting | 中国会计准则/税务/审核/记账 |
+### 分录驱动账务模型
 
-### Repository 模式
-- 抽象数据库接口
-- 支持未来迁移到 PostgreSQL/MySQL
-- 单例模式全局访问
+- 账务主存储为 `account_subject`、`journal_voucher`、`journal_line`
+- 旧 `ledger` 接口通过兼容适配层映射到新版主账，不再参与主流程双写
+- 凭证必须借贷平衡
 
-### 配置验证
-- 启动时验证 provider/model/base_url
-- 明确的错误提示
+### 记忆系统
 
-## 使用示例
+- 长期记忆写入根目录 `MEMORY.md`
+- 短期/每日记忆写入 `memory/YYYY-MM-DD.md`
+- Markdown 文件是源数据，SQLite FTS 只负责搜索
+- 主流程通过原生 `store_memory` / `search_memory` 工具读写记忆
 
-```
-当前: MiniMax - MiniMax-M2.7
-==================================================
-智能会计已启动 - 记账/查询（quit 退出）
-==================================================
+### 税务与审核
 
-你: 报销差旅费500元，日期2024-01-15，说明客户拜访
-助手: 记账成功 [ID:1]
+- 小规模纳税人增值税：按 1% 征收率基础计算
+- 小型微利企业企业所得税：按 25% x 20% 有效税负基础计算
+- 凭证审核覆盖借贷平衡、金额异常、摘要质量和重复凭证检查
 
-你: 你好
-助手: 你好！我是智能会计助手～
+## 测试
+
+```bash
+./.venv/bin/python -B -m unittest discover -s tests -v
 ```
 
-## 记账规则
+当前已覆盖的主路径：
+- 凭证记账与查询
+- 税务计算
+- 凭证审核
+- 长期记忆写入与复用
+- 规则问答
+- `<think>` 清理
+- 禁止无工具自由聊天
 
-- 金额超过 50000：标注"需审核"
-- 金额低于 10 元：标注"金额过小"
-- 自动记录交互到记忆
+## 说明
 
-## 版本历史
-
-- **v2.0** - 架构优化：LLM 重试机制、结构化输出、依赖注入、Repository 模式、配置验证
-- **v1.1** - 模型选择系统，支持 MiniMax/DeepSeek
-- **v1.0** - 智能会计 1.0，单 Agent 架构
+- 本项目已经验证本地 stub 测试和真实 MiniMax 原生 function calling smoke test
+- 文档处理类 skill 仍依赖 `skills/docx|pdf|pptx|xlsx/scripts/`
+- `memory/智能会计.json` 属于历史 legacy 数据，不是当前主流程存储
 
 ## License
 

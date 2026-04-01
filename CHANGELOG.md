@@ -1,5 +1,32 @@
 # CHANGELOG
 
+> 说明：
+> 本文件保留项目迭代过程中的历史记录。
+> 2026-04-02 之前的条目反映的是当时阶段性方案，不一定代表当前主架构。
+> 当前准确实现请以 [README.md](README.md) 与 [AGENTS.md](AGENTS.md) 为准。
+
+## 2026-04-02 - Native Tool Calling 收口
+
+### 当前主架构
+
+- 主流程已切换为 `skills + native function calling + deterministic services`
+- `AccountantAgent` 只做编排，工具执行由 `ToolRuntime` 负责
+- 业务确定性规则位于 `AccountingService`、`TaxService`、`AuditService`、`MemoryService`
+- `journal_voucher` / `journal_line` / `account_subject` 为主账真相
+- 旧 `ledger` 仅保留兼容接口，不再参与主流程双写
+
+### Skills 与目录
+
+- 业务技能主入口位于 `.opencode/skills/`
+- 根目录 `skills/` 当前仅保留文档处理类 helper scripts 与参考资料
+- 历史上的 `skills/accounting`、`skills/audit`、`skills/rules`、`skills/tax` 业务模板已移除
+
+### 文档与展示
+
+- README 已更新为当前架构说明
+- README 新增项目封面图 `assets/readme-hero.svg`
+- AGENTS 指南已改为当前函数调用与技能协同模式
+
 ## 2026-04-01 - Skills 技能完善
 
 ### 新增技能
