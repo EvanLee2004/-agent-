@@ -1,6 +1,7 @@
-"""Auditor Agent"""
+"""审计 Agent - 审核记账结果，拥有封驳权"""
 
 import asyncio
+import re
 
 from agents.base import AsyncAgent
 from core.llm import LLMClient
@@ -9,21 +10,36 @@ from core.message_bus import Message
 
 
 class Auditor(AsyncAgent):
-    """审核 Agent"""
+    """审计 - 审核记账结果
+
+    职责：
+    - 审核会计的执行结果
+    - 合格：准奏（返回"通过"）
+    - 不合格：封驳（直接发给会计，不需要经过财务主管）
+    - 标注问题，让对方主动修改
+    """
 
     def __init__(self, bus=None):
-        super().__init__("auditor", bus)
-        self.skill_name = "audit"  # Skill 目录名
+        super().__init__("审计", bus)
+        self.skill_name = "audit"
         try:
             skill = SkillLoader.load(self.skill_name)
             self.SYSTEM_PROMPT = skill["system_prompt"]
         except FileNotFoundError:
-            self.SYSTEM_PROMPT = "你是财务审核"
+            self.SYSTEM_PROMPT = "你是财务审核，负责审查记账结果"
 
     async def handle(self, msg: Message):
         """处理审核任务"""
         result = await asyncio.to_thread(self._process, msg.content)
-        await self.reply(msg, result)
+
+        # 判断是准奏还是封驳
+        if "通过" in result and "不" not in result:
+            # 准奏，回复给财务主管
+            await self.reply(msg, "准奏: " + result, msg_type="approval")
+        else:
+            # 封驳，可以直接发给会计（不需要经过财务主管）
+            # 但为了保持流程一致，还是回复给财务主管，让它转发
+            await self.reply(msg, result, msg_type="rejection")
 
     def _process(self, record: str) -> str:
         """同步处理审核"""
@@ -45,9 +61,9 @@ class Auditor(AsyncAgent):
             return f"LLM 调用失败: {e}"
 
         resp = llm_response.content
-        import re
-
         resp = re.sub(r"<think>.*?</think>", "", resp, flags=re.DOTALL).strip()
+
         if "通过" in resp and "不" not in resp:
             return "审核通过"
+
         return resp

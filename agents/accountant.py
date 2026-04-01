@@ -1,9 +1,8 @@
-"""Accountant Agent"""
+"""会计 Agent - 执行记账任务"""
 
 import asyncio
 import re
 from datetime import datetime
-from typing import Optional
 
 from agents.base import AsyncAgent
 from core.ledger import write_entry
@@ -14,11 +13,18 @@ from core.message_bus import Message
 
 
 class Accountant(AsyncAgent):
-    """会计 Agent"""
+    """会计 - 执行记账任务
+
+    职责：
+    - 执行具体记账操作
+    - 写入数据库
+    - 处理审计的封驳反馈
+    - 检测异常金额
+    """
 
     def __init__(self, bus=None):
-        super().__init__("accountant", bus)
-        self.skill_name = "accounting"  # Skill 目录名
+        super().__init__("会计", bus)
+        self.skill_name = "accounting"
         try:
             skill = SkillLoader.load(self.skill_name)
             self.SYSTEM_PROMPT = skill["system_prompt"]
@@ -32,7 +38,7 @@ class Accountant(AsyncAgent):
         feedback = parts[1] if len(parts) > 1 else ""
 
         result = await asyncio.to_thread(self._process, task, feedback)
-        await self.reply(msg, result)
+        await self.reply(msg, result, msg_type="result")
 
     def _process(self, task: str, feedback: str = "") -> str:
         """同步处理记账"""
@@ -57,10 +63,12 @@ class Accountant(AsyncAgent):
 
         resp = llm_response.content
         resp = re.sub(r"<think>.*?</think>", "", resp, flags=re.DOTALL).strip()
+
         parsed = self._parse(resp)
         if parsed["status"] == "error":
             return f"执行失败: {parsed['message']}"
 
+        # 清理描述中的日期重复
         if parsed.get("description"):
             parsed["description"] = re.sub(
                 r"[,，.。\s]*日期[：:]\d{4}-\d{2}-\d{2}[,，.。\s]*",
@@ -72,10 +80,10 @@ class Accountant(AsyncAgent):
             ).strip()
 
         try:
-            dt = parsed.get("date") or datetime.now().strftime("%Y-%m-%d")
-            datetime_str = dt + " " + datetime.now().strftime("%H:%M:%S")
             entry_id = write_entry(
-                datetime=datetime_str,
+                datetime=parsed.get("date", datetime.now().strftime("%Y-%m-%d"))
+                + " "
+                + datetime.now().strftime("%H:%M:%S"),
                 type_=parsed["type"],
                 amount=float(parsed["amount"]),
                 description=parsed["description"],

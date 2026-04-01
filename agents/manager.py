@@ -1,98 +1,95 @@
-"""Manager Agent - 协调者，负责意图分类和流程协调"""
+"""财务主管 Agent - 协调任务流程，分发任务，汇总结果"""
 
 import asyncio
 import re
-from core.ledger import get_entries
-from core.llm import LLMClient
-from core.skill_loader import SkillLoader
+from typing import Optional
+
 from agents.base import AsyncAgent
+from core.ledger import get_entries
 from core.message_bus import Message
 
 
-class Manager(AsyncAgent):
-    """经理 Agent，唯一和用户交互"""
+class FinanceManager(AsyncAgent):
+    """财务主管 - 任务协调中心
+
+    职责：
+    - 接收财务专员转发的任务
+    - 分发给会计执行
+    - 协调审核流程（循环）
+    - 汇总结果返回给财务专员
+    """
 
     def __init__(self, bus=None):
-        super().__init__("manager", bus)
-        self.skill_name = "coordination"
-        try:
-            skill = SkillLoader.load(self.skill_name)
-        except FileNotFoundError:
-            self.SYSTEM_PROMPT = "你是财务部门经理"
+        super().__init__("财务主管", bus)
+        self._max_rounds = 2  # 最大协调轮数
 
     async def handle(self, msg: Message):
-        """处理用户消息"""
-        intent = await self._classify(msg.content)
+        """处理任务消息"""
+        intent = msg.intent
+        content = msg.content
 
         if intent == "accounting":
-            result = await self._do_accounting(msg.content)
-        elif intent == "review":
-            result = self._do_review()
+            result = await self._handle_accounting(content, msg)
         elif intent == "transfer":
-            result = await self._do_transfer(msg.content)
+            result = await self._handle_transfer(content, msg)
+        elif intent == "review":
+            result = self._handle_review()
         else:
-            result = "🤔 无法理解您的意图"
+            result = "🤔 无法处理此类型任务"
 
-        await self.reply(msg, result)
+        await self.reply(msg, result, msg_type="result")
 
-    async def _classify(self, task: str) -> str:
-        """意图分类"""
-        result = SkillLoader.execute_script(self.skill_name, "intent", [task, "--json"])
-        if result.get("status") != "ok":
-            return "unknown"
-
-        data = result.get("data", {})
-        messages = [
-            {"role": "system", "content": data.get("system", "")},
-            {"role": "user", "content": data.get("prompt", "")},
-        ]
-
-        try:
-            response = await asyncio.to_thread(
-                lambda: LLMClient.get_instance().chat(messages)
-            )
-            resp = response.content
-            resp = re.sub(r"<think>.*?</think>", "", resp, flags=re.DOTALL).strip()
-            resp_lower = resp.lower()
-            resp_num = resp_lower.split(".")[0].strip()
-
-            if resp_num == "2":
-                return "review"
-            elif resp_num == "3":
-                return "transfer"
-            elif resp_num == "1" or "记账" in resp_lower or "报销" in resp_lower:
-                return "accounting"
-        except Exception:
-            pass
-        return "unknown"
-
-    async def _do_accounting(self, task: str) -> str:
-        """处理记账"""
-        max_rounds = 2
+    async def _handle_accounting(self, task: str, original_msg: Message) -> str:
+        """处理记账任务"""
         feedback = ""
 
-        for i in range(max_rounds):
-            acct_reply = await self.send_to("accountant", f"{task}|{feedback}")
+        for round_num in range(self._max_rounds):
+            # 发给会计执行
+            acct_reply = await self.send_to(
+                recipient="会计",
+                content=f"{task}|{feedback}",
+                msg_type="task",
+                intent="accounting",
+                round=round_num,
+            )
+
             if not acct_reply:
-                return f"⚠️ 第 {i + 1} 轮：Accountant 无响应"
+                return f"⚠️ 第 {round_num + 1} 轮：会计无响应"
 
-            audit_reply = await self.send_to("auditor", acct_reply.content)
+            # 发给审计审核
+            audit_reply = await self.send_to(
+                recipient="审计",
+                content=acct_reply.content,
+                msg_type="task",
+                intent="audit",
+                round=round_num,
+            )
+
             if not audit_reply:
-                return f"⚠️ 第 {i + 1} 轮：Auditor 无响应"
+                return f"⚠️ 第 {round_num + 1} 轮：审计无响应"
 
-            if "通过" in audit_reply.content:
+            # 检查审核结果
+            if "通过" in audit_reply.content or "准奏" in audit_reply.content:
                 return f"✅ {acct_reply.content}"
 
+            # 提取反馈，准备下一轮
             fb = re.search(r"请补充([^。\n]*)", audit_reply.content)
             if fb:
                 feedback = fb.group(0)
             else:
-                return f"✅ {acct_reply.content}"
+                # 没有明确反馈，但没通过
+                return f"⚠️ 第 {round_num + 1} 轮审核未通过：{audit_reply.content[:100]}"
 
-        return f"⚠️ 经过 {max_rounds} 轮仍有问题，需人工确认\n\n审核意见：{feedback}"
+        return (
+            f"⚠️ 经过 {self._max_rounds} 轮仍有问题，需人工确认\n\n审核意见：{feedback}"
+        )
 
-    def _do_review(self) -> str:
-        """查看账目"""
+    async def _handle_transfer(self, task: str, original_msg: Message) -> str:
+        """处理转账任务（暂同记账）"""
+        return await self._handle_accounting(task, original_msg)
+
+    def _handle_review(self) -> str:
+        """处理查询请求"""
         entries = get_entries(limit=50)
         if not entries:
             return "暂无记录"
@@ -105,7 +102,3 @@ class Manager(AsyncAgent):
                 f"{e['type']:^4} ¥{e['amount']:>8.2f} {e['description'][:12]:<12}"
             )
         return "\n".join(lines)
-
-    async def _do_transfer(self, task: str) -> str:
-        """转账"""
-        return await self._do_accounting(task)
