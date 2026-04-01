@@ -112,6 +112,14 @@ class LLMClient:
             cls._instance = cls()
         return cls._instance
 
+    @classmethod
+    def reset_instance(cls) -> None:
+        """Reset the singleton instance.
+
+        Used when configuration changes and LLM needs to be reinitialized.
+        """
+        cls._instance = None
+
     def chat(
         self,
         messages: list[dict],
@@ -147,8 +155,15 @@ class LLMClient:
                 "total_tokens": response.usage.total_tokens,
             }
 
+        content = ""
+        try:
+            if response.choices and response.choices[0].message:
+                content = response.choices[0].message.content or ""
+        except (IndexError, AttributeError) as e:
+            raise RuntimeError(f"LLM 响应格式异常: {response}")
+
         return LLMResponse(
-            content=response.choices[0].message.content or "",
+            content=content,
             usage=usage,
             model=self.model,
         )
