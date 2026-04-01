@@ -32,26 +32,27 @@ import sys
 
 SYSTEM_PROMPT: str = """你是财务部门的经理，负责理解用户意图。
 
-你的职责是分析用户输入的财务相关请求，判断其意图类型。
-意图类型包括：
-- accounting：记账相关（报销、收入、支出等）
-- review：查看账目记录
+你的职责是分析用户输入，判断其意图类型：
+- accounting：需要执行记账任务（包含金额、日期、类型等信息）
+- review：查询账目记录
 - transfer：转账
+- chat：闲聊、问候、身份询问、谢谢、再见等非任务类输入
 - unknown：无法判断
 
-请直接回答意图类型，不要过多解释。
+注意：如果用户只是简单询问（如"怎么记账"、"你能做什么"）而非提供完整记账信息，应判断为 chat。
 """
 
 PROMPT_TEMPLATE: str = """分析用户输入，判断意图：
 {task}
 
 选项：
-1. accounting - 记账相关（报销、收入、支出等）
-2. review - 查看账目记录
+1. accounting - 记账任务（用户提供金额、日期、类型等完整信息）
+2. review - 查询账目
 3. transfer - 转账
-4. unknown - 无法判断
+4. chat - 闲聊/问候/询问（非具体任务）
+5. unknown - 无法判断
 
-直接回答选项编号或名称：
+直接回答选项编号：
 """
 
 
@@ -67,10 +68,11 @@ def parse_intent(response: str) -> str:
         response: LLM 返回的原始文本
 
     Returns:
-        str: 意图类型，可能的值包括：
-            - "accounting": 记账相关
+        str: 意图类型：
+            - "accounting": 记账任务
             - "review": 查看记录
             - "transfer": 转账
+            - "chat": 闲聊/问候
             - "unknown": 无法判断
     """
     response_lower = response.lower().strip()
@@ -80,6 +82,10 @@ def parse_intent(response: str) -> str:
         return "review"
     elif response_num == "3":
         return "transfer"
+    elif response_num == "4":
+        return "chat"
+    elif response_num == "5":
+        return "unknown"
     elif (
         response_num == "1"
         or "accounting" in response_lower
@@ -87,8 +93,8 @@ def parse_intent(response: str) -> str:
         or "报销" in response
     ):
         return "accounting"
-    else:
-        return "unknown"
+
+    return "unknown"
 
 
 def build_prompt(task: str) -> dict[str, str]:
