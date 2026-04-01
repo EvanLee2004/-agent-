@@ -14,34 +14,39 @@
 ```
 用户 → 智能会计（单 Agent）
            ↓
-      LLM 判断意图
+      LLM 判断意图（结构化 JSON 输出）
            ↓
-     执行/回复
+      Skill 系统（可选）/ 直接执行
+           ↓
+      Repository 模式数据库
+           ↓
+      长期记忆学习
 ```
 
-**参考 opencode 的设计**：长期记忆 + 模型选择系统。
+**参考 opencode 的设计**：长期记忆 + 模型选择系统 + Skill 系统。
 
 ## 项目结构
 
 ```
 ├── main.py                      # CLI 入口
 ├── agents/
-│   └── accountant_agent.py      # 智能会计
+│   └── accountant_agent.py      # 智能会计（AccountantAgent 类）
 ├── infrastructure/
-│   ├── llm.py                  # LLM 调用（从 config.json 读取配置）
-│   ├── ledger.py               # 账目数据库
-│   └── memory.py               # 长期记忆
+│   ├── llm.py                  # LLM 调用（重试+异常处理+超时）
+│   ├── ledger.py               # 数据库接口（向后兼容）
+│   ├── ledger_repository.py    # Repository 模式（SQLite 实现）
+│   ├── memory.py               # 长期记忆系统
+│   └── skill_loader.py        # Skill 加载器
 ├── providers/
 │   ├── __init__.py            # Provider 定义（MiniMax/DeepSeek）
-│   └── config.py             # 配置管理
+│   └── config.py             # 配置管理（含验证层）
 ├── skills/
-│   ├── accounting/            # 记账 Skill
-│   └── audit/                # 审核 Skill
-├── memory/                     # 记忆存储
-├── data/                       # 账目数据库
-├── config.json                # 模型配置（provider/model）
-├── .env                       # API 密钥（不上传 Git）
-└── .env.example              # 环境变量模板
+│   ├── accounting/            # 记账 Skill（模板）
+│   ├── audit/                # 审核 Skill（模板）
+│   └── rules/                # 规则 Skill（模板）
+├── memory/                     # 记忆存储（JSON）
+├── data/                       # 账目数据库（SQLite）
+└── config.json                # 模型配置
 ```
 
 ## 快速开始
@@ -72,6 +77,37 @@ LLM_API_KEY=your_key_here
 python main.py
 ```
 
+## 核心特性
+
+### LLM 调用稳定性
+- 自动重试（最多 3 次）
+- 指数退避策略
+- 超时控制（30 秒）
+- 网络异常降级处理
+
+### 结构化意图识别
+- JSON 格式输出
+- 自动降级到正则匹配（兼容旧格式）
+- 意图类型：`accounting` / `query` / `chat`
+
+### 依赖注入架构
+- `AccountantAgent` 类支持自定义 LLM 客户端
+- 便于单元测试和模型切换
+
+### Skill 系统
+- 记账/审核 Skill 可独立执行
+- 通过 subprocess 隔离
+- 支持 JSON 输出格式
+
+### Repository 模式
+- 抽象数据库接口
+- 支持未来迁移到 PostgreSQL/MySQL
+- 单例模式全局访问
+
+### 配置验证
+- 启动时验证 provider/model/base_url
+- 明确的错误提示
+
 ## 使用示例
 
 ```
@@ -95,6 +131,7 @@ python main.py
 
 ## 版本历史
 
+- **v2.0** - 架构优化：LLM 重试机制、结构化输出、依赖注入、Repository 模式、配置验证
 - **v1.1** - 模型选择系统，支持 MiniMax/DeepSeek
 - **v1.0** - 智能会计 1.0，单 Agent 架构
 

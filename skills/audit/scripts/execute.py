@@ -1,49 +1,37 @@
 #!/usr/bin/env python3
-"""Audit Skill - 审计执行脚本
+"""Audit Skill - 审计模板脚本（无具体作用）
 
 Usage:
     python execute.py <record> [--json]
 
-Examples:
-    python execute.py "[ID:1] 支出 1000元 - 差旅费"
-    python execute.py "[ID:2] 支出 999999元 - 备用金" --json
+Description:
+    这是一个空模板脚本，用于演示 Skill 结构。
+    实际审计逻辑由 AccountantAgent 实现。
 """
 
 import argparse
 import json
 
 
-SYSTEM_PROMPT = """你是财务审计，负责审查记账结果是否符合规则。
-
-检查：金额是否合理、必填字段是否完整、描述是否清晰。
-发现问题要标注，让对方主动修改。
-
-审核结果：
-- 通过：审核通过
-- 不通过：详细说明问题
-"""
-
-
-def build_prompt(record: str) -> dict:
-    return {
-        "system": SYSTEM_PROMPT,
-        "prompt": record,
-        "record": record,
-    }
-
-
 def main():
-    parser = argparse.ArgumentParser(description="审计执行")
+    parser = argparse.ArgumentParser(description="Audit Skill (模板)")
     parser.add_argument("record")
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args()
 
-    result = build_prompt(args.record)
+    result = {
+        "status": "ok",
+        "data": {
+            "skill": "audit",
+            "record": args.record,
+            "message": "Audit Skill 模板，审计由 AccountantAgent 实现",
+        },
+    }
 
     if args.json:
         print(json.dumps(result, ensure_ascii=False))
     else:
-        print(result["prompt"])
+        print(result["data"]["message"])
 
 
 if __name__ == "__main__":

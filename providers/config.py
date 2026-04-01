@@ -2,6 +2,7 @@
 
 import json
 import os
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
@@ -13,6 +14,67 @@ load_dotenv()
 
 CONFIG_FILE = Path("config.json")
 ENV_FILE = Path(".env")
+
+
+@dataclass
+class ConfigValidationResult:
+    """配置验证结果"""
+
+    is_valid: bool
+    error_message: Optional[str] = None
+
+
+class ConfigValidator:
+    """配置验证器"""
+
+    REQUIRED_FIELDS = ["provider", "model", "base_url"]
+
+    @classmethod
+    def validate(cls, config: dict) -> ConfigValidationResult:
+        """验证配置完整性
+
+        Args:
+            config: 配置字典
+
+        Returns:
+            ConfigValidationResult: 验证结果
+        """
+        if not isinstance(config, dict):
+            return ConfigValidationResult(
+                is_valid=False, error_message="配置格式错误：期望字典类型"
+            )
+
+        for field in cls.REQUIRED_FIELDS:
+            if field not in config:
+                return ConfigValidationResult(
+                    is_valid=False, error_message=f"配置缺少必需字段: {field}"
+                )
+            if not config[field]:
+                return ConfigValidationResult(
+                    is_valid=False, error_message=f"字段 {field} 不能为空"
+                )
+
+        provider_name = config.get("provider", "")
+        if provider_name not in PROVIDERS:
+            return ConfigValidationResult(
+                is_valid=False,
+                error_message=f"不支持的 provider: {provider_name}，可用: {', '.join(PROVIDERS.keys())}",
+            )
+
+        provider = get_provider(provider_name)
+        if not provider:
+            return ConfigValidationResult(
+                is_valid=False, error_message=f"Provider 配置错误: {provider_name}"
+            )
+
+        model = config.get("model", "")
+        if model not in provider.models:
+            return ConfigValidationResult(
+                is_valid=False,
+                error_message=f"Provider {provider_name} 不支持模型: {model}，可用: {', '.join(provider.models)}",
+            )
+
+        return ConfigValidationResult(is_valid=True)
 
 
 def load_config() -> Optional[dict]:
@@ -36,10 +98,8 @@ def get_api_key() -> str:
     if key:
         return key
 
-    # 如果 .env 没有，提示用户输入
     print("未在 .env 中找到 LLM_API_KEY，请输入：")
     key = input("API Key: ").strip()
-    # 保存到 .env
     _save_env_key(key)
     return key
 
@@ -69,7 +129,8 @@ def select_provider() -> str:
     print("请选择模型提供商：")
     for i, p in enumerate(providers, 1):
         cfg = get_provider(p)
-        print(f"  {i}. {cfg.name} ({p})")
+        if cfg:
+            print(f"  {i}. {cfg.name} ({p})")
 
     while True:
         choice = input("选择 (1): ").strip() or "1"
@@ -85,6 +146,9 @@ def select_provider() -> str:
 def select_model(provider: str) -> str:
     """让用户选择 model"""
     cfg = get_provider(provider)
+    if not cfg:
+        raise ValueError(f"未找到 provider: {provider}")
+
     print(f"\n请为 {cfg.name} 选择模型：")
     for i, m in enumerate(cfg.models, 1):
         marker = " (默认)" if m == cfg.default_model else ""
@@ -109,17 +173,13 @@ def setup_config() -> dict:
     print("首次使用，需要配置模型")
     print("=" * 50)
 
-    # 选择 provider
     provider = select_provider()
-
-    # 选择 model
     model = select_model(provider)
-
-    # 输入 API key（保存到 .env）
     api_key = get_api_key()
 
-    # 获取 base_url
     provider_cfg = get_provider(provider)
+    if not provider_cfg:
+        raise ValueError(f"配置错误: provider {provider} 不存在")
     base_url = provider_cfg.base_url_template
 
     config = {
@@ -134,11 +194,15 @@ def setup_config() -> dict:
 
 
 def ensure_config() -> dict:
-    """确保配置存在，必要时引导用户配置"""
+    """确保配置存在且有效，必要时引导用户配置"""
     config = load_config()
 
-    if config and config.get("provider") and config.get("model"):
-        return config
+    if config:
+        validation = ConfigValidator.validate(config)
+        if validation.is_valid:
+            return config
+        print(f"配置验证失败: {validation.error_message}")
+        print("请重新配置...")
 
     return setup_config()
 
@@ -148,6 +212,11 @@ def print_current_config() -> None:
     config = load_config()
     if not config:
         print("未配置")
+        return
+
+    validation = ConfigValidator.validate(config)
+    if not validation.is_valid:
+        print(f"配置无效: {validation.error_message}")
         return
 
     provider = get_provider(config.get("provider", ""))

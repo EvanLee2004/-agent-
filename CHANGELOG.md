@@ -1,5 +1,139 @@
 # CHANGELOG
 
+## 2026-04-01 - Skills 模板化
+
+### 变更
+
+- 新增 `skills/rules/` Skill（从 `rules/accounting_rules.md` 转换）
+- 清空 `skills/accounting/` 和 `skills/audit/` 的具体逻辑，改为模板
+- 删除 `rules/` 目录（内容已转移到 `skills/rules/`）
+- 所有 Skills 现在都是空模板，通过 SkillLoader 调用
+
+### 目录结构
+
+```
+skills/
+├── accounting/           # 记账模板
+│   ├── SKILL.md
+│   └── scripts/
+│       └── execute.py    # 空模板
+├── audit/                # 审核模板
+│   ├── SKILL.md
+│   └── scripts/
+│       └── execute.py    # 空模板
+└── rules/                # 规则模板
+    ├── SKILL.md          # 包含完整规则 SYSTEM_PROMPT
+    └── scripts/
+        └── execute.py    # 空模板
+```
+
+### 测试验证
+
+```bash
+# 所有 Skills 可被调用
+SkillLoader.get_skill_names()  # ['accounting', 'audit', 'rules']
+SkillLoader.execute_script('rules', 'execute', ['test'], timeout=5)  # OK
+```
+
+---
+
+## 2026-04-01 - 智能会计 v2.0 架构优化
+
+### 核心优化
+
+| 优化项 | 文件 | 说明 |
+|--------|------|------|
+| P0-A | `infrastructure/llm.py` | LLM 调用重试机制（3次）+ 异常处理 + 超时控制 |
+| P0-B | `agents/accountant_agent.py` | 结构化 JSON 输出替代正则匹配，支持 fallback |
+| P1-A | `agents/accountant_agent.py` | 依赖注入解耦，AccountantAgent 类 |
+| P1-B | `agents/accountant_agent.py` | Skill 系统集成到主流程 |
+| P2-A | `infrastructure/ledger_repository.py` | Repository 模式抽象数据库层 |
+| P2-B | `providers/config.py` | 配置验证层，启动时校验配置完整性 |
+
+### P0-A: LLM 调用稳定性
+
+```python
+# chat() 方法新增参数
+LLMResponse = llm_client.chat(
+    messages,
+    temperature=0.3,
+    max_retries=3,      # 新增：最大重试次数
+    timeout=30,         # 新增：超时控制
+)
+
+# LLMResponse 新增字段
+@dataclass
+class LLMResponse:
+    content: str
+    usage: dict
+    model: str
+    success: bool         # 新增：是否成功
+    error_message: str    # 新增：错误信息
+```
+
+### P0-B: 结构化意图识别
+
+```python
+# LLM 输出格式从
+【记账】日期:2024-01-15|金额:500|类型:支出|说明:xxx
+
+# 改为 JSON
+{"intent": "accounting", "data": {"date": "2024-01-15", "amount": 500, "type": "支出", "description": "xxx"}}
+
+# 解析优先级：JSON > 正则 fallback
+```
+
+### P1-A: 依赖注入
+
+```python
+# 新增 AccountantAgent 类
+agent = AccountantAgent(llm_client=llm_client)
+result = await agent.handle(user_input)
+
+# 保留向后兼容的模块级函数
+result = await handle(user_input)
+```
+
+### P1-B: Skill 系统集成
+
+```python
+class AccountantAgent:
+    def _execute_skill_accounting(self, user_input: str) -> Optional[dict]:
+        # 尝试使用 Skill 执行记账
+        
+    def _execute_skill_audit(self, entry_info: dict) -> Optional[dict]:
+        # 尝试使用 Skill 执行审核
+```
+
+### P2-A: Repository 模式
+
+```python
+# 新增 infrastructure/ledger_repository.py
+class ILedgerRepository(ABC):
+    @abstractmethod
+    def write(...) -> int: pass
+    @abstractmethod
+    def get(...) -> list[dict]: pass
+    @abstractmethod
+    def update_status(...) -> None: pass
+
+class SQLiteLedgerRepository(ILedgerRepository):
+    # SQLite 实现
+    
+# 向后兼容：ledger.py 保持原有接口
+```
+
+### P2-B: 配置验证
+
+```python
+# 新增 ConfigValidator
+result = ConfigValidator.validate(config)
+if not result.is_valid:
+    print(result.error_message)  # 明确的错误信息
+```
+
+---
+
 ## 2026-04-01 - 会计智能体 v1.0
 
 单 Agent 架构，简化设计，集成长期记忆。

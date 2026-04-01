@@ -4,7 +4,7 @@ import asyncio
 
 from infrastructure.ledger import init_ledger_db
 from infrastructure.llm import LLMClient
-from agents.accountant_agent import handle
+from agents.accountant_agent import AccountantAgent
 from providers.config import ensure_config, print_current_config
 
 
@@ -17,6 +17,9 @@ def init():
 async def main_async():
     init()
     init_ledger_db()
+
+    llm_client = LLMClient.get_instance()
+    agent = AccountantAgent(llm_client)
 
     print("=" * 50)
     print("智能会计已启动 - 记账/查询（quit 退出）")
@@ -33,7 +36,7 @@ async def main_async():
         if not user_input:
             continue
 
-        reply = await handle(user_input)
+        reply = await agent.handle(user_input)
         print(f"助手: {reply}\n")
 
     print("\n再见！")
