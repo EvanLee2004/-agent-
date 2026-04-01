@@ -16,6 +16,7 @@ from agents.auditor import Auditor
 from core.ledger import get_entries, init_ledger_db
 from core.llm import LLMClient
 from core.skill_loader import SkillLoader
+from core.token_counter import TokenCounter
 
 
 class Manager(BaseAgent):
@@ -50,7 +51,7 @@ class Manager(BaseAgent):
                 "协调会计和审核的工作、汇总结果返回用户。"
             )
 
-    def process(self, task: str) -> str:
+    def process(self, task: str, session=None) -> str:
         """处理用户任务的入口方法。
 
         工作流程：
@@ -60,6 +61,7 @@ class Manager(BaseAgent):
 
         Args:
             task: 用户输入的任务描述
+            session: 可选的会话对象，用于多轮对话和上下文压缩
 
         Returns:
             处理结果字符串

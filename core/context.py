@@ -43,7 +43,13 @@ def build_messages(
     Returns:
         准备好的消息字典列表，用于 LLM 调用。
     """
-    messages = [{"role": "system", "content": system_prompt}]
+    # 获取记忆上下文
+    memory_context = get_memory_context(session.agent_name, memory_limit)
+
+    # 构建系统提示词
+    full_system = system_prompt + memory_context if memory_context else system_prompt
+
+    messages = [{"role": "system", "content": full_system}]
 
     if session.messages:
         messages.extend(session.messages)

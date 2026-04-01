@@ -26,41 +26,45 @@ from core.token_counter import TokenCounter
 
 
 class ConversationSession:
-    """In-memory session object for a single conversation.
+    """内存中的会话对象。
 
-    Tracks messages, token count, and summary state during a session.
-    This object exists in memory and syncs with SessionManager for persistence.
+    追踪消息、token 计数和会话状态。
+    此对象存在于内存中，通过 SessionManager 持久化。
 
     Attributes:
-        session_id: Unique identifier.
-        title: Session title.
-        messages: List of message dicts with 'role' and 'content'.
-        token_count: Estimated total tokens in conversation.
-        summary: Summary text if session has been compacted.
-        summary_message_id: DB message ID of the summary.
+        session_id: 唯一标识符。
+        title: 会话标题。
+        agent_name: 关联的 Agent 名称（用于记忆查询）。
+        messages: 消息字典列表，包含 'role' 和 'content'。
+        token_count: 估算的总 token 数量。
+        summary: 压缩后的摘要文本。
+        summary_message_id: 摘要在数据库中的消息 ID。
     """
 
     def __init__(
         self,
         session_id: str,
         title: str = "",
+        agent_name: str = "manager",
         messages: Optional[list[dict]] = None,
         token_count: int = 0,
         summary: Optional[str] = None,
         summary_message_id: Optional[int] = None,
     ):
-        """Initialize a conversation session.
+        """初始化会话。
 
         Args:
-            session_id: Unique session identifier.
-            title: Session title for display.
-            messages: Initial message list (default empty).
-            token_count: Initial token count (default 0).
-            summary: Existing summary text if any.
-            summary_message_id: DB message ID of summary if any.
+            session_id: 唯一标识符。
+            title: 会话标题。
+            agent_name: 关联的 Agent 名称（用于记忆查询）。
+            messages: 初始消息列表（默认空）。
+            token_count: 初始 token 计数（默认 0）。
+            summary: 现有摘要文本（如果有）。
+            summary_message_id: 摘要的消息 ID（如果有）。
         """
         self.session_id = session_id
         self.title = title
+        self.agent_name = agent_name
         self.messages: list[dict] = messages or []
         self.token_count = token_count
         self.summary = summary
