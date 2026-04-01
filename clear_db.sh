@@ -2,7 +2,7 @@
 # 一键清除测试数据和记忆
 
 rm -f data/ledger.db
-rm -f memory/*.json
+rm -f data/dlq.json
 find memory -mindepth 1 -type f -name "*.md" -delete 2>/dev/null
 rm -f .opencode/cache/*.sqlite
 cat <<'EOF' > MEMORY.md

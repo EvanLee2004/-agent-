@@ -190,7 +190,6 @@ class AccountantAgentEndToEndTest(unittest.IsolatedAsyncioTestCase):
         return OpenClawMemoryStore(
             long_term_memory_file=temp_path / "MEMORY.md",
             daily_memory_dir=temp_path / "memory",
-            legacy_memory_dir=temp_path / "memory",
             memory_index=SQLiteMemoryIndex(index_path),
         )
 

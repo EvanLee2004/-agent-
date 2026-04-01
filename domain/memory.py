@@ -13,40 +13,6 @@ class MemoryScope(str, Enum):
 
 
 @dataclass
-class ExperienceRecord:
-    """长期记忆中的一条经验记录。"""
-
-    type: str
-    content: str
-    result: str
-    learned_at: str
-    feedback: Optional[str] = None
-
-    def to_dict(self) -> dict:
-        """转换为可序列化字典。"""
-        data = {
-            "type": self.type,
-            "content": self.content,
-            "result": self.result,
-            "learned_at": self.learned_at,
-        }
-        if self.feedback:
-            data["feedback"] = self.feedback
-        return data
-
-    @classmethod
-    def from_dict(cls, data: dict) -> "ExperienceRecord":
-        """从字典恢复经验对象。"""
-        return cls(
-            type=str(data.get("type", "经验")),
-            content=str(data.get("content", "")),
-            result=str(data.get("result", "")),
-            learned_at=str(data.get("learned_at", "")),
-            feedback=str(data["feedback"]) if data.get("feedback") else None,
-        )
-
-
-@dataclass
 class MemoryRecord:
     """一条已存储的记忆记录。"""
 

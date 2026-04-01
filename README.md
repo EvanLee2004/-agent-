@@ -7,6 +7,12 @@
 基于 LLM 的智能会计助手，单 Agent 架构。  
 当前版本已经从“收入/支出流水账助手”重构为“`skills + native function calling + deterministic services`”驱动的小企业会计系统雏形。
 
+## 开发与架构来源
+
+- **Claude Code**：用于项目开发过程中的代码重构、联调与工程化整理
+- **Codex**：用于架构重构、函数调用接入、测试补全与文档整理
+- **OpenCode**：作为项目目录组织、Skills 形态与 Agent 工程风格的重要参考
+
 ## 功能
 
 - **记账**：把自然语言业务转成标准会计凭证并自动入账
@@ -155,7 +161,6 @@ python main.py
 
 - 本项目已经验证本地 stub 测试和真实 MiniMax 原生 function calling smoke test
 - 文档处理类 skill 仍依赖 `skills/docx|pdf|pptx|xlsx/scripts/`
-- `memory/智能会计.json` 属于历史 legacy 数据，不是当前主流程存储
 
 ## License
 

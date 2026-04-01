@@ -5,7 +5,6 @@
 - `domain.tax`
 - `domain.audit`
 - `domain.memory`
-- `domain.reporting`
 
 但为了避免一次性打断现有导入路径，这里继续保留 `domain.models`
 作为统一兼容出口。
@@ -22,13 +21,11 @@ from domain.accounting import (
 )
 from domain.audit import AuditFlag, AuditRequest, AuditResult, AuditTarget
 from domain.memory import (
-    ExperienceRecord,
     MemoryDecision,
     MemoryRecord,
     MemoryScope,
     MemorySearchResult,
 )
-from domain.reporting import TrialBalanceReport, TrialBalanceRow
 from domain.tax import TaxComputationResult, TaxRequest, TaxpayerType, TaxType
 
 __all__ = [
@@ -38,7 +35,6 @@ __all__ = [
     "AuditRequest",
     "AuditResult",
     "AuditTarget",
-    "ExperienceRecord",
     "JournalLine",
     "JournalVoucher",
     "MemoryDecision",
@@ -50,8 +46,6 @@ __all__ = [
     "TaxRequest",
     "TaxType",
     "TaxpayerType",
-    "TrialBalanceReport",
-    "TrialBalanceRow",
     "VoucherDraft",
     "VoucherLineDraft",
 ]
