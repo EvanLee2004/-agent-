@@ -36,7 +36,9 @@ Only store memory when the content is likely to help future interactions.
 - When the user explicitly asks to remember something, call `store_memory`
 - Choose `long_term` for stable preferences, fixed rules, or durable facts
 - Choose `daily` for temporary task context
-- When the user asks what you remember, or when remembered information is clearly needed, call `search_memory`
+- `search_memory` is the only trusted source for answering what the system remembers
+- When the user asks what you remember, what they asked you to remember before, or what their preference is, call `search_memory` before answering
+- Do not claim that memory is empty unless `search_memory` has been called and returned no relevant results
 - Do not store ordinary chit-chat or information that can be directly re-derived from the ledger
 
 ## Categories

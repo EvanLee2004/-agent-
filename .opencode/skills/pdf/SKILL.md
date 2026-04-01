@@ -11,4 +11,4 @@ Use this skill when the task involves extracting, checking, filling, or transfor
 ## Notes
 
 - This project keeps the OpenCode-style entry point here
-- Legacy helper scripts remain under `skills/pdf/`
+- This auxiliary skill is not part of the main accounting tool chain

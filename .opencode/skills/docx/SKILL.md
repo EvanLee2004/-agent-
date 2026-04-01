@@ -11,4 +11,4 @@ Use this skill when the task involves creating, editing, or inspecting Word docu
 ## Notes
 
 - This project keeps the OpenCode-style entry point here
-- Legacy helper scripts and templates remain under `skills/docx/`
+- This auxiliary skill is not part of the main accounting tool chain

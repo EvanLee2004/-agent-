@@ -11,4 +11,4 @@ Use this skill when the task involves spreadsheet calculations, workbook updates
 ## Notes
 
 - This project keeps the OpenCode-style entry point here
-- Legacy helper scripts remain under `skills/xlsx/`
+- This auxiliary skill is not part of the main accounting tool chain

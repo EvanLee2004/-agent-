@@ -1,30 +1,32 @@
 # Agent 开发指南
 
-本文档面向 AI Agent，为在此代码库中开发提供指导。
+本文档面向在本仓库中工作的 AI Agent。
 
-生成的代码要加详细注释。
+生成的代码要带详细中文注释，但注释要解释“为什么这样设计”，不要只重复代码行为。
 
 ## 项目概述
 
-智能会计是一个单 Agent 系统，当前主架构为：
+智能会计是一个单 Agent 系统，当前采用按功能模块组织的架构：
 
 ```text
 用户
   ↓
-AccountantAgent
+ConversationRouter
   ↓
-SkillPromptService（skills + 记忆 + 科目目录）
+ConversationService
   ↓
-ToolRuntime（原生 function calling）
+PromptContextService
   ↓
-Tool Handlers
+ToolLoopService
   ↓
-Accounting / Tax / Audit / Memory Services
+Feature Tool Routers
   ↓
-SQLite 主账 + OpenClaw 风格记忆
+Feature Services
+  ↓
+Repositories
 ```
 
-主流程已经不再依赖“模型先输出结构化 JSON，再由本地解析执行”的旧链路。
+主流程已经完全切换到原生 function calling，不再依赖旧的 JSON 意图解析链路。
 
 ## 运行命令
 
@@ -33,137 +35,82 @@ SQLite 主账 + OpenClaw 风格记忆
 python main.py
 ```
 
-### 手动配置（如需要）
+### 配置 API Key
 ```bash
 echo "LLM_API_KEY=your_key" > .env
-python main.py
 ```
 
-### OpenCode Skills
-```bash
-ls .opencode/skills
-```
-
-### 数据库与记忆清理
-```bash
-./clear_db.sh
-```
-
-### 依赖安装
-```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-```
-
-### 测试
+### 运行测试
 ```bash
 ./.venv/bin/python -B -m unittest discover -s tests -v
 ```
 
-## 当前架构要点
+### 清理数据库与记忆
+```bash
+./clear_db.sh
+```
 
-### 1. Agent 只做编排
-
-- `agents/accountant_agent.py` 只负责：
-  - 获取 system prompt
-  - 调用 `ToolRuntime`
-  - 返回最终回复
-- Agent 不直接处理数据库细节，不再承担旧意图路由或 JSON 解析职责。
-
-### 2. Skills 只负责领域上下文
-
-- Skills 位于 `.opencode/skills/`
-- Skills 的职责是：
-  - 提供领域知识
-  - 约束工具使用方式
-  - 约束最终答复风格
-- Skills 不再承担主流程协议输出，不要求模型手写 JSON。
-
-### 3. Tool Runtime 是主执行入口
-
-- `tools/runtime.py` 负责原生 function calling loop
-- 第一轮强制至少调用一个工具
-- 工具结果回灌给模型后，再生成最终中文答复
-- 如果模型第一轮没有调用任何工具，主流程应视为失败，而不是悄悄退回自由聊天
-
-### 4. 业务规则必须留在确定性服务层
-
-- `services/accounting_service.py`：记账与凭证查询
-- `services/tax_service.py`：税额确定性计算
-- `services/audit_service.py`：凭证审核规则
-- `services/memory_service.py`：记忆存储与检索
-- 工具 handler 只做参数校验和服务调用，不承载核心业务规则
-
-### 5. 主账是唯一业务真相
-
-- 主账结构：
-  - `account_subject`
-  - `journal_voucher`
-  - `journal_line`
-- 旧 `ledger` 兼容体系已经移除
-- 不允许重新引入双账本真相或兼容双写
-
-## 代码风格
-
-### 导入
-
-- 使用绝对导入
-- 三方库在前，标准库在中，自定义模块在后
-- 每组之间空一行
-
-### 类型注解
-
-- 函数参数和返回值必须标注类型
-- 使用 `Optional[T]` 表示可空类型，而非 `T | None`
-
-### Docstrings
-
-- 所有公共函数、公共类方法必须有 docstring
-- docstring 要说明参数和返回值
-
-### 注释
-
-- 新增代码必须带详细中文注释
-- 复杂控制流前要说明设计意图和边界
-- 不要写“变量赋值”这种低价值注释
-
-### 错误处理
-
-- 使用明确异常类型，不捕获宽泛异常后静默吞掉
-- 敏感信息不暴露在错误消息中
-- Provider / tool 调用失败要给出明确、可定位的错误信息
-
-### 异步
-
-- 对外会话入口保持 `async/await`
-- 不要把本地纯同步业务逻辑无意义地改成异步
-
-## 项目结构
+## 当前目录结构
 
 ```text
 ├── main.py
-├── bootstrap.py
-├── agents/
-│   ├── accountant_agent.py
-│   └── factory.py
-├── domain/
-├── services/
-├── infrastructure/
-├── tools/
+├── app/
+├── conversation/
+├── accounting/
+├── audit/
+├── tax/
+├── memory/
+├── rules/
+├── llm/
+├── configuration/
 ├── .opencode/
 │   └── skills/
-├── skills/                     # 仅保留文档处理类 helper scripts
 ├── MEMORY.md
-├── memory/
 ├── tests/
 ├── opencode.json
 └── config.json
 ```
 
+## 开发规则
+
+### 1. 严格分层
+
+- `router -> service -> repository -> model`
+- 禁止跨层直接调用
+- 具体实现只允许在 `app/` 装配
+
+### 2. 按功能模块组织
+
+- 目录按业务功能拆分，不按“types / services / infrastructure”分组
+- 一个文件一个类
+- 禁止新增 `utils.py` / `helpers.py`
+
+### 3. 工具调用主链路
+
+- `conversation/` 负责会话编排
+- `ToolLoopService` 负责原生 function calling 循环
+- 各 feature 自己提供 tool router
+- 业务规则必须留在 feature service，不得塞进 router
+
+### 4. 账务真相
+
+- 主账只有：
+  - `account_subject`
+  - `journal_voucher`
+  - `journal_line`
+- 不允许重新引入旧 `ledger` 兼容体系
+
+### 5. 记忆系统
+
+- 长期记忆：`MEMORY.md`
+- 每日记忆：`memory/YYYY-MM-DD.md`
+- Markdown 是源数据
+- SQLite FTS 只做搜索索引
+- 记忆事实类问题必须先查询 `search_memory`
+
 ## Skills
 
-### 当前主技能
+当前业务核心 skills：
 
 - `accounting`
 - `tax`
@@ -171,68 +118,47 @@ pip install -r requirements.txt
 - `memory`
 - `rules`
 
-### 文档处理类辅助技能
+辅助 skills：
 
 - `docx`
 - `pdf`
 - `pptx`
 - `xlsx`
 
-这些技能的 helper scripts 仍保留在根目录 `skills/` 下。
+skills 位于 `.opencode/skills/`，职责是提供领域上下文与工具使用约束，不直接承担业务执行。
 
-## 核心模块 API
+## 编码要求
 
-### llm.py
+### 导入
 
-- `LLMClient.get_instance()`
-- `LLMClient.chat_with_tools(...)`
-- `LLMClient.require_native_tool_calling()`
+- 使用绝对导入
+- 标准库、三方库、自定义模块分组
 
-### tools/
+### 类型注解
 
-- `ToolRuntime`
-- `ToolRegistry`
-- `ToolDefinition`
-- `ToolExecutionResult`
+- 公共函数与方法必须有参数和返回值类型
+- 可空类型使用 `Optional[T]`
 
-### accounting_repository.py
+### Docstring
 
-- `SQLiteChartOfAccountsRepository`
-- `SQLiteJournalRepository`
+- 所有公共函数必须有 docstring
+- docstring 需说明用途、参数、返回值、异常
 
-### memory.py
+### 错误处理
 
-- `OpenClawMemoryStore`
-- `IAgentMemoryStore`
-- `get_memory_store()`
+- 禁止裸 `except`
+- 业务错误用模块内自定义异常
+- 不要吞掉底层错误，也不要泄露敏感信息
 
-## 业务规则
+### 注释
 
-### 记账异常标注
+- 注释解释设计意图、边界和业务原因
+- 不写“给变量赋值”这类低价值注释
 
-- 金额 `> 50000`：标注“需审核”
-- 金额 `< 10`：标注“金额过小”
+## 当前重点约束
 
-### 税务默认规则
-
-- `includes_tax=true` 只在用户明确说“含税”“价税合计”等时成立
-- 若用户未明确说明含税，则默认 `includes_tax=false`
-
-### 账目状态
-
-- `pending`
-- `approved`
-
-## Git 约定
-
-```text
-.env
-__pycache__/
-*.pyc
-.venv/
-*.db
-data/
-sessions/
-memory/*.md
-.opencode/cache/*.sqlite
-```
+- 保持代码高内聚、低耦合
+- 每次只做可验证的小步重构
+- 先读代码再改代码
+- 写完代码必须补测试并重跑
+- 完成后再做一次结构与安全视角检查
