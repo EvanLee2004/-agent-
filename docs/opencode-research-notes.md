@@ -205,6 +205,171 @@ Skill 工作方式：
 
 ---
 
+## 11. OpenCode 上下文窗口管理（Compaction）
+
+**重要发现**：OpenCode 实现了自动上下文压缩机制，支持长会话。
+
+### 11.1 自动压缩触发机制
+
+位置：`internal/tui/tui.go`
+
+```go
+// 当响应完成且 token 超过上下文窗口 95% 时触发
+if payload.Done && payload.Type == agent.AgentEventTypeResponse {
+    model := a.app.CoderAgent.Model()
+    contextWindow := model.ContextWindow  // e.g., 200000 for Claude 200k
+    tokens := a.selectedSession.CompletionTokens + a.selectedSession.PromptTokens
+    if (tokens >= int64(float64(contextWindow)*0.95)) && config.Get().AutoCompact {
+        return a, util.CmdHandler(startCompactSessionMsg{})
+    }
+}
+```
+
+**关键点**：
+- 阈值：上下文窗口的 **95%**
+- 默认：**启用**（`autoCompact: true`）
+- 可手动触发：`compact` 命令
+
+### 11.2 Session 结构（token 追踪）
+
+位置：`internal/session/session.go`
+
+```go
+type Session struct {
+    ID               string
+    ParentSessionID  string
+    Title            string
+    MessageCount     int64
+    PromptTokens     int64           // 累计输入 token
+    CompletionTokens int64           // 累计输出 token
+    SummaryMessageID string          // 指向摘要消息
+    Cost             float64
+    CreatedAt        int64
+    UpdatedAt        int64
+}
+```
+
+### 11.3 Summarization 流程
+
+位置：`internal/llm/agent/agent.go` - `Summarize` 方法
+
+1. **获取所有消息**
+2. **创建摘要 prompt**：
+   ```
+   "Provide a detailed but concise summary of our conversation above.
+    Focus on information that would be helpful for continuing the conversation,
+    including what we did, what we're doing, which files we're working on,
+    and what we're going to do next."
+   ```
+3. **发送给 summarizer provider**（可以使用与主 agent 不同的模型）
+4. **在 session 中创建摘要消息**
+5. **更新 session**：`SummaryMessageID = msg.ID`
+
+```go
+oldSession.SummaryMessageID = msg.ID
+oldSession.CompletionTokens = response.Usage.OutputTokens
+oldSession.PromptTokens = 0  // 重置计数器
+```
+
+### 11.4 Token 计算与追踪
+
+位置：`internal/llm/provider/provider.go`
+
+```go
+type TokenUsage struct {
+    InputTokens         int64
+    OutputTokens        int64
+    CacheCreationTokens int64  // 缓存上下文 token
+    CacheReadTokens     int64  // 从缓存读取的 token
+}
+```
+
+**Model 结构**（`internal/llm/models/models.go`）：
+```go
+type Model struct {
+    ContextWindow       int64  // e.g., 200000 for Claude 200k
+    DefaultMaxTokens    int64
+    // ...
+}
+```
+
+### 11.5 对话历史管理
+
+**消息过滤**（在 `agent.go` `processGeneration`）：
+
+当 session 有摘要时，只使用摘要之后的消息：
+
+```go
+if session.SummaryMessageID != "" {
+    summaryMsgIndex := -1
+    for i, msg := range msgs {
+        if msg.ID == session.SummaryMessageID {
+            summaryMsgIndex = i
+            break
+        }
+    }
+    if summaryMsgIndex != -1 {
+        msgs = msgs[summaryMsgIndex:]  // 从摘要开始
+        msgs[0].Role = message.User    // 让摘要成为 user 消息
+    }
+}
+```
+
+### 11.6 架构图
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                         TUI (tui.go)                         │
+│  监控每次响应后的 token 使用量                                │
+│  当超过上下文窗口 95% 时触发 auto-compact                   │
+└─────────────────────────┬───────────────────────────────────┘
+                          │
+                          ▼
+┌─────────────────────────────────────────────────────────────┐
+│                    Agent Service (agent.go)                  │
+│  - Run(): 主 agent 循环                                      │
+│  - Summarize(): 创建摘要                                     │
+│  - TrackUsage(): 更新 token 计数                             │
+└─────────────────────────┬───────────────────────────────────┘
+                          │
+                          ▼
+┌─────────────────────────────────────────────────────────────┐
+│              Session Service (session/session.go)            │
+│  - 存储 session 元数据                                       │
+│  - 追踪 PromptTokens, CompletionTokens                       │
+│  - 存储 SummaryMessageID（摘要锚点）                         │
+└─────────────────────────┬───────────────────────────────────┘
+                          │
+                          ▼
+┌─────────────────────────────────────────────────────────────┐
+│             Message Service (message/message.go)              │
+│  - 存储所有对话消息                                          │
+│  - 提供消息历史检索                                          │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 11.7 核心设计洞察
+
+1. **Token 累积**：Token 在整个 session 生命周期内累积
+2. **95% 阈值**：当总 token 超过上下文窗口 95% 时触发摘要
+3. **摘要作为检查点**：摘要消息成为 pivot point；其之前的 history 被"压缩"
+4. **分离的 summarizer**：可以使用不同的模型做摘要
+5. **持久化存储**：所有消息存在 SQLite，session 追踪元数据和摘要指针
+
+### 11.8 相关文件
+
+| 文件 | 用途 |
+|------|------|
+| `internal/tui/tui.go` | TUI 事件循环，95% 触发 auto-compact |
+| `internal/llm/agent/agent.go` | `Summarize()` 方法，token 追踪 |
+| `internal/session/session.go` | Session 结构体，含 token 计数 |
+| `internal/message/message.go` | 消息存储和检索 |
+| `internal/llm/models/models.go` | 每个模型的 `ContextWindow` |
+| `internal/llm/provider/provider.go` | `TokenUsage` 结构体 |
+| `internal/config/config.go` | `AutoCompact` 配置项 |
+
+---
+
 ## 附录：相关文件路径
 
 | 功能 | 路径 |
@@ -214,3 +379,7 @@ Skill 工作方式：
 | Agent | `packages/opencode/src/agent/agent.ts` |
 | Skill Service | `packages/opencode/src/skill/` |
 | Plugin Hooks | `packages/opencode/src/plugin/` |
+| Context Compaction | `internal/tui/tui.go` |
+| Summarization | `internal/llm/agent/agent.go` |
+| Session | `internal/session/session.go` |
+| Message | `internal/message/message.go` |

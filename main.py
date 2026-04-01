@@ -17,7 +17,7 @@ def main():
         if not user_input:
             continue
 
-        reply = manager.handle(user_input)
+        reply = manager.process(user_input)
         print(f"助手: {reply}\n")
 
 

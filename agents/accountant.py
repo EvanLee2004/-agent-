@@ -14,6 +14,7 @@ from typing import Any, Optional
 from agents.base import BaseAgent
 from core.ledger import write_entry
 from core.llm import LLMClient
+from core.memory import write_memory, read_memory
 from core.skill_loader import SkillLoader
 
 
@@ -101,7 +102,7 @@ class Accountant(BaseAgent):
         except Exception as e:
             return f"LLM 调用失败: {str(e)}"
 
-        parsed = self._parse_accounting_response(llm_response)
+        parsed = self._parse_accounting_response(llm_response.content)
 
         if parsed["status"] == "error":
             return f"执行失败: {parsed['message']}"
@@ -211,4 +212,11 @@ class Accountant(BaseAgent):
         """
         if feedback:
             self._feedback = feedback[:500]
-            self.update_memory(f"审核反馈: {feedback[:200]}")
+            memory = read_memory(self.NAME)
+            memory["experiences"].append(
+                {
+                    "context": f"审核反馈: {feedback[:200]}",
+                    "learned_at": datetime.now().strftime("%Y-%m-%d"),
+                }
+            )
+            write_memory(self.NAME, memory)

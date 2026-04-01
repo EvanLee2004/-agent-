@@ -1,16 +1,16 @@
-"""Auditor Agent - Reviews and validates accounting records.
+"""Auditor Agent - 审核记账结果
 
-The Auditor is responsible for:
-1. Loading SYSTEM_PROMPT from the audit Skill
-2. Calling the Skill script to get prompt data
-3. Invoking LLM via centralized LLMClient to process audit
-4. Returning audit results
+Auditor 负责审核记账结果：
+1. 从 audit Skill 加载 SYSTEM_PROMPT
+2. 调用 Skill 脚本获取 prompt 数据
+3. 通过中心化 LLMClient 调用 LLM
+4. 返回审核结果
 
-The audit workflow:
-- Accountant creates initial record
-- Auditor reviews for rule compliance
-- If issues found, Accountant revises based on feedback
-- Up to 3 revision cycles before final rejection
+工作流程：
+- Accountant 创建初始记账记录
+- Auditor 审核是否符合规则
+- 如发现问题，提供反馈让 Accountant 修正
+- 最多 3 轮修正循环
 """
 
 import re
@@ -21,16 +21,14 @@ from core.skill_loader import SkillLoader
 
 
 class Auditor(BaseAgent):
-    """Auditor Agent that reviews accounting records for rule compliance.
+    """审核 Agent，审查记账记录是否符合规则。
 
-    The Auditor examines the Accountant's entries against established
-    accounting rules and flags any violations or anomalies. When issues
-    are detected, the Auditor provides feedback for the Accountant to
-    correct and resubmit.
+    Auditor 审查 Accountant 的记账条目是否符合既定规则，
+    发现问题时提供反馈让 Accountant 修正后重新提交。
 
     Attributes:
-        NAME: Agent identifier, corresponds to 'audit' Skill directory.
-        SYSTEM_PROMPT: System prompt loaded from Skill on initialization.
+        NAME: Agent 标识符，对应 'audit' Skill 目录。
+        SYSTEM_PROMPT: 初始化时从 Skill 加载的系统提示词。
 
     Example:
         auditor = Auditor()
@@ -40,35 +38,32 @@ class Auditor(BaseAgent):
     NAME = "audit"
 
     def __init__(self):
-        """Initialize Auditor by loading SYSTEM_PROMPT from Skill.
+        """初始化 Auditor，从 Skill 加载 SYSTEM_PROMPT。
 
-        Attempts to load the 'audit' Skill. If the Skill directory or
-        SKILL.md is not found, falls back to a default system prompt.
+        尝试加载 'audit' Skill。如果 Skill 目录或 SKILL.md 不存在，
+        则回退到默认系统提示词。
         """
         try:
             skill = SkillLoader.load(self.NAME)
             self.SYSTEM_PROMPT = skill["system_prompt"]
         except FileNotFoundError:
-            self.SYSTEM_PROMPT = (
-                "You are a financial auditor responsible for reviewing "
-                "accounting records for compliance with established rules."
-            )
+            self.SYSTEM_PROMPT = "你是财务审核，负责审查记账结果是否符合规则。"
 
     def process(self, task: str) -> str:
-        """Process an audit task for the given accounting record.
+        """处理审核任务。
 
-        Executes the audit workflow:
-        1. Calls the audit Skill script to build prompt data
-        2. Sends prompt to LLM via centralized LLMClient
-        3. Parses and returns the audit response
+        执行审核工作流程：
+        1. 调用 audit Skill 脚本构建 prompt 数据
+        2. 通过 LLMClient 发送 prompt 给 LLM
+        3. 解析并返回审核响应
 
         Args:
-            task: The accounting record to audit, typically formatted as
-                "类型 金额 说明" (e.g., "支出 1000 办公用品").
+            task: 待审核的记账记录，格式通常为
+                "类型 金额 说明"（如"支出 1000 办公用品"）。
 
         Returns:
-            Audit result string. Returns "审核通过" (approved) if no
-            issues found, otherwise returns the LLM's detailed feedback.
+            审核结果字符串。如果没问题返回"审核通过"，
+            否则返回 LLM 的详细反馈。
         """
         result = SkillLoader.execute_script(
             "audit",
@@ -93,22 +88,21 @@ class Auditor(BaseAgent):
         except Exception as e:
             return f"LLM call failed: {str(e)}"
 
-        return self._parse_audit_response(llm_response)
+        return self._parse_audit_response(llm_response.content)
 
     @staticmethod
     def _parse_audit_response(response: str) -> str:
-        """Parse the LLM audit response to determine approval status.
+        """解析 LLM 审核响应，判断是否通过。
 
-        Checks the LLM response text for approval indicators. A response
-        containing "通过" (approve/pass) without "不" (not) is considered
-        approved.
+        检查 LLM 响应文本中的审核指示器。如果响应包含"通过"
+        且不包含"不"，则认为审核通过。
 
         Args:
-            response: Raw text response from the LLM audit call.
+            response: LLM 审核调用的原始文本响应。
 
         Returns:
-            "审核通过" if the response indicates approval, otherwise
-            returns the original LLM response text with feedback.
+            如果响应表示通过则返回"审核通过"，
+            否则返回带有反馈的原始 LLM 响应文本。
         """
         if "通过" in response and "不" not in response:
             return "审核通过"

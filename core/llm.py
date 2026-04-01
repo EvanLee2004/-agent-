@@ -1,10 +1,10 @@
 """LLM Client Module - Centralized LLM invocation across all Agents.
 
-This module provides a singleton LLMClient that统一的 LLM 调用接口，
-支持多种模型提供商。所有 Agent 通过 LLMClient.chat() 发起 LLM 调用，
-确保 LLM 配置集中管理。
+This module provides a singleton LLMClient that provides a unified LLM calling interface
+and supports multiple model providers. All Agents invoke LLM through LLMClient.chat()
+to ensure centralized LLM configuration management.
 
-The client reads configuration from environment variables:
+Configuration is read from environment variables:
 - LLM_API_KEY: API key for the LLM provider
 - LLM_BASE_URL: Base URL for the LLM API endpoint
 - LLM_MODEL: Model name to use (e.g., "MiniMax-M2.7")
@@ -12,9 +12,12 @@ The client reads configuration from environment variables:
 Example:
     client = LLMClient.get_instance()
     response = client.chat([{"role": "user", "content": "Hello"}])
+    print(response.content)
+    print(response.usage)
 """
 
 import os
+from dataclasses import dataclass
 from enum import Enum
 from typing import Optional
 
@@ -39,6 +42,24 @@ PROVIDER_CONFIG: dict[ModelProvider, dict] = {
 }
 
 
+@dataclass
+class LLMResponse:
+    """LLM response with content and usage information.
+
+    Attributes:
+        content: The LLM's response text content.
+        usage: Dictionary with token usage information containing:
+            - prompt_tokens: Input token count
+            - completion_tokens: Output token count
+            - total_tokens: Total token count
+        model: The model name used for this response.
+    """
+
+    content: str
+    usage: dict
+    model: str
+
+
 class LLMClient:
     """Singleton LLM client for centralized LLM invocation.
 
@@ -56,6 +77,8 @@ class LLMClient:
             {"role": "user", "content": "What is 2+2?"}
         ]
         response = client.chat(messages)
+        print(response.content)
+        print(f"Tokens used: {response.usage['total_tokens']}")
     """
 
     _instance: Optional["LLMClient"] = None
@@ -94,7 +117,7 @@ class LLMClient:
         self,
         messages: list[dict],
         temperature: float = 0.3,
-    ) -> str:
+    ) -> LLMResponse:
         """Send a chat completion request to the LLM.
 
         Args:
@@ -108,12 +131,44 @@ class LLMClient:
                 Defaults to 0.3.
 
         Returns:
-            The LLM's response text content. Empty string if the
-            model returned no content.
+            LLMResponse with content, usage dict, and model name.
+            Usage dict contains prompt_tokens, completion_tokens, total_tokens.
         """
         response = self.client.chat.completions.create(
             model=self.model,
             messages=messages,  # type: ignore[arg-type]
             temperature=temperature,
         )
-        return response.choices[0].message.content or ""
+
+        usage = {}
+        if hasattr(response, "usage") and response.usage:
+            usage = {
+                "prompt_tokens": response.usage.prompt_tokens,
+                "completion_tokens": response.usage.completion_tokens,
+                "total_tokens": response.usage.total_tokens,
+            }
+
+        return LLMResponse(
+            content=response.choices[0].message.content or "",
+            usage=usage,
+            model=self.model,
+        )
+
+    def chat_str(
+        self,
+        messages: list[dict],
+        temperature: float = 0.3,
+    ) -> str:
+        """Convenience method that returns only the content string.
+
+        This method exists for backward compatibility. Use chat() directly
+        when you need usage information.
+
+        Args:
+            messages: List of message dictionaries.
+            temperature: Sampling temperature.
+
+        Returns:
+            The LLM's response text content only.
+        """
+        return self.chat(messages, temperature).content

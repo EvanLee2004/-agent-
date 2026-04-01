@@ -115,7 +115,7 @@ class Manager(BaseAgent):
         except Exception:
             return "unknown"
 
-        return self._parse_intent_response(response)
+        return self._parse_intent_response(response.content)
 
     @staticmethod
     def _parse_intent_response(response: str) -> str:

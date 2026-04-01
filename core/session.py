@@ -1,103 +1,228 @@
-"""Session 管理模块，使用 SQLite 存储对话历史"""
+"""Session management module.
+
+Manages conversation sessions with SQLite persistence.
+Supports:
+- Creating and listing sessions
+- Adding messages to sessions
+- Retrieving session history
+- Token counting for compaction triggers
+- Summary tracking (for compaction)
+
+Each session has:
+- id: Unique session identifier (YYYYMMDD_HHMMSS format)
+- title: Session title
+- messages: Conversation history (stored in messages table)
+- token_count: Running token estimate for the session
+- summary: Compressed summary when history is compacted
+- summary_message_id: DB message ID of the summary
+"""
 
 import sqlite3
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
+from typing import Optional
+
+from core.token_counter import TokenCounter
+
+
+class ConversationSession:
+    """In-memory session object for a single conversation.
+
+    Tracks messages, token count, and summary state during a session.
+    This object exists in memory and syncs with SessionManager for persistence.
+
+    Attributes:
+        session_id: Unique identifier.
+        title: Session title.
+        messages: List of message dicts with 'role' and 'content'.
+        token_count: Estimated total tokens in conversation.
+        summary: Summary text if session has been compacted.
+        summary_message_id: DB message ID of the summary.
+    """
+
+    def __init__(
+        self,
+        session_id: str,
+        title: str = "",
+        messages: Optional[list[dict]] = None,
+        token_count: int = 0,
+        summary: Optional[str] = None,
+        summary_message_id: Optional[int] = None,
+    ):
+        """Initialize a conversation session.
+
+        Args:
+            session_id: Unique session identifier.
+            title: Session title for display.
+            messages: Initial message list (default empty).
+            token_count: Initial token count (default 0).
+            summary: Existing summary text if any.
+            summary_message_id: DB message ID of summary if any.
+        """
+        self.session_id = session_id
+        self.title = title
+        self.messages: list[dict] = messages or []
+        self.token_count = token_count
+        self.summary = summary
+        self.summary_message_id = summary_message_id
+
+    def add_message(self, role: str, content: str) -> None:
+        """Add a message and update token count.
+
+        Args:
+            role: Message role ('user' or 'assistant').
+            content: Message content.
+        """
+        self.messages.append({"role": role, "content": content})
+        self.token_count += TokenCounter.estimate_from_text(content) + 4
+
+    def get_messages(self) -> list[dict]:
+        """Get all messages in the session.
+
+        Returns:
+            List of message dicts.
+        """
+        return self.messages
+
+    def has_summary(self) -> bool:
+        """Check if session has a summary (has been compacted).
+
+        Returns:
+            True if session has been compacted, False otherwise.
+        """
+        return self.summary is not None
+
+    def compact_with_summary(self, summary: str, summary_message_id: int) -> None:
+        """Replace session history with summary after compaction.
+
+        Args:
+            summary: The summary text.
+            summary_message_id: DB message ID of the summary message.
+        """
+        self.messages = [
+            {
+                "role": "assistant",
+                "content": f"[Previous conversation summary]\n{summary}",
+            }
+        ]
+        self.summary = summary
+        self.summary_message_id = summary_message_id
+        self.token_count = TokenCounter.estimate_from_text(summary) + 10
 
 
 class SessionManager:
-    """会话管理器，负责对话历史的存储和读取"""
+    """Manages session persistence to SQLite database.
+
+    Handles:
+    - Creating new sessions
+    - Adding messages to sessions
+    - Retrieving session history
+    - Tracking summaries for compaction
+
+    Database schema:
+    - sessions: id, title, created_at, updated_at, summary, summary_message_id
+    - messages: id, session_id, role, content, created_at
+    """
 
     def __init__(self, db_path: str = "sessions/sessions.db"):
-        """初始化会话管理器
+        """Initialize the session manager.
 
         Args:
-            db_path: 数据库文件路径，默认保存在 sessions/sessions.db
+            db_path: Path to SQLite database file.
         """
         self.db_path = db_path
         Path(db_path).parent.mkdir(exist_ok=True)
         self._init_db()
 
-    def _init_db(self):
-        """初始化数据库，创建 sessions 和 messages 两张表"""
+    def _init_db(self) -> None:
+        """Create database tables if they don't exist."""
         conn = sqlite3.connect(self.db_path)
-
-        # 创建 sessions 表：存储会话列表
-        conn.execute("""
+        conn.execute(
+            """
             CREATE TABLE IF NOT EXISTS sessions (
-                id TEXT PRIMARY KEY,           -- 会话唯一标识符
-                title TEXT NOT NULL,           -- 会话标题
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,  -- 创建时间
-                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP   -- 更新时间
+                id TEXT PRIMARY KEY,
+                title TEXT NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                summary TEXT,
+                summary_message_id INTEGER
             )
-        """)
-
-        # 创建 messages 表：存储消息
-        conn.execute("""
+            """
+        )
+        conn.execute(
+            """
             CREATE TABLE IF NOT EXISTS messages (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,  -- 消息唯一ID
-                session_id TEXT NOT NULL,             -- 所属会话ID
-                role TEXT NOT NULL,                    -- 消息角色：system/user/assistant
-                content TEXT NOT NULL,                 -- 消息内容
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_id TEXT NOT NULL,
+                role TEXT NOT NULL,
+                content TEXT NOT NULL,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (session_id) REFERENCES sessions(id)
             )
-        """)
-
-        # 创建索引，加速按 session_id 查询
-        conn.execute("""
-            CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id)
-        """)
-
+            """
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id)"
+        )
         conn.commit()
         conn.close()
 
-    def create(self, title: str) -> str:
-        """创建新会话
+    def create(self, title: str = "") -> str:
+        """Create a new session.
 
         Args:
-            title: 会话标题
+            title: Session title.
 
         Returns:
-            session_id: 新创建的会话ID，格式为 YYYYMMDD_HHMMSS
+            Session ID string in YYYYMMDD_HHMMSS format.
         """
         session_id = datetime.now().strftime("%Y%m%d_%H%M%S")
         conn = sqlite3.connect(self.db_path)
         conn.execute(
-            "INSERT INTO sessions (id, title) VALUES (?, ?)", (session_id, title)
+            "INSERT INTO sessions (id, title) VALUES (?, ?)",
+            (session_id, title or "New Session"),
         )
         conn.commit()
         conn.close()
         return session_id
 
-    def add(self, session_id: str, role: str, content: str):
-        """添加消息到指定会话
+    def add_message(self, session_id: str, role: str, content: str) -> Optional[int]:
+        """Add a message to a session.
 
         Args:
-            session_id: 会话ID
-            role: 消息角色，"user" 或 "assistant"
-            content: 消息内容
-        """
-        conn = sqlite3.connect(self.db_path)
-        conn.execute(
-            "INSERT INTO messages (session_id, role, content) VALUES (?, ?, ?)",
-            (session_id, role, content),
-        )
-        conn.execute(
-            "UPDATE sessions SET updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-            (session_id,),
-        )
-        conn.commit()
-        conn.close()
-
-    def get(self, session_id: str) -> list[dict]:
-        """获取指定会话的所有消息
-
-        Args:
-            session_id: 会话ID
+            session_id: Session ID.
+            role: Message role ('user' or 'assistant').
+            content: Message content.
 
         Returns:
-            消息列表，每条是 {"role": "...", "content": "..."}
+            Message ID if successful, None if session not found.
+        """
+        conn = sqlite3.connect(self.db_path)
+        try:
+            cursor = conn.execute(
+                "INSERT INTO messages (session_id, role, content) VALUES (?, ?, ?)",
+                (session_id, role, content),
+            )
+            conn.execute(
+                "UPDATE sessions SET updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                (session_id,),
+            )
+            conn.commit()
+            msg_id = cursor.lastrowid
+            conn.close()
+            return msg_id
+        except sqlite3.Error:
+            conn.close()
+            return None
+
+    def get_messages(self, session_id: str) -> list[dict]:
+        """Get all messages for a session.
+
+        Args:
+            session_id: Session ID.
+
+        Returns:
+            List of message dicts with 'role' and 'content'.
         """
         conn = sqlite3.connect(self.db_path)
         conn.row_factory = sqlite3.Row
@@ -108,20 +233,116 @@ class SessionManager:
         conn.close()
         return [dict(row) for row in rows]
 
-    def list_all(self, limit: int = 10) -> list[dict]:
-        """列出最近的会话
+    def get_session_info(self, session_id: str) -> Optional[dict]:
+        """Get session metadata.
 
         Args:
-            limit: 返回数量限制，默认10条
+            session_id: Session ID.
 
         Returns:
-            会话列表，每条包含 id, title, created_at, updated_at
+            Dict with session info including summary and summary_message_id,
+            or None if session not found.
+        """
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        row = conn.execute(
+            "SELECT * FROM sessions WHERE id = ?", (session_id,)
+        ).fetchone()
+        conn.close()
+        return dict(row) if row else None
+
+    def update_summary(
+        self, session_id: str, summary: str, summary_message_id: int
+    ) -> bool:
+        """Update session with summary information after compaction.
+
+        Args:
+            session_id: Session ID.
+            summary: Summary text.
+            summary_message_id: Message ID of the summary in DB.
+
+        Returns:
+            True if update successful, False otherwise.
+        """
+        conn = sqlite3.connect(self.db_path)
+        try:
+            conn.execute(
+                """UPDATE sessions
+                   SET summary = ?, summary_message_id = ?, updated_at = CURRENT_TIMESTAMP
+                   WHERE id = ?""",
+                (summary, summary_message_id, session_id),
+            )
+            conn.commit()
+            conn.close()
+            return True
+        except sqlite3.Error:
+            conn.close()
+            return False
+
+    def list_sessions(self, limit: int = 10) -> list[dict]:
+        """List recent sessions.
+
+        Args:
+            limit: Maximum number of sessions to return.
+
+        Returns:
+            List of session dicts with id, title, created_at, updated_at.
         """
         conn = sqlite3.connect(self.db_path)
         conn.row_factory = sqlite3.Row
         rows = conn.execute(
-            "SELECT id, title, created_at, updated_at FROM sessions ORDER BY updated_at DESC LIMIT ?",
+            """SELECT id, title, created_at, updated_at
+               FROM sessions
+               ORDER BY updated_at DESC
+               LIMIT ?""",
             (limit,),
         ).fetchall()
         conn.close()
         return [dict(row) for row in rows]
+
+    def get_or_create_session(
+        self, session_id: Optional[str] = None
+    ) -> tuple[str, list[dict]]:
+        """Get existing session or create a new one.
+
+        If session_id is provided and exists, returns that session.
+        Otherwise creates a new session.
+
+        Args:
+            session_id: Optional session ID to retrieve.
+
+        Returns:
+            Tuple of (session_id, messages).
+        """
+        if session_id:
+            info = self.get_session_info(session_id)
+            if info:
+                return session_id, self.get_messages(session_id)
+
+        new_id = self.create()
+        return new_id, []
+
+    def load_session(self, session_id: str) -> Optional[ConversationSession]:
+        """Load a session from database into a ConversationSession object.
+
+        Args:
+            session_id: Session ID to load.
+
+        Returns:
+            ConversationSession object, or None if not found.
+        """
+        info = self.get_session_info(session_id)
+        if not info:
+            return None
+
+        messages = self.get_messages(session_id)
+        token_count = TokenCounter.estimate_messages(messages)
+
+        return ConversationSession(
+            session_id=session_id,
+            title=info.get("title", ""),
+            messages=messages,
+            token_count=token_count,
+            summary=info.get("summary"),
+            summary_message_id=info.get("summary_message_id"),
+        )
