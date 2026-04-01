@@ -5,7 +5,7 @@
 
 因此这一层需要同时解决两件事：
 1. 隔离 OpenAI SDK/OpenAI-compatible SDK 的细节
-2. 为上层提供稳定的 `chat()` / `chat_with_tools()` 接口
+2. 为上层提供稳定的 `chat_with_tools()` 接口
 
 设计原则：
 - Agent 和 ToolRuntime 不直接依赖第三方 SDK 响应对象
@@ -78,16 +78,6 @@ class LLMProvider(ABC):
         pass
 
     @abstractmethod
-    def chat(
-        self,
-        messages: list[dict[str, Any]],
-        temperature: float = 0.3,
-        timeout: int = 30,
-    ) -> LLMResponse:
-        """普通聊天调用。"""
-        pass
-
-    @abstractmethod
     def chat_with_tools(
         self,
         messages: list[dict[str, Any]],
@@ -124,21 +114,6 @@ class OpenAICompatibleProvider(LLMProvider):
     def supports_native_tool_calling(self) -> bool:
         """当前 provider 是否支持原生 function calling。"""
         return self._supports_native_tool_calling
-
-    def chat(
-        self,
-        messages: list[dict[str, Any]],
-        temperature: float = 0.3,
-        timeout: int = 30,
-    ) -> LLMResponse:
-        """发送普通聊天请求。"""
-        response = self._client.chat.completions.create(
-            model=self._model,
-            messages=messages,  # type: ignore[arg-type]
-            temperature=temperature,
-            timeout=timeout,
-        )
-        return self._normalize_response(response)
 
     def chat_with_tools(
         self,
@@ -342,22 +317,6 @@ class LLMClient:
             raise LLMError(
                 f"当前 provider {self.provider_name} 不支持原生 function calling"
             )
-
-    def chat(
-        self,
-        messages: list[dict[str, Any]],
-        temperature: float = 0.3,
-        max_retries: int = 3,
-        timeout: int = 30,
-    ) -> LLMResponse:
-        """发送普通聊天请求，带重试和超时控制。"""
-        return self._run_with_retry(
-            callable_name="chat",
-            temperature=temperature,
-            max_retries=max_retries,
-            timeout=timeout,
-            messages=messages,
-        )
 
     def chat_with_tools(
         self,

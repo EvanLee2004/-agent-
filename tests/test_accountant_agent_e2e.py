@@ -17,8 +17,8 @@ from typing import Any, Optional
 
 from agents.accountant_agent import AccountantAgent
 from bootstrap import ApplicationBootstrapper
+from domain.accounting import VoucherDraft, VoucherLineDraft
 from domain.tax import TaxRequest, TaxType, TaxpayerType
-from domain.models import VoucherDraft, VoucherLineDraft
 from infrastructure.accounting_repository import (
     SQLiteChartOfAccountsRepository,
     SQLiteJournalRepository,
@@ -26,7 +26,6 @@ from infrastructure.accounting_repository import (
 from infrastructure.llm import LLMResponse, LLMToolCall
 from infrastructure.memory import OpenClawMemoryStore
 from infrastructure.memory_index import SQLiteMemoryIndex
-from infrastructure.ledger_repository import SQLiteLedgerRepository
 from infrastructure.skill_loader import SkillLoader
 
 
@@ -59,43 +58,6 @@ class StubLLMClient:
 
     def require_native_tool_calling(self) -> None:
         """模拟真实 LLMClient 的能力检查接口。"""
-
-    def chat(self, messages, temperature=0.3, max_retries=3, timeout=30):
-        """保留普通 chat 兼容入口。"""
-        del temperature, max_retries, timeout
-        self.calls.append(
-            {
-                "mode": "chat",
-                "messages": messages,
-            }
-        )
-        if not self._responses:
-            return LLMResponse(
-                content="",
-                usage={},
-                model="stub",
-                success=False,
-                error_message="No more stub responses",
-            )
-
-        response = self._responses.pop(0)
-        if isinstance(response, str):
-            return LLMResponse(
-                content=response,
-                usage={},
-                model="stub",
-                success=True,
-                assistant_message={"role": "assistant", "content": response},
-            )
-
-        return LLMResponse(
-            content=str(response.get("content", "")),
-            usage={},
-            model="stub",
-            success=response.get("success", True),
-            error_message=response.get("error_message"),
-            assistant_message={"role": "assistant", "content": str(response.get("content", ""))},
-        )
 
     def chat_with_tools(
         self,
@@ -200,7 +162,6 @@ class AccountantAgentEndToEndTest(unittest.IsolatedAsyncioTestCase):
     ) -> tuple[
         AccountantAgent,
         SQLiteJournalRepository,
-        SQLiteLedgerRepository,
         OpenClawMemoryStore,
         StubLLMClient,
     ]:
@@ -208,11 +169,9 @@ class AccountantAgentEndToEndTest(unittest.IsolatedAsyncioTestCase):
         db_path = str(temp_path / "ledger.db")
         journal_repository = SQLiteJournalRepository(db_path)
         chart_repository = SQLiteChartOfAccountsRepository(db_path)
-        legacy_ledger_repository = SQLiteLedgerRepository(db_path)
         ApplicationBootstrapper(
             chart_repository=chart_repository,
             journal_repository=journal_repository,
-            legacy_ledger_repository=legacy_ledger_repository,
         ).initialize()
 
         memory_store = self._build_memory_store(temp_path)
@@ -224,7 +183,7 @@ class AccountantAgentEndToEndTest(unittest.IsolatedAsyncioTestCase):
             memory_store=memory_store,
             skill_loader=SkillLoader(),
         )
-        return agent, journal_repository, legacy_ledger_repository, memory_store, llm_client
+        return agent, journal_repository, memory_store, llm_client
 
     def test_agent_construction_has_no_bootstrap_side_effects(self):
         """验证 Agent 构造函数本身不再初始化数据库。"""
@@ -293,7 +252,7 @@ class AccountantAgentEndToEndTest(unittest.IsolatedAsyncioTestCase):
                 "已找到1张凭证：报销客户拜访差旅费，金额500.00元。",
             ]
 
-            agent, journal_repository, legacy_ledger_repository, _, llm_client = (
+            agent, journal_repository, _, llm_client = (
                 self._build_bootstrapped_agent(temp_path=temp_path, responses=responses)
             )
 
@@ -305,7 +264,6 @@ class AccountantAgentEndToEndTest(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(len(vouchers), 1)
             self.assertEqual(vouchers[0].summary, "报销客户拜访差旅费")
             self.assertAlmostEqual(vouchers[0].total_amount, 500.0)
-            self.assertEqual(legacy_ledger_repository.get(), [])
 
             query_result = await agent.handle("查看账目")
             self.assertIn("报销客户拜访差旅费", query_result)
@@ -332,7 +290,7 @@ class AccountantAgentEndToEndTest(unittest.IsolatedAsyncioTestCase):
                 "税务计算完成：增值税\n- 应纳税额：100.00元\n- 税率：1.00%",
             ]
 
-            agent, _, _, _, _ = self._build_bootstrapped_agent(
+            agent, _, _, _ = self._build_bootstrapped_agent(
                 temp_path=temp_path,
                 responses=responses,
             )
@@ -352,7 +310,7 @@ class AccountantAgentEndToEndTest(unittest.IsolatedAsyncioTestCase):
                 "已审核 1 张凭证，风险等级：high\n- [HIGH] LARGE_AMOUNT: 金额超过阈值。",
             ]
 
-            agent, journal_repository, _, _, _ = self._build_bootstrapped_agent(
+            agent, journal_repository, _, _ = self._build_bootstrapped_agent(
                 temp_path=temp_path,
                 responses=responses,
             )
@@ -408,7 +366,7 @@ class AccountantAgentEndToEndTest(unittest.IsolatedAsyncioTestCase):
                 "之后我会尽量把报销说明写得更简洁。",
             ]
 
-            agent, _, _, memory_store, llm_client = self._build_bootstrapped_agent(
+            agent, _, memory_store, llm_client = self._build_bootstrapped_agent(
                 temp_path=temp_path,
                 responses=responses,
             )
@@ -444,7 +402,7 @@ class AccountantAgentEndToEndTest(unittest.IsolatedAsyncioTestCase):
                 "超过50000元的凭证需要审核。",
             ]
 
-            agent, _, _, _, llm_client = self._build_bootstrapped_agent(
+            agent, _, _, llm_client = self._build_bootstrapped_agent(
                 temp_path=temp_path,
                 responses=responses,
             )
@@ -465,7 +423,7 @@ class AccountantAgentEndToEndTest(unittest.IsolatedAsyncioTestCase):
                 "<think>\n先整理一下结果。\n</think>\n\n当前账目为空。",
             ]
 
-            agent, _, _, _, _ = self._build_bootstrapped_agent(
+            agent, _, _, _ = self._build_bootstrapped_agent(
                 temp_path=temp_path,
                 responses=responses,
             )
@@ -478,7 +436,7 @@ class AccountantAgentEndToEndTest(unittest.IsolatedAsyncioTestCase):
             temp_path = Path(temp_dir)
             responses = ["这是一段没有任何工具调用的直接回复"]
 
-            agent, _, _, _, _ = self._build_bootstrapped_agent(
+            agent, _, _, _ = self._build_bootstrapped_agent(
                 temp_path=temp_path,
                 responses=responses,
             )
@@ -557,7 +515,6 @@ class AccountantAgentEndToEndTest(unittest.IsolatedAsyncioTestCase):
             (
                 agent,
                 journal_repository,
-                legacy_ledger_repository,
                 memory_store,
                 llm_client,
             ) = self._build_bootstrapped_agent(
@@ -589,7 +546,6 @@ class AccountantAgentEndToEndTest(unittest.IsolatedAsyncioTestCase):
             vouchers = journal_repository.list_vouchers()
             self.assertEqual(len(vouchers), 1)
             self.assertEqual(vouchers[0].summary, "报销客户拜访差旅费")
-            self.assertEqual(legacy_ledger_repository.get(), [])
             self.assertTrue((temp_path / "MEMORY.md").exists())
             self.assertTrue(memory_store.search_memories("简洁"))
 

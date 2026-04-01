@@ -7,7 +7,10 @@
 这样可以避免把“业务规则”和“对话措辞”重新耦合在一起。
 """
 
-from domain.models import AuditRequest, MemoryScope, QueryRequest, TaxRequest, VoucherDraft
+from domain.accounting import QueryRequest, VoucherDraft
+from domain.audit import AuditRequest
+from domain.memory import MemoryScope
+from domain.tax import TaxRequest
 from services.accounting_service import AccountingService
 from services.audit_service import AuditService
 from services.memory_service import MemoryService

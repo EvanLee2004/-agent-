@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
-from domain.models import MemoryScope, MemorySearchResult
+from domain.memory import MemoryScope, MemorySearchResult
 
 
 @dataclass

@@ -101,8 +101,8 @@ pip install -r requirements.txt
   - `account_subject`
   - `journal_voucher`
   - `journal_line`
-- `infrastructure/ledger.py` 只是旧接口兼容层
-- 不允许恢复主流程双写旧 `ledger`
+- 旧 `ledger` 兼容体系已经移除
+- 不允许重新引入双账本真相或兼容双写
 
 ## 代码风格
 
@@ -185,7 +185,6 @@ pip install -r requirements.txt
 ### llm.py
 
 - `LLMClient.get_instance()`
-- `LLMClient.chat(...)`
 - `LLMClient.chat_with_tools(...)`
 - `LLMClient.require_native_tool_calling()`
 

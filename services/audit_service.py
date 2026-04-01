@@ -8,7 +8,8 @@
 - 摘要和分录是否过于空泛
 """
 
-from domain.models import AuditFlag, AuditRequest, AuditResult, AuditTarget, JournalVoucher
+from domain.accounting import JournalVoucher
+from domain.audit import AuditFlag, AuditRequest, AuditResult, AuditTarget
 from services.voucher_service import VoucherService
 
 
@@ -50,23 +51,6 @@ class AuditService:
             flags=flags,
             suggestion=suggestion,
         )
-
-    def format_result(self, result: AuditResult) -> str:
-        """格式化审核结果。"""
-        lines = [
-            result.summary,
-            f"- 凭证ID: {', '.join(str(item) for item in result.audited_voucher_ids)}",
-        ]
-        if not result.flags:
-            lines.append("- 未发现明显异常")
-        else:
-            for flag in result.flags:
-                lines.append(
-                    f"- [{flag.severity.upper()}] {flag.code}: {flag.message}"
-                )
-        if result.suggestion:
-            lines.append(f"- 建议: {result.suggestion}")
-        return "\n".join(lines)
 
     def _select_target_vouchers(self, request: AuditRequest) -> list[JournalVoucher]:
         """根据审核请求选择目标凭证。"""

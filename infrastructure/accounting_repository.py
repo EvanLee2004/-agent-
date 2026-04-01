@@ -17,8 +17,10 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Optional
 
-from domain.models import AccountSubject, JournalLine, JournalVoucher, VoucherDraft
-from infrastructure.ledger_repository import LEDGER_DB
+from domain.accounting import AccountSubject, JournalLine, JournalVoucher, VoucherDraft
+
+
+DEFAULT_ACCOUNTING_DB = "data/ledger.db"
 
 
 class IChartOfAccountsRepository(ABC):
@@ -101,7 +103,7 @@ class IJournalRepository(ABC):
 class SQLiteChartOfAccountsRepository(IChartOfAccountsRepository):
     """SQLite 科目表仓库实现。"""
 
-    def __init__(self, db_path: str = LEDGER_DB):
+    def __init__(self, db_path: str = DEFAULT_ACCOUNTING_DB):
         self._db_path = db_path
 
     def init_db(self) -> None:
@@ -220,7 +222,7 @@ class SQLiteChartOfAccountsRepository(IChartOfAccountsRepository):
 class SQLiteJournalRepository(IJournalRepository):
     """SQLite 凭证仓库实现。"""
 
-    def __init__(self, db_path: str = LEDGER_DB):
+    def __init__(self, db_path: str = DEFAULT_ACCOUNTING_DB):
         self._db_path = db_path
 
     def init_db(self) -> None:
@@ -504,9 +506,3 @@ def get_journal_repository() -> SQLiteJournalRepository:
     if _journal_repository is None:
         _journal_repository = SQLiteJournalRepository()
     return _journal_repository
-
-
-def init_accounting_db() -> None:
-    """初始化新版账务表结构。"""
-    get_chart_of_accounts_repository().init_db()
-    get_journal_repository().init_db()

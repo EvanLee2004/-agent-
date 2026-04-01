@@ -14,12 +14,7 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Optional
 
-from domain.models import (
-    MemoryDecision,
-    MemoryRecord,
-    MemoryScope,
-    MemorySearchResult,
-)
+from domain.memory import MemoryDecision, MemoryRecord, MemoryScope, MemorySearchResult
 from infrastructure.memory_index import IMemoryIndex, SQLiteMemoryIndex
 
 
@@ -52,15 +47,6 @@ class IAgentMemoryStore(ABC):
         limit: int = DEFAULT_MEMORY_LIMIT,
     ) -> list[MemorySearchResult]:
         """根据查询搜索相关记忆片段。"""
-        pass
-
-    @abstractmethod
-    def get_memory_file(
-        self,
-        scope: MemoryScope,
-        target_date: Optional[str] = None,
-    ) -> Optional[str]:
-        """读取指定记忆文件的原始内容。"""
         pass
 
     @abstractmethod
@@ -314,39 +300,6 @@ class OpenClawMemoryStore(IAgentMemoryStore):
         self._rebuild_index()
         return self._memory_index.search(query=query, limit=limit)
 
-    def get_memory_file(
-        self,
-        scope: MemoryScope,
-        target_date: Optional[str] = None,
-        start_line: Optional[int] = None,
-        line_count: Optional[int] = None,
-    ) -> Optional[str]:
-        """读取记忆文件原文。
-
-        Args:
-            scope: 记忆范围，长期或每日。
-            target_date: 当 scope 为 daily 时指定日期，格式 `YYYY-MM-DD`。
-            start_line: 可选，起始行号（1-based）。
-            line_count: 可选，读取的行数。
-
-        Returns:
-            文件内容；若文件不存在则返回 None。
-        """
-        if scope == MemoryScope.LONG_TERM:
-            if not self._long_term_memory_file.exists():
-                return None
-            content = self._long_term_memory_file.read_text(encoding="utf-8")
-            return self._slice_text_by_line(content, start_line, line_count)
-
-        if not target_date:
-            target_date = date.today().isoformat()
-
-        daily_file = self._daily_memory_dir / f"{target_date}.md"
-        if not daily_file.exists():
-            return None
-        content = daily_file.read_text(encoding="utf-8")
-        return self._slice_text_by_line(content, start_line, line_count)
-
     @staticmethod
     def _is_duplicate(existing_records: list[MemoryRecord], new_record: MemoryRecord) -> bool:
         """判断是否与已有记忆重复。"""
@@ -375,21 +328,6 @@ class OpenClawMemoryStore(IAgentMemoryStore):
             long_term_file=self._long_term_memory_file,
             daily_memory_dir=self._daily_memory_dir,
         )
-
-    @staticmethod
-    def _slice_text_by_line(
-        content: str,
-        start_line: Optional[int],
-        line_count: Optional[int],
-    ) -> str:
-        """按行裁剪文本，近似 OpenClaw `memory_get` 的片段读取。"""
-        if start_line is None or line_count is None:
-            return content
-
-        all_lines = content.splitlines()
-        start_index = max(start_line - 1, 0)
-        end_index = start_index + max(line_count, 0)
-        return "\n".join(all_lines[start_index:end_index])
 
 
 _memory_store: Optional[OpenClawMemoryStore] = None

@@ -55,8 +55,6 @@ Journal / Chart Repository + OpenClaw 风格记忆存储
 ├── services/                       # 应用服务层
 ├── infrastructure/
 │   ├── accounting_repository.py    # 凭证、分录、科目 Repository
-│   ├── ledger.py                   # 旧接口兼容层
-│   ├── ledger_repository.py        # 历史 ledger 仓库
 │   ├── llm.py                      # Provider + LLM facade
 │   ├── memory.py                   # OpenClaw 风格记忆存储
 │   ├── memory_index.py             # SQLite FTS 记忆索引
@@ -126,7 +124,7 @@ python main.py
 ### 分录驱动账务模型
 
 - 账务主存储为 `account_subject`、`journal_voucher`、`journal_line`
-- 旧 `ledger` 接口通过兼容适配层映射到新版主账，不再参与主流程双写
+- 旧 `ledger` 兼容体系已经移除，当前只保留分录驱动主账
 - 凭证必须借贷平衡
 
 ### 记忆系统

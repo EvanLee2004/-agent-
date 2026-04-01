@@ -8,7 +8,7 @@
 
 from typing import Optional
 
-from domain.models import JournalVoucher
+from domain.accounting import JournalVoucher
 from infrastructure.accounting_repository import IJournalRepository
 
 

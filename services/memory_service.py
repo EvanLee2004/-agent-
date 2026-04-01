@@ -9,9 +9,7 @@
 而是由模型直接调用 `store_memory` / `search_memory` 两个原生工具。
 """
 
-from typing import Optional
-
-from domain.models import MemoryDecision, MemoryScope, MemorySearchResult
+from domain.memory import MemoryDecision, MemoryScope, MemorySearchResult
 from infrastructure.memory import IAgentMemoryStore
 
 
@@ -57,18 +55,3 @@ class MemoryService:
     ) -> list[MemorySearchResult]:
         """搜索相关记忆片段。"""
         return self._memory_store.search_memories(query=query, limit=limit)
-
-    def get_memory_file(
-        self,
-        scope: MemoryScope,
-        target_date: Optional[str] = None,
-        start_line: Optional[int] = None,
-        line_count: Optional[int] = None,
-    ) -> Optional[str]:
-        """读取指定记忆文件原文。"""
-        return self._memory_store.get_memory_file(
-            scope=scope,
-            target_date=target_date,
-            start_line=start_line,
-            line_count=line_count,
-        )

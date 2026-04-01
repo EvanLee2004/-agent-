@@ -8,7 +8,7 @@
 原因是税额计算属于高确定性任务，不适合完全交给模型自由发挥。
 """
 
-from domain.models import TaxComputationResult, TaxRequest, TaxType, TaxpayerType
+from domain.tax import TaxComputationResult, TaxRequest, TaxType, TaxpayerType
 
 
 SMALL_SCALE_VAT_RATE = 0.01
@@ -36,21 +36,6 @@ class TaxService:
             return self._calculate_small_low_profit_cit(request)
 
         raise ValueError("当前版本仅支持小规模纳税人增值税和小型微利企业企业所得税计算")
-
-    def format_result(self, result: TaxComputationResult) -> str:
-        """把税务计算结果格式化为用户可读文本。"""
-        lines = [
-            f"税务计算完成：{self._format_tax_type(result.tax_type)}",
-            f"- 适用主体：{self._format_taxpayer_type(result.taxpayer_type)}",
-            f"- 计税基础：{result.taxable_base:.2f}元",
-            f"- 税率：{result.tax_rate * 100:.2f}%",
-            f"- 应纳税额：{result.payable_tax:.2f}元",
-            f"- 计算公式：{result.formula}",
-            f"- 政策依据：{result.policy_basis}",
-        ]
-        for note in result.notes:
-            lines.append(f"- 提示：{note}")
-        return "\n".join(lines)
 
     def _calculate_small_scale_vat(self, request: TaxRequest) -> TaxComputationResult:
         """计算小规模纳税人增值税。"""
@@ -114,17 +99,3 @@ class TaxService:
                 "是否满足从业人数、资产总额等资格条件，需要结合企业实际情况人工确认。",
             ],
         )
-
-    @staticmethod
-    def _format_tax_type(tax_type: TaxType) -> str:
-        """格式化税种名称。"""
-        if tax_type == TaxType.VAT:
-            return "增值税"
-        return "企业所得税"
-
-    @staticmethod
-    def _format_taxpayer_type(taxpayer_type: TaxpayerType) -> str:
-        """格式化纳税主体名称。"""
-        if taxpayer_type == TaxpayerType.SMALL_SCALE_VAT:
-            return "小规模纳税人"
-        return "小型微利企业"

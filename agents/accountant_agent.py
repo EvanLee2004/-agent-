@@ -16,6 +16,7 @@ from typing import Optional
 from infrastructure.accounting_repository import (
     IChartOfAccountsRepository,
     IJournalRepository,
+    get_chart_of_accounts_repository,
     get_journal_repository,
 )
 from infrastructure.llm import LLMClient
@@ -56,11 +57,7 @@ class AccountantAgent:
     ):
         self._llm_client = llm_client
         self._journal_repository = journal_repository or get_journal_repository()
-        self._chart_repository = chart_repository
-        if self._chart_repository is None:
-            from infrastructure.accounting_repository import get_chart_of_accounts_repository
-
-            self._chart_repository = get_chart_of_accounts_repository()
+        self._chart_repository = chart_repository or get_chart_of_accounts_repository()
         self._memory_store = memory_store or get_memory_store()
         self._skill_loader = skill_loader or SkillLoader()
         self._agent_name = agent_name

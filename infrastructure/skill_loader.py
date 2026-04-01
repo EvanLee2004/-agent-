@@ -207,7 +207,7 @@ class SkillLoader:
         """
         for skill_dir in cls.SKILL_DIR_CANDIDATES:
             candidate = skill_dir / skill_name
-            if candidate.exists():
+            if candidate.exists() and (candidate / "SKILL.md").exists():
                 return candidate
         return None
 

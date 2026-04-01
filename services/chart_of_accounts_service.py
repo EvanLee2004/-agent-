@@ -6,7 +6,7 @@
 3. 为 accounting skill 提供明确的科目目录，降低模型胡编科目的概率。
 """
 
-from domain.models import AccountSubject, VoucherDraft
+from domain.accounting import AccountSubject, VoucherDraft
 from infrastructure.accounting_repository import IChartOfAccountsRepository
 
 
