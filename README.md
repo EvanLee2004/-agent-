@@ -61,7 +61,6 @@ Repositories + SQLite / Markdown Memory
 ├── MEMORY.md                    # 长期记忆
 ├── memory/                      # 每日记忆（YYYY-MM-DD.md）
 ├── tests/
-├── opencode.json
 └── config.json
 ```
 

@@ -67,7 +67,6 @@ echo "LLM_API_KEY=your_key" > .env
 │   └── skills/
 ├── MEMORY.md
 ├── tests/
-├── opencode.json
 └── config.json
 ```
 

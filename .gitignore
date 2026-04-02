@@ -3,7 +3,11 @@ __pycache__/
 *.pyc
 .venv/
 *.db
+.DS_Store
+.claude/
+.ruff_cache/
+opencode.json
 data/
 sessions/
 memory/*.md
-.opencode/cache/*.sqlite
+.opencode/cache/
