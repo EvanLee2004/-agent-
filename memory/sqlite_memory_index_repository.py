@@ -194,7 +194,7 @@ class SQLiteMemoryIndexRepository(MemoryIndexRepository):
     """SQLite FTS5 记忆索引实现。"""
 
     def __init__(self, database_path: Optional[Path] = None):
-        self._database_path = database_path or Path(".opencode/cache/memory_search.sqlite")
+        self._database_path = database_path or Path(".agent_assets/cache/memory_search.sqlite")
 
     def rebuild_index(self, long_term_file: Path, daily_memory_dir: Path) -> None:
         """重建索引。"""

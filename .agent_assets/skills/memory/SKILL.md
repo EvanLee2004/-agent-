@@ -1,7 +1,6 @@
 ---
 name: memory
 description: Decide whether a conversation should update long-term or daily memory.
-compatibility: opencode
 ---
 
 # Memory

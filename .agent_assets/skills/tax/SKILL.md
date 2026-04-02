@@ -1,7 +1,6 @@
 ---
 name: tax
 description: Extract structured Chinese tax calculation requests for deterministic processing.
-compatibility: opencode
 ---
 
 # Tax

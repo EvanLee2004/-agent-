@@ -152,7 +152,7 @@ class ConversationRouterEndToEndTest(unittest.TestCase):
             daily_memory_dir=temp_path / "memory",
         )
         memory_index_repository = SQLiteMemoryIndexRepository(
-            temp_path / ".opencode" / "cache" / "memory_search.sqlite"
+            temp_path / ".agent_assets" / "cache" / "memory_search.sqlite"
         )
         memory_service = MemoryService(memory_store_repository, memory_index_repository)
         prompt_skill_repository = FilePromptSkillRepository()

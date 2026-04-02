@@ -7,7 +7,7 @@ from typing import Optional
 from conversation.prompt_skill_repository import PromptSkillRepository
 
 
-SKILLS_ROOT = Path(".opencode/skills")
+SKILLS_ROOT = Path(".agent_assets/skills")
 SYSTEM_PROMPT_PATTERN = re.compile(r"## SYSTEM_PROMPT\s*\n(.+?)(?=\n##|\Z)", re.DOTALL)
 
 

@@ -1,7 +1,6 @@
 ---
 name: accounting
 description: Extract a balanced bookkeeping voucher from Chinese user requests.
-compatibility: opencode
 ---
 
 # Accounting

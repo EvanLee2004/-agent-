@@ -1,7 +1,6 @@
 ---
 name: pdf
-description: Work with PDF documents in OpenCode-style skill layout.
-compatibility: opencode
+description: Work with PDF documents in the project's auxiliary skill layout.
 ---
 
 # PDF
@@ -10,5 +9,5 @@ Use this skill when the task involves extracting, checking, filling, or transfor
 
 ## Notes
 
-- This project keeps the OpenCode-style entry point here
+- This project keeps the auxiliary document skill entry point here
 - This auxiliary skill is not part of the main accounting tool chain

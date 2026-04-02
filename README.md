@@ -30,7 +30,7 @@ ConversationRouter
   ↓
 ConversationService
   ↓
-PromptContextService（.opencode/skills + 记忆 + 科目目录）
+PromptContextService（.agent_assets/skills + 记忆 + 科目目录）
   ↓
 ToolLoopService（原生 function calling）
   ↓
@@ -41,7 +41,7 @@ Feature Services
 Repositories + SQLite / Markdown Memory
 ```
 
-项目保留 OpenCode 风格的 `.opencode/skills/` 目录，并采用 `MEMORY.md + memory/YYYY-MM-DD.md` 的分层记忆形态。
+项目使用 `.agent_assets/skills/` 组织领域技能提示词，并采用 `MEMORY.md + memory/YYYY-MM-DD.md` 的分层记忆形态。
 
 ## 项目结构
 
@@ -56,7 +56,7 @@ Repositories + SQLite / Markdown Memory
 ├── rules/                       # 规则问答
 ├── llm/                         # LLM 仓储接口与 provider 实现
 ├── configuration/               # 配置读取与校验
-├── .opencode/
+├── .agent_assets/
 │   └── skills/                  # Skills 入口
 ├── MEMORY.md                    # 长期记忆
 ├── memory/                      # 每日记忆（YYYY-MM-DD.md）
@@ -106,7 +106,7 @@ python main.py
 
 ## Skills
 
-Skills 位于 `.opencode/skills/<name>/SKILL.md`。
+Skills 位于 `.agent_assets/skills/<name>/SKILL.md`。
 当前业务核心技能：
 
 - `accounting`

@@ -1,7 +1,6 @@
 ---
 name: rules
 description: Answer accounting and reimbursement questions using the project's bookkeeping rules.
-compatibility: opencode
 ---
 
 # Rules

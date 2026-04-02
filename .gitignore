@@ -10,4 +10,4 @@ opencode.json
 data/
 sessions/
 memory/*.md
-.opencode/cache/
+.agent_assets/cache/

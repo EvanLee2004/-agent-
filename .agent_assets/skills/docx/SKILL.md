@@ -1,7 +1,6 @@
 ---
 name: docx
-description: Work with Word documents in OpenCode-style skill layout.
-compatibility: opencode
+description: Work with Word documents in the project's auxiliary skill layout.
 ---
 
 # DOCX
@@ -10,5 +9,5 @@ Use this skill when the task involves creating, editing, or inspecting Word docu
 
 ## Notes
 
-- This project keeps the OpenCode-style entry point here
+- This project keeps the auxiliary document skill entry point here
 - This auxiliary skill is not part of the main accounting tool chain

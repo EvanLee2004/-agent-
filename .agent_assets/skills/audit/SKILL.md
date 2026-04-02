@@ -1,7 +1,6 @@
 ---
 name: audit
 description: Extract structured voucher audit targets for deterministic review rules.
-compatibility: opencode
 ---
 
 # Audit

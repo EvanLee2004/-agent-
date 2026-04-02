@@ -63,7 +63,7 @@ echo "LLM_API_KEY=your_key" > .env
 ├── rules/
 ├── llm/
 ├── configuration/
-├── .opencode/
+├── .agent_assets/
 │   └── skills/
 ├── MEMORY.md
 ├── tests/
@@ -124,7 +124,7 @@ echo "LLM_API_KEY=your_key" > .env
 - `pptx`
 - `xlsx`
 
-skills 位于 `.opencode/skills/`，职责是提供领域上下文与工具使用约束，不直接承担业务执行。
+skills 位于 `.agent_assets/skills/`，职责是提供领域上下文与工具使用约束，不直接承担业务执行。
 
 ## 编码要求
 
