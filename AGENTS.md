@@ -105,7 +105,7 @@ echo "LLM_API_KEY=your_key" > .env
 - 每日记忆：`memory/YYYY-MM-DD.md`
 - Markdown 是源数据
 - SQLite FTS 只做搜索索引
-- 记忆事实类问题必须先查询 `search_memory`
+- 记忆事实类问题优先查询 `search_memory`
 
 ## Skills
 
@@ -124,7 +124,7 @@ echo "LLM_API_KEY=your_key" > .env
 - `pptx`
 - `xlsx`
 
-skills 位于 `.agent_assets/skills/`，职责是提供领域上下文与工具使用约束，不直接承担业务执行。
+skills 位于 `.agent_assets/skills/`，职责是提供领域上下文与工具使用建议，不直接承担业务执行。
 
 ## 编码要求
 

@@ -142,7 +142,7 @@ def _build_conversation_service(
     llm_chat_repository = OpenAiCompatibleLlmChatRepository(llm_configuration)
     return ConversationService(
         prompt_context_service,
-        ToolLoopService(llm_chat_repository, tool_router_catalog, tool_use_policy),
+        ToolLoopService(llm_chat_repository, tool_router_catalog),
     )
 
 

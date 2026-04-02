@@ -92,7 +92,7 @@ python main.py
 
 ## Native Function Calling
 
-主流程不再依赖“模型输出 JSON，再由本地解析执行”的旧链路，而是强制走原生工具调用循环。当前工具包括：
+主流程不再依赖“模型输出 JSON，再由本地解析执行”的旧链路，而是优先使用原生工具调用循环。当前工具包括：
 
 - `record_voucher`
 - `query_vouchers`
@@ -102,7 +102,7 @@ python main.py
 - `search_memory`
 - `reply_with_rules`
 
-第一轮必须调用至少一个工具；如果模型试图退回自由聊天，主流程会直接拒绝。
+涉及持久化、系统事实查询、税务计算、审核和记忆读写时，模型会优先调用工具；日常寒暄和一般性说明则允许直接自然回复。
 
 ## Skills
 
@@ -130,7 +130,7 @@ Skills 位于 `.agent_assets/skills/<name>/SKILL.md`。
 - 每日记忆写入 `memory/YYYY-MM-DD.md`
 - Markdown 文件是源数据
 - SQLite FTS 索引只负责搜索，不是主存储
-- 记忆事实问题必须先通过 `search_memory` 查询，再生成最终答复
+- 记忆事实问题优先通过 `search_memory` 查询，再生成最终答复
 
 ## 测试
 
@@ -147,12 +147,12 @@ Skills 位于 `.agent_assets/skills/<name>/SKILL.md`。
 - 记忆写入与记忆召回
 - 规则问答
 - `<think>` 清理
-- 禁止无工具自由聊天
+- 普通闲聊自然回复
 
 ## 说明
 
 - 当前已通过本地 stub 测试
-- 当前已通过真实模型的最小 smoke test，包括“记住 -> 召回”
+- 当前已通过真实模型 smoke test，包括“你好 -> 记住 -> 召回 -> 记账 -> 查账”
 
 ## License
 

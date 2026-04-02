@@ -179,7 +179,7 @@ class ConversationRouterEndToEndTest(unittest.TestCase):
         router = ConversationRouter(
             ConversationService(
                 prompt_context_service,
-                ToolLoopService(llm_chat_repository, tool_router_catalog, tool_use_policy),
+                ToolLoopService(llm_chat_repository, tool_router_catalog),
             )
         )
         return router, journal_repository, memory_store_repository, llm_chat_repository
@@ -264,9 +264,9 @@ class ConversationRouterEndToEndTest(unittest.TestCase):
             self.assertEqual(vouchers[0].summary, "报销客户拜访差旅费")
             query_response = router.handle(ConversationRequest(user_input="查看账目"))
             self.assertIn("报销客户拜访差旅费", query_response.reply_text)
-            self.assertEqual(llm_repository.calls[0].tool_choice, "required")
+            self.assertEqual(llm_repository.calls[0].tool_choice, "auto")
             self.assertEqual(llm_repository.calls[1].tool_choice, "auto")
-            self.assertEqual(llm_repository.calls[2].tool_choice, "required")
+            self.assertEqual(llm_repository.calls[2].tool_choice, "auto")
 
     def test_tax_flow_uses_calculate_tax_tool(self):
         """验证税务流程。"""
@@ -355,8 +355,8 @@ class ConversationRouterEndToEndTest(unittest.TestCase):
             self.assertIn("简洁", second_response.reply_text)
             self.assertIn("用户希望报销说明默认写得简洁。", llm_repository.calls[2].messages[0].content)
 
-    def test_memory_recall_retry_requires_search_memory_first(self):
-        """验证记忆召回纠偏。"""
+    def test_memory_recall_prompt_does_not_preload_memory_fact(self):
+        """验证记忆召回场景不会预加载具体记忆内容。"""
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
             remembered_content = "用户希望报销说明默认写得简洁。"
@@ -366,8 +366,6 @@ class ConversationRouterEndToEndTest(unittest.TestCase):
                     {"scope": "long_term", "category": "preference", "content": remembered_content},
                 ),
                 "我记住了：以后默认把报销说明写得简洁些。",
-                build_tool_response("reply_with_rules", {"question": "我之前让你记住了什么？"}),
-                "目前没有存储任何用户主动要求的记忆。",
                 build_tool_response("search_memory", {"query": "我之前让你记住了什么", "limit": 5}),
                 "你之前让我记住：用户希望报销说明默认写得简洁。",
             ]
@@ -378,13 +376,7 @@ class ConversationRouterEndToEndTest(unittest.TestCase):
             initial_prompt = llm_repository.calls[2].messages[0].content
             self.assertIn("记忆召回约束", initial_prompt)
             self.assertNotIn(remembered_content, initial_prompt)
-            correction_messages = [
-                message.content
-                for message in llm_repository.calls[4].messages
-                if message.role == "system"
-            ]
-            self.assertTrue(any("尚未调用 `search_memory`" in content for content in correction_messages))
-            self.assertEqual(llm_repository.calls[4].tool_choice, "required")
+            self.assertEqual(llm_repository.calls[2].tool_choice, "auto")
 
     def test_rules_questions_use_reply_with_rules_tool(self):
         """验证规则问题仍走工具链。"""
@@ -412,13 +404,17 @@ class ConversationRouterEndToEndTest(unittest.TestCase):
             response = router.handle(ConversationRequest(user_input="查看账目"))
             self.assertEqual(response.reply_text, "当前账目为空。")
 
-    def test_router_rejects_free_chat_without_tool_call(self):
-        """验证第一轮不调工具时会拒绝。"""
+    def test_router_allows_free_chat_without_tool_call(self):
+        """验证普通闲聊允许直接自然回复。"""
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
-            router, _, _, _ = self._build_bootstrapped_router(temp_path, ["这是一段没有工具调用的直接回复"])
+            router, _, _, llm_repository = self._build_bootstrapped_router(
+                temp_path,
+                ["你好，我是智能会计助手，可以帮你处理记账、查账、税务和审核问题。"],
+            )
             response = router.handle(ConversationRequest(user_input="你好"))
-            self.assertIn("模型未调用任何工具", response.reply_text)
+            self.assertIn("智能会计助手", response.reply_text)
+            self.assertEqual(llm_repository.calls[0].tool_choice, "auto")
 
     def test_full_business_flow_runs_end_to_end(self):
         """验证完整业务链路。"""

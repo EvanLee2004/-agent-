@@ -28,7 +28,7 @@
   - `store_memory`
   - `search_memory`
   - `reply_with_rules`
-- 第一轮必须调用工具，禁止主流程退回自由聊天
+- 工具调用改为按需触发：涉及系统事实和真实动作时优先走工具，普通闲聊允许直接自然回复
 
 ### 账务模型
 
@@ -41,7 +41,7 @@
 - 长期记忆统一写入 `MEMORY.md`
 - 每日记忆统一写入 `memory/YYYY-MM-DD.md`
 - SQLite FTS 只负责搜索索引，不再充当主存储
-- 记忆召回场景增加一次受控纠偏，避免真实模型绕过 `search_memory`
+- 记忆召回场景不再做 runtime 强制拦截，而是通过 prompt 约束优先查询 `search_memory`
 
 ### 仓库清理
 

@@ -20,7 +20,7 @@ REPLY_WITH_RULES_PARAMETERS = {
 
 def _build_memory_notice() -> str:
     """构造记忆召回场景下的规则提示。"""
-    return "当前问题涉及记忆事实，必须调用 search_memory 获取记忆源，不要仅根据规则参考直接作答。"
+    return "当前问题涉及记忆事实，建议先调用 search_memory 获取记忆源，再结合规则参考组织回答。"
 
 
 class ReplyWithRulesRouter(ToolRouter):
