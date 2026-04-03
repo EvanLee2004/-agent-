@@ -1,16 +1,16 @@
-"""财务部门工具上下文注册器。"""
+"""DeerFlow 财务部门工具上下文注册器。"""
 
 from typing import Optional
 
-from department.finance_department_tool_context import FinanceDepartmentToolContext
+from runtime.deerflow.finance_department_tool_context import FinanceDepartmentToolContext
 
 
 class FinanceDepartmentToolContextRegistry:
     """保存 DeerFlow 工具可见的财务部门上下文。
 
-    这是受 DeerFlow 静态工具装配协议约束而保留的唯一全局注册点。之所以把它留在
-    部门模块，而不是会话模块，是为了明确表达：这层副作用是“部门运行时资产”的一部分，
-    不属于对外会话协议。
+    这是受 DeerFlow 静态工具装配协议约束而保留的唯一全局注册点。把它放在
+    `runtime/deerflow/` 下，而不是继续留在 `department/`，是为了明确表达：
+    这层副作用属于运行时集成边界，不属于财务部门业务本身。
     """
 
     _context: Optional[FinanceDepartmentToolContext] = None

@@ -2,8 +2,8 @@
 
 import unittest
 
-from department.role_trace import RoleTrace
-from department.role_trace_formatter import RoleTraceFormatter
+from department.workbench.role_trace import RoleTrace
+from department.workbench.role_trace_formatter import RoleTraceFormatter
 
 
 class RoleTraceFormatterTest(unittest.TestCase):
@@ -31,4 +31,3 @@ class RoleTraceFormatterTest(unittest.TestCase):
         self.assertIn("协作过程：", trace_text)
         self.assertIn("思考摘要：我是智能财务部门的协调角色。", trace_text)
         self.assertNotIn("\n我会负责理解您的目标", trace_text)
-

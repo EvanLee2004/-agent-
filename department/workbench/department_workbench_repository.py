@@ -3,7 +3,7 @@
 from abc import ABC, abstractmethod
 from typing import Optional
 
-from department.department_workbench import DepartmentWorkbench
+from department.workbench.department_workbench import DepartmentWorkbench
 
 
 class DepartmentWorkbenchRepository(ABC):
@@ -27,4 +27,3 @@ class DepartmentWorkbenchRepository(ABC):
         Returns:
             当前线程的工作台；不存在时返回 None。
         """
-

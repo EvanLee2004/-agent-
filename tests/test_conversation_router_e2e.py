@@ -32,21 +32,20 @@ from conversation.conversation_router import ConversationRouter
 from conversation.conversation_service import ConversationService
 from conversation.reply_text_sanitizer import ReplyTextSanitizer
 from conversation.tool_use_policy import ToolUsePolicy
-from department.collaborate_with_department_role_router import CollaborateWithDepartmentRoleRouter
-from department.department_collaboration_service import DepartmentCollaborationService
+from department.collaboration.collaborate_with_department_role_router import CollaborateWithDepartmentRoleRouter
+from department.collaboration.department_collaboration_service import DepartmentCollaborationService
 from department.department_role_request import DepartmentRoleRequest
 from department.department_role_response import DepartmentRoleResponse
 from department.department_role_runtime_repository import DepartmentRoleRuntimeRepository
 from department.department_runtime_context import DepartmentRuntimeContext
-from department.department_workbench_service import DepartmentWorkbenchService
 from department.finance_department_agent_assets_service import FinanceDepartmentAgentAssetsService
 from department.finance_department_request import FinanceDepartmentRequest
 from department.finance_department_role_catalog import FinanceDepartmentRoleCatalog
 from department.finance_department_service import FinanceDepartmentService
-from department.finance_department_tool_context import FinanceDepartmentToolContext
-from department.finance_department_tool_context_registry import FinanceDepartmentToolContextRegistry
-from department.in_memory_department_workbench_repository import InMemoryDepartmentWorkbenchRepository
-from department.role_trace_summary_builder import RoleTraceSummaryBuilder
+from department.workbench.department_workbench_service import DepartmentWorkbenchService
+from department.workbench.in_memory_department_workbench_repository import InMemoryDepartmentWorkbenchRepository
+from department.workbench.role_trace_factory import RoleTraceFactory
+from department.workbench.role_trace_summary_builder import RoleTraceSummaryBuilder
 from memory.markdown_memory_store_repository import MarkdownMemoryStoreRepository
 from memory.memory_service import MemoryService
 from memory.search_memory_router import SearchMemoryRouter
@@ -62,6 +61,8 @@ from runtime.deerflow.deerflow_client_factory import DeerFlowClientFactory
 from runtime.deerflow.deerflow_department_role_runtime_repository import DeerFlowDepartmentRoleRuntimeRepository
 from runtime.deerflow.deerflow_runtime_assets import DeerFlowRuntimeAssets
 from runtime.deerflow.deerflow_runtime_assets_service import DeerFlowRuntimeAssetsService
+from runtime.deerflow.finance_department_tool_context import FinanceDepartmentToolContext
+from runtime.deerflow.finance_department_tool_context_registry import FinanceDepartmentToolContextRegistry
 from tax.calculate_tax_router import CalculateTaxRouter
 from tax.calculate_tax_tool import calculate_tax_tool
 from tax.tax_service import TaxService
@@ -119,7 +120,7 @@ class StubFinanceDepartmentService(FinanceDepartmentService):
 
     def reply(self, request: FinanceDepartmentRequest):
         from department.finance_department_response import FinanceDepartmentResponse
-        from department.role_trace import RoleTrace
+        from department.workbench.role_trace import RoleTrace
 
         return FinanceDepartmentResponse(
             reply_text=f"thread={request.thread_id}; input={request.user_input}",
@@ -418,7 +419,7 @@ class ConversationRouterEndToEndTest(unittest.TestCase):
     def test_conversation_service_strips_internal_thinking_text(self):
         """验证会话服务会剔除底层角色泄漏的内部思考片段。"""
         from department.finance_department_response import FinanceDepartmentResponse
-        from department.role_trace import RoleTrace
+        from department.workbench.role_trace import RoleTrace
 
         class ThinkingFinanceDepartmentService(StubFinanceDepartmentService):
             """返回带思考片段的部门服务替身。"""
@@ -471,7 +472,7 @@ class ConversationRouterEndToEndTest(unittest.TestCase):
             daily_memory_dir=temp_path / "memory",
         )
         memory_index_repository = SQLiteMemoryIndexRepository(
-            temp_path / ".agent_assets" / "cache" / "memory_search.sqlite"
+            temp_path / ".runtime" / "memory" / "memory_search.sqlite"
         )
         memory_service = MemoryService(memory_store_repository, memory_index_repository)
         rules_service = RulesService(FileRulesRepository())
@@ -485,7 +486,7 @@ class ConversationRouterEndToEndTest(unittest.TestCase):
             runtime_repository=StubDepartmentRoleRuntimeRepository(),
             workbench_service=workbench_service,
             runtime_context=runtime_context,
-            role_trace_summary_builder=RoleTraceSummaryBuilder(),
+            role_trace_factory=RoleTraceFactory(RoleTraceSummaryBuilder()),
         )
         workbench_service.start_turn("test-thread", "测试用户请求")
         FinanceDepartmentToolContextRegistry.register(

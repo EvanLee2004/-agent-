@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass, field
 
-from department.role_trace import RoleTrace
+from department.workbench.role_trace import RoleTrace
 
 
 @dataclass(frozen=True)

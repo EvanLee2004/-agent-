@@ -2,19 +2,20 @@
 
 import unittest
 
-from department.department_collaboration_command import DepartmentCollaborationCommand
-from department.department_collaboration_service import DepartmentCollaborationService
+from department.collaboration.department_collaboration_command import DepartmentCollaborationCommand
+from department.collaboration.department_collaboration_service import DepartmentCollaborationService
 from department.department_error import DepartmentError
 from department.department_role_request import DepartmentRoleRequest
 from department.department_role_response import DepartmentRoleResponse
 from department.department_role_runtime_repository import DepartmentRoleRuntimeRepository
 from department.department_runtime_context import DepartmentRuntimeContext
-from department.department_workbench_service import DepartmentWorkbenchService
 from department.finance_department_role_catalog import FinanceDepartmentRoleCatalog
 from department.finance_department_service import FinanceDepartmentService
 from department.finance_department_request import FinanceDepartmentRequest
-from department.in_memory_department_workbench_repository import InMemoryDepartmentWorkbenchRepository
-from department.role_trace_summary_builder import RoleTraceSummaryBuilder
+from department.workbench.department_workbench_service import DepartmentWorkbenchService
+from department.workbench.in_memory_department_workbench_repository import InMemoryDepartmentWorkbenchRepository
+from department.workbench.role_trace_factory import RoleTraceFactory
+from department.workbench.role_trace_summary_builder import RoleTraceSummaryBuilder
 
 
 class FakeDepartmentRoleRuntimeRepository(DepartmentRoleRuntimeRepository):
@@ -49,7 +50,7 @@ class DepartmentCollaborationServiceTest(unittest.TestCase):
             runtime_repository=runtime_repository,
             workbench_service=workbench_service,
             runtime_context=runtime_context,
-            role_trace_summary_builder=RoleTraceSummaryBuilder(),
+            role_trace_factory=RoleTraceFactory(RoleTraceSummaryBuilder()),
         )
 
         with runtime_context.open_scope("finance-coordinator", "thread-1", 0):
@@ -77,7 +78,7 @@ class DepartmentCollaborationServiceTest(unittest.TestCase):
             runtime_repository=FakeDepartmentRoleRuntimeRepository(),
             workbench_service=workbench_service,
             runtime_context=runtime_context,
-            role_trace_summary_builder=RoleTraceSummaryBuilder(),
+            role_trace_factory=RoleTraceFactory(RoleTraceSummaryBuilder()),
         )
 
         with runtime_context.open_scope("finance-audit", "thread-2", 0):
@@ -100,7 +101,7 @@ class DepartmentCollaborationServiceTest(unittest.TestCase):
             role_catalog=role_catalog,
             role_runtime_repository=runtime_repository,
             workbench_service=workbench_service,
-            role_trace_summary_builder=RoleTraceSummaryBuilder(),
+            role_trace_factory=RoleTraceFactory(RoleTraceSummaryBuilder()),
         )
 
         response = service.reply(

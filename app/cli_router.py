@@ -7,7 +7,7 @@ from typing import Optional
 from app.dependency_container import DependencyContainer
 from configuration.configuration_service import ConfigurationService
 from conversation.conversation_request import ConversationRequest
-from department.role_trace_formatter import RoleTraceFormatter
+from department.workbench.role_trace_formatter import RoleTraceFormatter
 
 
 class CliRouter:

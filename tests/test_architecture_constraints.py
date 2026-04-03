@@ -52,6 +52,17 @@ REMOVED_PATHS = [
     PROJECT_ROOT / "conversation" / "deerflow_runtime_assets.py",
     PROJECT_ROOT / "conversation" / "deerflow_runtime_assets_service.py",
     PROJECT_ROOT / "conversation" / "deerflow_runtime_error.py",
+    PROJECT_ROOT / "department" / "collaborate_with_department_role_router.py",
+    PROJECT_ROOT / "department" / "collaborate_with_department_role_tool.py",
+    PROJECT_ROOT / "department" / "department_collaboration_command.py",
+    PROJECT_ROOT / "department" / "department_collaboration_service.py",
+    PROJECT_ROOT / "department" / "department_workbench.py",
+    PROJECT_ROOT / "department" / "department_workbench_repository.py",
+    PROJECT_ROOT / "department" / "department_workbench_service.py",
+    PROJECT_ROOT / "department" / "in_memory_department_workbench_repository.py",
+    PROJECT_ROOT / "department" / "role_trace.py",
+    PROJECT_ROOT / "department" / "role_trace_formatter.py",
+    PROJECT_ROOT / "department" / "role_trace_summary_builder.py",
 ]
 
 

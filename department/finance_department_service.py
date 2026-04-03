@@ -2,12 +2,11 @@
 
 from department.department_role_request import DepartmentRoleRequest
 from department.department_role_runtime_repository import DepartmentRoleRuntimeRepository
-from department.department_workbench_service import DepartmentWorkbenchService
 from department.finance_department_request import FinanceDepartmentRequest
 from department.finance_department_response import FinanceDepartmentResponse
 from department.finance_department_role_catalog import FinanceDepartmentRoleCatalog
-from department.role_trace import RoleTrace
-from department.role_trace_summary_builder import RoleTraceSummaryBuilder
+from department.workbench.department_workbench_service import DepartmentWorkbenchService
+from department.workbench.role_trace_factory import RoleTraceFactory
 
 
 class FinanceDepartmentService:
@@ -23,12 +22,12 @@ class FinanceDepartmentService:
         role_catalog: FinanceDepartmentRoleCatalog,
         role_runtime_repository: DepartmentRoleRuntimeRepository,
         workbench_service: DepartmentWorkbenchService,
-        role_trace_summary_builder: RoleTraceSummaryBuilder,
+        role_trace_factory: RoleTraceFactory,
     ):
         self._role_catalog = role_catalog
         self._role_runtime_repository = role_runtime_repository
         self._workbench_service = workbench_service
-        self._role_trace_summary_builder = role_trace_summary_builder
+        self._role_trace_factory = role_trace_factory
 
     def reply(self, request: FinanceDepartmentRequest) -> FinanceDepartmentResponse:
         """处理一轮财务部门入口请求。"""
@@ -44,13 +43,13 @@ class FinanceDepartmentService:
         )
         self._workbench_service.record_role_trace(
             request.thread_id,
-            RoleTrace(
+            self._role_trace_factory.build(
                 role_name=entry_role.agent_name,
                 display_name=entry_role.display_name,
-                requested_by=None,
                 goal=request.user_input,
-                thinking_summary=self._role_trace_summary_builder.build(role_response.reply_text),
+                reply_text=role_response.reply_text,
                 depth=0,
+                requested_by=None,
             ),
         )
         return FinanceDepartmentResponse(

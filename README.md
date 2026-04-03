@@ -83,8 +83,10 @@ SQLite / Markdown Memory
 ├── app/                             # 启动入口与依赖装配
 ├── conversation/                    # 会话边界与用户可见响应收口
 ├── runtime/                         # 第三方运行时适配层（当前为 DeerFlow）
-├── department/                      # 财务部门目录、共享工作台与协作协议
-│   └── roles/                       # 六个财务角色的独立定义
+├── department/                      # 财务部门主域
+│   ├── collaboration/               # 角色协作协议与协作工具
+│   ├── roles/                       # 六个财务角色的独立定义
+│   └── workbench/                   # 共享工作台与角色轨迹
 ├── accounting/                      # 记账与凭证查询
 ├── cashier/                         # 出纳事实与资金收付
 ├── audit/                           # 审核规则

@@ -1,6 +1,6 @@
 """角色协作轨迹格式化器。"""
 
-from department.role_trace import RoleTrace
+from department.workbench.role_trace import RoleTrace
 
 
 TRACE_SUMMARY_MAX_CHARS = 120

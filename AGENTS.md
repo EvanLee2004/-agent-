@@ -65,7 +65,7 @@ ConversationService
   ↓
 FinanceDepartmentService
   ↓
-DepartmentWorkbenchService + DepartmentCollaborationService
+department/workbench + department/collaboration
   ↓
 runtime/deerflow/DeerFlowDepartmentRoleRuntimeRepository
   ↓
@@ -88,7 +88,9 @@ Repositories + SQLite / Markdown Memory
 ├── conversation/
 ├── runtime/
 ├── department/
-│   └── roles/
+│   ├── collaboration/
+│   ├── roles/
+│   └── workbench/
 ├── cashier/
 ├── accounting/
 ├── audit/
@@ -131,7 +133,9 @@ echo "LLM_API_KEY=your_key" > .env
 - DeerFlow 运行时配置由 `runtime/deerflow/` 下的适配层统一生成
 - 运行期资产统一落到 `.runtime/deerflow/`
 - DeerFlow skill 资产当前位于 `.agent_assets/deerflow_skills/public/`
-- 财务部门角色定义与 DeerFlow agent 资产生成位于 `department/`
+- 财务部门角色定义位于 `department/roles/`
+- 角色协作协议位于 `department/collaboration/`
+- 共享工作台与角色轨迹位于 `department/workbench/`
 - 不要重新引入自研 `ToolLoopService`
 - 不要重新创建 `llm/` 目录维持另一套聊天协议
 

@@ -139,7 +139,7 @@ class DeerFlowRuntimeAssetsService:
         return [
             self._build_tool_document(
                 "collaborate_with_department_role",
-                "department.collaborate_with_department_role_tool:collaborate_with_department_role_tool",
+                "department.collaboration.collaborate_with_department_role_tool:collaborate_with_department_role_tool",
             ),
             self._build_tool_document("record_voucher", "accounting.record_voucher_tool:record_voucher_tool"),
             self._build_tool_document("query_vouchers", "accounting.query_vouchers_tool:query_vouchers_tool"),

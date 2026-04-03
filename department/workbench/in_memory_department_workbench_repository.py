@@ -2,8 +2,8 @@
 
 from typing import Optional
 
-from department.department_workbench import DepartmentWorkbench
-from department.department_workbench_repository import DepartmentWorkbenchRepository
+from department.workbench.department_workbench import DepartmentWorkbench
+from department.workbench.department_workbench_repository import DepartmentWorkbenchRepository
 
 
 class InMemoryDepartmentWorkbenchRepository(DepartmentWorkbenchRepository):
@@ -23,4 +23,3 @@ class InMemoryDepartmentWorkbenchRepository(DepartmentWorkbenchRepository):
     def get(self, thread_id: str) -> Optional[DepartmentWorkbench]:
         """读取工作台。"""
         return self._workbenches.get(thread_id)
-

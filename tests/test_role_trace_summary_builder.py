@@ -2,7 +2,7 @@
 
 import unittest
 
-from department.role_trace_summary_builder import RoleTraceSummaryBuilder
+from department.workbench.role_trace_summary_builder import RoleTraceSummaryBuilder
 
 
 class RoleTraceSummaryBuilderTest(unittest.TestCase):

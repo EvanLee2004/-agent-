@@ -1,9 +1,9 @@
 """财务部门共享工作台服务。"""
 
 from department.department_error import DepartmentError
-from department.department_workbench import DepartmentWorkbench
-from department.department_workbench_repository import DepartmentWorkbenchRepository
-from department.role_trace import RoleTrace
+from department.workbench.department_workbench import DepartmentWorkbench
+from department.workbench.department_workbench_repository import DepartmentWorkbenchRepository
+from department.workbench.role_trace import RoleTrace
 
 
 MAX_COLLABORATION_COUNT = 12
@@ -81,4 +81,3 @@ class DepartmentWorkbenchService:
         if workbench is None:
             raise DepartmentError("当前线程尚未初始化财务部门工作台")
         return workbench
-

@@ -1,7 +1,7 @@
 """角色协作工具入口。"""
 
-from department.department_collaboration_command import DepartmentCollaborationCommand
-from department.department_collaboration_service import DepartmentCollaborationService
+from department.collaboration.department_collaboration_command import DepartmentCollaborationCommand
+from department.collaboration.department_collaboration_service import DepartmentCollaborationService
 from department.department_error import DepartmentError
 from conversation.tool_router import ToolRouter
 from conversation.tool_router_response import ToolRouterResponse
@@ -38,4 +38,3 @@ class CollaborateWithDepartmentRoleRouter(ToolRouter):
                 success=False,
                 error_message=f"部门协作失败: {str(error)}",
             )
-

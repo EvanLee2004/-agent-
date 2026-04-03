@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass, field
 
-from department.role_trace import RoleTrace
+from department.workbench.role_trace import RoleTrace
 
 
 @dataclass(frozen=True)
@@ -20,4 +20,3 @@ class DepartmentWorkbench:
     original_user_input: str
     collaboration_count: int = 0
     role_traces: list[RoleTrace] = field(default_factory=list)
-

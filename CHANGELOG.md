@@ -44,6 +44,8 @@
 
 - 新增 `department/` 模块
 - 角色定义从单一目录表拆到 `department/roles/`
+- 角色协作协议拆到 `department/collaboration/`
+- 共享工作台与角色轨迹拆到 `department/workbench/`
 - 新增财务部门六角色目录：
   - `finance-coordinator`
   - `finance-cashier`
