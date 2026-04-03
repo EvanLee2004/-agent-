@@ -2,21 +2,11 @@
 
 from abc import ABC, abstractmethod
 
-from conversation.tool_definition import ToolDefinition
 from conversation.tool_router_response import ToolRouterResponse
 
 
 class ToolRouter(ABC):
     """工具路由接口。"""
-
-    @abstractmethod
-    def get_definition(self) -> ToolDefinition:
-        """返回工具定义。
-
-        Returns:
-            当前工具的定义对象。
-        """
-        raise NotImplementedError
 
     @abstractmethod
     def route(self, arguments: dict) -> ToolRouterResponse:

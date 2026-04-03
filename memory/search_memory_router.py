@@ -1,6 +1,5 @@
 """查记忆工具入口。"""
 
-from conversation.tool_definition import ToolDefinition
 from conversation.tool_router import ToolRouter
 from conversation.tool_router_response import ToolRouterResponse
 from memory.memory_service import MemoryService
@@ -8,14 +7,6 @@ from memory.search_memory_query import SearchMemoryQuery
 
 
 DEFAULT_MEMORY_SEARCH_LIMIT = 5
-SEARCH_MEMORY_PARAMETERS = {
-    "type": "object",
-    "properties": {
-        "query": {"type": "string"},
-        "limit": {"type": "integer"},
-    },
-    "required": ["query"],
-}
 
 
 def _build_search_query(arguments: dict) -> SearchMemoryQuery:
@@ -52,14 +43,6 @@ class SearchMemoryRouter(ToolRouter):
 
     def __init__(self, memory_service: MemoryService):
         self._memory_service = memory_service
-
-    def get_definition(self) -> ToolDefinition:
-        """返回工具定义。"""
-        return ToolDefinition(
-            name="search_memory",
-            description="搜索与当前问题相关的长期或每日记忆片段。凡是回答“你记住了什么”“我的偏好是什么”“我之前说过什么”这类记忆事实问题，都必须先调用本工具。",
-            parameters=SEARCH_MEMORY_PARAMETERS,
-        )
 
     def route(self, arguments: dict) -> ToolRouterResponse:
         """执行查记忆。"""

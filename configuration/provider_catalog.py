@@ -25,7 +25,7 @@ class ProviderCatalog:
             ],
             default_model="MiniMax-M2.7",
             base_url="https://api.minimax.chat/v1",
-            supports_native_tool_calling=True,
+            supports_tool_calling=True,
             allow_custom_models=True,
         ),
         "deepseek": ProviderMetadata(
@@ -33,7 +33,7 @@ class ProviderCatalog:
             models=["deepseek-chat", "deepseek-reasoner", "deepseek-coder"],
             default_model="deepseek-chat",
             base_url="https://api.deepseek.com/v1",
-            supports_native_tool_calling=True,
+            supports_tool_calling=True,
             allow_custom_models=True,
         ),
         "openai": ProviderMetadata(
@@ -41,7 +41,7 @@ class ProviderCatalog:
             models=["gpt-4.1-mini", "gpt-4.1", "gpt-4o-mini"],
             default_model="gpt-4.1-mini",
             base_url="https://api.openai.com/v1",
-            supports_native_tool_calling=True,
+            supports_tool_calling=True,
             allow_custom_models=True,
         ),
     }

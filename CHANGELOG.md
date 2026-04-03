@@ -1,26 +1,24 @@
 # CHANGELOG
 
-## 2026-04-02
+## 2026-04-03
 
-### 架构重构
+### DeerFlow 底层接入
 
-- 删除旧的 `agents/`、`services/`、`infrastructure/`、`tools/`、`domain/`、`providers/`
-- 重构为按功能模块组织的结构：
-  - `app/`
-  - `conversation/`
-  - `accounting/`
-  - `tax/`
-  - `audit/`
-  - `memory/`
-  - `rules/`
-  - `llm/`
-  - `configuration/`
-- 主链路切换为 `ConversationRouter -> ConversationService -> ToolLoopService`
+- 主会话运行时切换到 `DeerFlowClient`
+- 新增 `DeerFlowAgentRuntimeRepository`
+- 新增 DeerFlow 运行时资产生成服务
+- 新增 DeerFlow 客户端工厂
+- 新增 DeerFlow 专用 skill 资产：
+  - `.agent_assets/deerflow_skills/public/finance-core/SKILL.md`
+  - `.agent_assets/deerflow_skills/public/coordinator/SKILL.md`
+  - `.agent_assets/deerflow_skills/public/bookkeeping/SKILL.md`
+  - `.agent_assets/deerflow_skills/public/policy-research/SKILL.md`
+  - `.agent_assets/deerflow_skills/public/tax/SKILL.md`
+  - `.agent_assets/deerflow_skills/public/audit/SKILL.md`
 
-### 工具调用
+### 财务工具接入
 
-- 全面切换到原生 function calling
-- 业务工具统一为：
+- 把财务能力映射成 DeerFlow 可加载工具：
   - `record_voucher`
   - `query_vouchers`
   - `calculate_tax`
@@ -28,23 +26,46 @@
   - `store_memory`
   - `search_memory`
   - `reply_with_rules`
-- 工具调用改为按需触发：涉及系统事实和真实动作时优先走工具，普通闲聊允许直接自然回复
 
-### 账务模型
+### 运行时收口
 
+- 删除旧的自研 `ToolLoopService` 相关文件
+- 删除旧 `llm/` 目录与自研聊天协议层
+- 删除已失效的 `ToolDefinition` 协议残留
+- 删除会话层里不该承载的财务工具上下文残留
+- DeerFlow 运行目录收口到 `.agent_assets/runtime/deerflow/`
+- 新增 `DEER_FLOW_HOME` 注入，避免 DeerFlow 状态写入用户主目录
+
+### 财务部门角色化
+
+- 新增 `department/` 模块
+- 新增财务部门五角色目录：
+  - `finance-coordinator`
+  - `finance-bookkeeping`
+  - `finance-policy-research`
+  - `finance-tax`
+  - `finance-audit`
+- 新增 DeerFlow 自定义 agent 资产生成服务
+- 新增财务部门工具上下文注册器，隔离 DeerFlow 静态工具装配约束
+
+### 产品化修正
+
+- CLI 配置错误改为友好提示并退出，不再抛出 Python 栈
+- 运行时失败不再把底层错误细节直接回显给最终用户
+- `DependencyContainer` 去掉基于列表下标拼装 router 的实现
+
+### 文档更新
+
+- README 改写为当前 DeerFlow 财务部门阶段说明
+- AGENTS 改写为当前真实开发约束
+- 明确当前阶段已经落地角色目录和角色资产，下一步再打开角色协作
+
+## 2026-04-02
+
+### 之前阶段收口
+
+- 删除旧的 `agents/`、`services/`、`infrastructure/`、`tools/`、`domain/`、`providers/`
+- 重构为按功能模块组织的结构
 - 主账收口到 `account_subject`、`journal_voucher`、`journal_line`
-- 删除旧 `ledger` 兼容代码
-- 凭证入账、查询、审核都围绕主账模型运行
-
-### 记忆系统
-
 - 长期记忆统一写入 `MEMORY.md`
 - 每日记忆统一写入 `memory/YYYY-MM-DD.md`
-- SQLite FTS 只负责搜索索引，不再充当主存储
-- 记忆召回场景不再做 runtime 强制拦截，而是通过 prompt 约束优先查询 `search_memory`
-
-### 仓库清理
-
-- 删除历史数据和旧兼容逻辑
-- 删除根目录 `skills/` 历史 helper 目录
-- 更新 README、AGENTS 与测试到当前架构

@@ -4,25 +4,8 @@ from audit.audit_error import AuditError
 from audit.audit_request import AuditRequest
 from audit.audit_service import AuditService
 from audit.audit_voucher_command import AuditVoucherCommand
-from conversation.tool_definition import ToolDefinition
 from conversation.tool_router import ToolRouter
 from conversation.tool_router_response import ToolRouterResponse
-
-
-AUDIT_VOUCHER_PARAMETERS = {
-    "type": "object",
-    "properties": {
-        "target": {
-            "type": "string",
-            "enum": ["latest", "all", "voucher_id"],
-        },
-        "voucher_id": {
-            "type": "integer",
-            "description": "当 target=voucher_id 时必填",
-        },
-    },
-    "required": ["target"],
-}
 
 
 def _serialize_flag(flag) -> dict:
@@ -50,14 +33,6 @@ class AuditVoucherRouter(ToolRouter):
 
     def __init__(self, audit_service: AuditService):
         self._audit_service = audit_service
-
-    def get_definition(self) -> ToolDefinition:
-        """返回工具定义。"""
-        return ToolDefinition(
-            name="audit_voucher",
-            description="审核最新凭证、全部凭证或指定凭证的规则风险。",
-            parameters=AUDIT_VOUCHER_PARAMETERS,
-        )
 
     def route(self, arguments: dict) -> ToolRouterResponse:
         """执行审核工具调用。"""

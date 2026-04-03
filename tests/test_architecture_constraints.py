@@ -14,8 +14,8 @@ TARGET_DIRECTORIES = [
     PROJECT_ROOT / "tax",
     PROJECT_ROOT / "memory",
     PROJECT_ROOT / "rules",
-    PROJECT_ROOT / "llm",
     PROJECT_ROOT / "configuration",
+    PROJECT_ROOT / "department",
 ]
 REMOVED_PATHS = [
     PROJECT_ROOT / "agents",
@@ -26,6 +26,21 @@ REMOVED_PATHS = [
     PROJECT_ROOT / "providers",
     PROJECT_ROOT / "bootstrap.py",
     PROJECT_ROOT / "skills",
+    PROJECT_ROOT / "llm",
+    PROJECT_ROOT / "conversation" / "prompt_context_service.py",
+    PROJECT_ROOT / "conversation" / "tool_loop_request.py",
+    PROJECT_ROOT / "conversation" / "tool_loop_result.py",
+    PROJECT_ROOT / "conversation" / "tool_loop_service.py",
+    PROJECT_ROOT / "conversation" / "tool_router_catalog.py",
+    PROJECT_ROOT / "conversation" / "tool_definition.py",
+    PROJECT_ROOT / "conversation" / "file_prompt_skill_repository.py",
+    PROJECT_ROOT / "conversation" / "prompt_skill_repository.py",
+    PROJECT_ROOT / "conversation" / "finance_tool_context.py",
+    PROJECT_ROOT / "conversation" / "finance_tool_context_registry.py",
+    PROJECT_ROOT / ".agent_assets" / "skills" / "docx",
+    PROJECT_ROOT / ".agent_assets" / "skills" / "pdf",
+    PROJECT_ROOT / ".agent_assets" / "skills" / "pptx",
+    PROJECT_ROOT / ".agent_assets" / "skills" / "xlsx",
 ]
 
 

@@ -11,3 +11,5 @@ data/
 sessions/
 memory/*.md
 .agent_assets/cache/
+.agent_assets/runtime/
+.deer-flow/

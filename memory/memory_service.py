@@ -22,7 +22,7 @@ class MemoryService:
         self,
         memory_store_repository: MemoryStoreRepository,
         memory_index_repository: MemoryIndexRepository,
-        agent_name: str = "智能会计",
+        agent_name: str = "智能财务部门",
     ):
         self._memory_store_repository = memory_store_repository
         self._memory_index_repository = memory_index_repository

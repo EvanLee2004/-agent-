@@ -1,2 +1,5 @@
-openai==2.30.0
+deerflow-harness @ git+https://github.com/bytedance/deer-flow.git@76fad8b08de23c41ab1799e54b26bc59273d5ab9#subdirectory=backend/packages/harness
+langchain==1.2.10
+pydantic==2.12.5
 python-dotenv==1.2.2
+PyYAML==6.0.3
