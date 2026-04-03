@@ -95,6 +95,7 @@ class FinanceDepartmentRoleCatalog:
         """构造默认财务部门角色集合。"""
         return (
             self._build_coordinator_role(),
+            self._build_cashier_role(),
             self._build_bookkeeping_role(),
             self._build_policy_research_role(),
             self._build_tax_role(),
@@ -120,6 +121,16 @@ class FinanceDepartmentRoleCatalog:
             description="负责凭证生成、分录落账、账目查询和会计口径收口。",
             skill_names=("bookkeeping",),
             soul_markdown=self._build_bookkeeping_soul(),
+        )
+
+    def _build_cashier_role(self) -> FinanceDepartmentRole:
+        """构造出纳角色。"""
+        return FinanceDepartmentRole(
+            agent_name="finance-cashier",
+            display_name="CashierAgent",
+            description="负责资金收付事实确认、账户收付状态和报销支付结果记录。",
+            skill_names=("cashier",),
+            soul_markdown=self._build_cashier_soul(),
         )
 
     def _build_policy_research_role(self) -> FinanceDepartmentRole:
@@ -167,7 +178,16 @@ class FinanceDepartmentRoleCatalog:
         return (
             "# Finance Bookkeeping\n\n"
             "你是财务部门中的记账会计。你的职责是把业务描述转换成合规凭证、查询历史账目，"
-            "并在信息缺失时明确指出缺口。你必须保持借贷平衡、科目合规、摘要专业。"
+            "并在信息缺失时明确指出缺口。你必须保持借贷平衡、科目合规、摘要专业。若需要"
+            "确认资金是否已经实际支付或收到，请优先请求 CashierAgent 提供事实。"
+        )
+
+    def _build_cashier_soul(self) -> str:
+        """生成出纳角色的 SOUL 内容。"""
+        return (
+            "# Finance Cashier\n\n"
+            "你是财务部门中的出纳角色。你的职责是确认资金是否已收付、使用了什么账户、"
+            "何时发生支付，以及当前是否存在待支付事实。你只维护资金事实，不直接生成会计分录。"
         )
 
     def _build_policy_research_soul(self) -> str:
@@ -175,7 +195,8 @@ class FinanceDepartmentRoleCatalog:
         return (
             "# Finance Policy Research\n\n"
             "你负责外部政策与准则研究。你的结论必须包含时间、来源和适用范围；若当前系统"
-            "没有足够证据，你应明确说明不确定性，而不是凭记忆补全最新政策。"
+            "没有足够证据，你应明确说明不确定性，而不是凭记忆补全最新政策。必要时可以"
+            "把研究结果提供给 TaxAgent、AuditAgent 或 CoordinatorAgent。"
         )
 
     def _build_tax_soul(self) -> str:
@@ -183,7 +204,8 @@ class FinanceDepartmentRoleCatalog:
         return (
             "# Finance Tax Preparation\n\n"
             "你负责税额测算和税前准备。你基于已入账事实、政策依据和明确口径工作。你不能把"
-            "税前测算描述成正式税务申报，也不能在事实不充分时伪造税额。"
+            "税前测算描述成正式税务申报，也不能在事实不充分时伪造税额。若政策口径不明确，"
+            "请请求 PolicyResearchAgent；若账务事实不完整，请请求 BookkeepingAgent。"
         )
 
     def _build_audit_soul(self) -> str:
@@ -191,5 +213,6 @@ class FinanceDepartmentRoleCatalog:
         return (
             "# Finance Audit\n\n"
             "你负责复核财务结果，寻找异常、重复、口径冲突和风险点。你的任务是帮助部门发现"
-            "问题并提出整改建议，而不是为了给出结论而忽略证据不足。"
+            "问题并提出整改建议，而不是为了给出结论而忽略证据不足。若发现资金事实缺失，"
+            "应请求 CashierAgent；若发现账务基础不完整，应请求 BookkeepingAgent。"
         )

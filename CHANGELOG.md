@@ -5,12 +5,13 @@
 ### DeerFlow 底层接入
 
 - 主会话运行时切换到 `DeerFlowClient`
-- 新增 `DeerFlowAgentRuntimeRepository`
+- 新增 `DeerFlowDepartmentRoleRuntimeRepository`
 - 新增 DeerFlow 运行时资产生成服务
 - 新增 DeerFlow 客户端工厂
 - 新增 DeerFlow 专用 skill 资产：
   - `.agent_assets/deerflow_skills/public/finance-core/SKILL.md`
   - `.agent_assets/deerflow_skills/public/coordinator/SKILL.md`
+  - `.agent_assets/deerflow_skills/public/cashier/SKILL.md`
   - `.agent_assets/deerflow_skills/public/bookkeeping/SKILL.md`
   - `.agent_assets/deerflow_skills/public/policy-research/SKILL.md`
   - `.agent_assets/deerflow_skills/public/tax/SKILL.md`
@@ -19,8 +20,11 @@
 ### 财务工具接入
 
 - 把财务能力映射成 DeerFlow 可加载工具：
+  - `collaborate_with_department_role`
   - `record_voucher`
   - `query_vouchers`
+  - `record_cash_transaction`
+  - `query_cash_transactions`
   - `calculate_tax`
   - `audit_voucher`
   - `store_memory`
@@ -39,14 +43,16 @@
 ### 财务部门角色化
 
 - 新增 `department/` 模块
-- 新增财务部门五角色目录：
+- 新增财务部门六角色目录：
   - `finance-coordinator`
+  - `finance-cashier`
   - `finance-bookkeeping`
   - `finance-policy-research`
   - `finance-tax`
   - `finance-audit`
 - 新增 DeerFlow 自定义 agent 资产生成服务
 - 新增财务部门工具上下文注册器，隔离 DeerFlow 静态工具装配约束
+- 新增共享工作台、角色协作服务和可见 trace 机制
 
 ### 产品化修正
 

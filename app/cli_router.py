@@ -7,6 +7,7 @@ from typing import Optional
 from app.dependency_container import DependencyContainer
 from configuration.configuration_service import ConfigurationService
 from conversation.conversation_request import ConversationRequest
+from department.role_trace_formatter import RoleTraceFormatter
 
 
 class CliRouter:
@@ -14,6 +15,7 @@ class CliRouter:
 
     def __init__(self, configuration_service: ConfigurationService):
         self._configuration_service = configuration_service
+        self._role_trace_formatter = RoleTraceFormatter()
 
     def run(self) -> None:
         """运行 CLI。"""
@@ -39,6 +41,9 @@ class CliRouter:
                     thread_id=thread_id,
                 )
             )
+            role_trace_text = self._role_trace_formatter.format(response.role_traces)
+            if role_trace_text:
+                print(role_trace_text)
             print(f"助手: {response.reply_text}\n")
         print("\n再见！")
 
@@ -64,5 +69,5 @@ class CliRouter:
     def _print_banner(self) -> None:
         """打印启动信息。"""
         print("=" * 50)
-        print("智能财务部门已启动 - 对话 / 记账 / 查账 / 税前准备 / 审核（quit 退出）")
+        print("智能财务部门已启动 - 对话 / 记账 / 资金 / 查账 / 税前准备 / 审核（quit 退出）")
         print("=" * 50 + "\n")

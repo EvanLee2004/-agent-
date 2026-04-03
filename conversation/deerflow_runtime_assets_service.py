@@ -137,8 +137,20 @@ class DeerFlowRuntimeAssetsService:
     def _build_tool_documents(self) -> list[dict[str, str]]:
         """构造财务工具配置列表。"""
         return [
+            self._build_tool_document(
+                "collaborate_with_department_role",
+                "department.collaborate_with_department_role_tool:collaborate_with_department_role_tool",
+            ),
             self._build_tool_document("record_voucher", "accounting.record_voucher_tool:record_voucher_tool"),
             self._build_tool_document("query_vouchers", "accounting.query_vouchers_tool:query_vouchers_tool"),
+            self._build_tool_document(
+                "record_cash_transaction",
+                "cashier.record_cash_transaction_tool:record_cash_transaction_tool",
+            ),
+            self._build_tool_document(
+                "query_cash_transactions",
+                "cashier.query_cash_transactions_tool:query_cash_transactions_tool",
+            ),
             self._build_tool_document("calculate_tax", "tax.calculate_tax_tool:calculate_tax_tool"),
             self._build_tool_document("audit_voucher", "audit.audit_voucher_tool:audit_voucher_tool"),
             self._build_tool_document("store_memory", "memory.store_memory_tool:store_memory_tool"),

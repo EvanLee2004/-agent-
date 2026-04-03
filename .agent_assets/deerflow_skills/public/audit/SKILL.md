@@ -32,4 +32,5 @@ When the review needs historical bookkeeping context.
 ## Guardrails
 
 - Distinguish clearly between confirmed issues and potential risks.
+- If cash movement facts are missing, request CashierAgent support instead of assuming payment already happened.
 - Do not rewrite bookkeeping facts directly; provide review conclusions and next actions.

@@ -16,6 +16,7 @@ TARGET_DIRECTORIES = [
     PROJECT_ROOT / "rules",
     PROJECT_ROOT / "configuration",
     PROJECT_ROOT / "department",
+    PROJECT_ROOT / "cashier",
 ]
 REMOVED_PATHS = [
     PROJECT_ROOT / "agents",
@@ -41,6 +42,10 @@ REMOVED_PATHS = [
     PROJECT_ROOT / ".agent_assets" / "skills" / "pdf",
     PROJECT_ROOT / ".agent_assets" / "skills" / "pptx",
     PROJECT_ROOT / ".agent_assets" / "skills" / "xlsx",
+    PROJECT_ROOT / "conversation" / "agent_runtime_repository.py",
+    PROJECT_ROOT / "conversation" / "agent_runtime_request.py",
+    PROJECT_ROOT / "conversation" / "agent_runtime_response.py",
+    PROJECT_ROOT / "conversation" / "deerflow_agent_runtime_repository.py",
 ]
 
 

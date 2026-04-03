@@ -20,22 +20,36 @@ from app.application_bootstrapper import ApplicationBootstrapper
 from audit.audit_service import AuditService
 from audit.audit_voucher_router import AuditVoucherRouter
 from audit.audit_voucher_tool import audit_voucher_tool
+from cashier.cashier_service import CashierService
+from cashier.query_cash_transactions_router import QueryCashTransactionsRouter
+from cashier.query_cash_transactions_tool import query_cash_transactions_tool
+from cashier.record_cash_transaction_router import RecordCashTransactionRouter
+from cashier.record_cash_transaction_tool import record_cash_transaction_tool
+from cashier.sqlite_cashier_repository import SQLiteCashierRepository
 from configuration.llm_configuration import LlmConfiguration
-from conversation.agent_runtime_request import AgentRuntimeRequest
-from conversation.agent_runtime_response import AgentRuntimeResponse
-from conversation.agent_runtime_repository import AgentRuntimeRepository
 from conversation.conversation_request import ConversationRequest
 from conversation.conversation_router import ConversationRouter
 from conversation.conversation_service import ConversationService
-from conversation.deerflow_agent_runtime_repository import DeerFlowAgentRuntimeRepository
+from conversation.deerflow_client_factory import DeerFlowClientFactory
+from conversation.deerflow_department_role_runtime_repository import DeerFlowDepartmentRoleRuntimeRepository
 from conversation.deerflow_runtime_assets import DeerFlowRuntimeAssets
 from conversation.deerflow_runtime_assets_service import DeerFlowRuntimeAssetsService
 from conversation.reply_text_sanitizer import ReplyTextSanitizer
 from conversation.tool_use_policy import ToolUsePolicy
+from department.collaborate_with_department_role_router import CollaborateWithDepartmentRoleRouter
+from department.department_collaboration_service import DepartmentCollaborationService
+from department.department_role_request import DepartmentRoleRequest
+from department.department_role_response import DepartmentRoleResponse
+from department.department_role_runtime_repository import DepartmentRoleRuntimeRepository
+from department.department_runtime_context import DepartmentRuntimeContext
+from department.department_workbench_service import DepartmentWorkbenchService
 from department.finance_department_agent_assets_service import FinanceDepartmentAgentAssetsService
+from department.finance_department_request import FinanceDepartmentRequest
 from department.finance_department_role_catalog import FinanceDepartmentRoleCatalog
+from department.finance_department_service import FinanceDepartmentService
 from department.finance_department_tool_context import FinanceDepartmentToolContext
 from department.finance_department_tool_context_registry import FinanceDepartmentToolContextRegistry
+from department.in_memory_department_workbench_repository import InMemoryDepartmentWorkbenchRepository
 from memory.markdown_memory_store_repository import MarkdownMemoryStoreRepository
 from memory.memory_service import MemoryService
 from memory.search_memory_router import SearchMemoryRouter
@@ -53,7 +67,7 @@ from tax.tax_service import TaxService
 
 
 class FakeDeerFlowClient:
-    """用于验证仓储行为的 DeerFlowClient 测试替身。"""
+    """用于验证 DeerFlow 角色仓储的测试替身。"""
 
     def __init__(self, reply_text: str):
         self._reply_text = reply_text
@@ -66,12 +80,12 @@ class FakeDeerFlowClient:
 
 
 class FakeDeerFlowClientFactory:
-    """用于验证 DeerFlow 仓储装配的工厂替身。"""
+    """用于验证 DeerFlow 角色仓储装配行为的测试替身。"""
 
     def __init__(self, client: FakeDeerFlowClient):
         self._client = client
         self.assets: DeerFlowRuntimeAssets | None = None
-        self.agent_name: str | None = None
+        self.role_names: list[str] = []
 
     def create_client(
         self,
@@ -80,18 +94,44 @@ class FakeDeerFlowClientFactory:
     ) -> FakeDeerFlowClient:
         """返回预设 client，并记录接收到的参数。"""
         self.assets = assets
-        self.agent_name = agent_name
+        self.role_names.append(agent_name)
         return self._client
 
 
-class StubAgentRuntimeRepository(AgentRuntimeRepository):
-    """用于会话边界测试的运行时替身。"""
+class StubDepartmentRoleRuntimeRepository(DepartmentRoleRuntimeRepository):
+    """用于会话边界测试的角色运行时替身。"""
 
-    def reply(self, request: AgentRuntimeRequest) -> AgentRuntimeResponse:
-        """直接回显线程信息，验证会话层是否正确透传。"""
-        return AgentRuntimeResponse(
+    def reply(self, request: DepartmentRoleRequest) -> DepartmentRoleResponse:
+        """直接回显线程与角色信息。"""
+        return DepartmentRoleResponse(
+            role_name=request.role_name,
+            reply_text=f"role={request.role_name}; thread={request.thread_id}; input={request.user_input}",
+            collaboration_depth=request.collaboration_depth,
+        )
+
+
+class StubFinanceDepartmentService(FinanceDepartmentService):
+    """用于会话边界测试的部门服务替身。"""
+
+    def __init__(self):
+        pass
+
+    def reply(self, request: FinanceDepartmentRequest):
+        from department.finance_department_response import FinanceDepartmentResponse
+        from department.role_trace import RoleTrace
+
+        return FinanceDepartmentResponse(
             reply_text=f"thread={request.thread_id}; input={request.user_input}",
-            executed_tool_names=[],
+            role_traces=[
+                RoleTrace(
+                    role_name="finance-coordinator",
+                    display_name="CoordinatorAgent",
+                    requested_by=None,
+                    goal=request.user_input,
+                    thinking_summary="已接收并汇总请求。",
+                    depth=0,
+                )
+            ],
         )
 
 
@@ -124,16 +164,18 @@ class ConversationRouterEndToEndTest(unittest.TestCase):
             extensions_data = json.loads(assets.extensions_config_path.read_text(encoding="utf-8"))
 
             self.assertEqual(config_data["models"][0]["model"], "MiniMax-M2.7")
-            self.assertEqual(config_data["tools"][0]["name"], "record_voucher")
+            self.assertEqual(config_data["tools"][0]["name"], "collaborate_with_department_role")
             self.assertEqual(config_data["skills"]["path"], str(skills_root.resolve()))
             self.assertEqual(extensions_data["skills"]["finance-core"]["enabled"], True)
-            self.assertEqual(extensions_data["skills"]["coordinator"]["enabled"], True)
+            self.assertEqual(extensions_data["skills"]["cashier"]["enabled"], True)
             self.assertEqual(assets.runtime_home, (runtime_root / "home").resolve())
             coordinator_config = runtime_root / "home" / "agents" / "finance-coordinator" / "config.yaml"
+            cashier_config = runtime_root / "home" / "agents" / "finance-cashier" / "config.yaml"
             self.assertTrue(coordinator_config.exists())
+            self.assertTrue(cashier_config.exists())
 
-    def test_deerflow_public_client_can_read_generated_skill(self):
-        """验证公开 DeerFlowClient 能吃到我们准备的 finance-core skill。"""
+    def test_deerflow_public_client_can_read_generated_skills(self):
+        """验证公开 DeerFlowClient 能读取当前部门全部 skill。"""
         configuration = LlmConfiguration(
             provider_name="minimax",
             model_name="MiniMax-M2.7",
@@ -144,17 +186,25 @@ class ConversationRouterEndToEndTest(unittest.TestCase):
             FinanceDepartmentAgentAssetsService(FinanceDepartmentRoleCatalog())
         ).prepare_assets(configuration)
 
-        from conversation.deerflow_client_factory import DeerFlowClientFactory
-
         client = DeerFlowClientFactory().create_client(assets, "finance-coordinator")
         skills_payload = client.list_skills()
 
         skill_names = {item["name"] for item in skills_payload["skills"]}
-        self.assertTrue({"finance-core", "coordinator", "bookkeeping", "policy-research", "tax", "audit"}.issubset(skill_names))
+        self.assertTrue(
+            {
+                "finance-core",
+                "coordinator",
+                "cashier",
+                "bookkeeping",
+                "policy-research",
+                "tax",
+                "audit",
+            }.issubset(skill_names)
+        )
         self.assertEqual(os.environ["DEER_FLOW_HOME"], str(assets.runtime_home))
 
     def test_deerflow_tool_registry_loads_custom_finance_tools(self):
-        """验证 DeerFlow 能从配置中加载我们的财务工具。"""
+        """验证 DeerFlow 能从配置中加载全部财务工具。"""
         with tempfile.TemporaryDirectory() as temp_dir:
             self._register_finance_tool_context(Path(temp_dir))
             configuration = LlmConfiguration(
@@ -167,7 +217,6 @@ class ConversationRouterEndToEndTest(unittest.TestCase):
                 FinanceDepartmentAgentAssetsService(FinanceDepartmentRoleCatalog())
             ).prepare_assets(configuration)
 
-            from conversation.deerflow_client_factory import DeerFlowClientFactory
             from deerflow.tools import get_available_tools
 
             DeerFlowClientFactory().create_client(assets, "finance-coordinator")
@@ -175,8 +224,11 @@ class ConversationRouterEndToEndTest(unittest.TestCase):
 
             self.assertTrue(
                 {
+                    "collaborate_with_department_role",
                     "record_voucher",
                     "query_vouchers",
+                    "record_cash_transaction",
+                    "query_cash_transactions",
                     "calculate_tax",
                     "audit_voucher",
                     "store_memory",
@@ -186,7 +238,7 @@ class ConversationRouterEndToEndTest(unittest.TestCase):
             )
 
     def test_record_voucher_and_query_tools_complete_bookkeeping_flow(self):
-        """验证记账和查账工具可通过 DeerFlow 适配层完成主业务闭环。"""
+        """验证记账和查账工具可完成主业务闭环。"""
         with tempfile.TemporaryDirectory() as temp_dir:
             self._register_finance_tool_context(Path(temp_dir))
 
@@ -221,6 +273,29 @@ class ConversationRouterEndToEndTest(unittest.TestCase):
             self.assertEqual(record_result["payload"]["voucher_id"], 1)
             self.assertEqual(query_result["payload"]["count"], 1)
             self.assertEqual(query_result["payload"]["items"][0]["summary"], "客户拜访午餐费")
+
+    def test_cashier_tools_return_structured_results(self):
+        """验证资金事实工具返回结构化结果。"""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            self._register_finance_tool_context(Path(temp_dir))
+
+            record_result = json.loads(
+                record_cash_transaction_tool.invoke(
+                    {
+                        "transaction_date": "2024-03-01",
+                        "direction": "payment",
+                        "amount": 120,
+                        "account_name": "工商银行基本户",
+                        "summary": "支付客户拜访午餐报销",
+                        "counterparty": "李明",
+                    }
+                )
+            )
+            query_result = json.loads(query_cash_transactions_tool.invoke({}))
+
+            self.assertEqual(record_result["success"], True)
+            self.assertEqual(query_result["payload"]["count"], 1)
+            self.assertEqual(query_result["payload"]["items"][0]["direction"], "payment")
 
     def test_tax_and_audit_tools_return_structured_results(self):
         """验证税务和审核工具返回结构化结果。"""
@@ -289,8 +364,8 @@ class ConversationRouterEndToEndTest(unittest.TestCase):
             self.assertEqual(search_result["payload"]["count"], 1)
             self.assertIn("memory_notice", rules_result["payload"])
 
-    def test_deerflow_runtime_repository_uses_thread_identifier(self):
-        """验证 DeerFlow 运行时仓储会透传线程标识。"""
+    def test_deerflow_role_runtime_repository_uses_thread_identifier(self):
+        """验证 DeerFlow 角色运行时仓储会透传线程标识。"""
         fake_client = FakeDeerFlowClient("你好，我是财务部门助手。")
         fake_factory = FakeDeerFlowClientFactory(fake_client)
 
@@ -298,7 +373,7 @@ class ConversationRouterEndToEndTest(unittest.TestCase):
             runtime_root = Path(temp_dir) / "runtime"
             skills_root = Path(temp_dir) / "skills"
             skills_root.mkdir(parents=True, exist_ok=True)
-            repository = DeerFlowAgentRuntimeRepository(
+            repository = DeerFlowDepartmentRoleRuntimeRepository(
                 configuration=LlmConfiguration(
                     provider_name="minimax",
                     model_name="MiniMax-M2.7",
@@ -311,40 +386,61 @@ class ConversationRouterEndToEndTest(unittest.TestCase):
                     department_agent_assets_service=FinanceDepartmentAgentAssetsService(FinanceDepartmentRoleCatalog()),
                 ),
                 client_factory=fake_factory,
-                agent_name="finance-coordinator",
+                runtime_context=DepartmentRuntimeContext(),
+                reply_text_sanitizer=ReplyTextSanitizer(),
             )
-            response = repository.reply(AgentRuntimeRequest(user_input="你好", thread_id="thread-123"))
+            response = repository.reply(
+                DepartmentRoleRequest(
+                    role_name="finance-coordinator",
+                    user_input="你好",
+                    thread_id="thread-123",
+                )
+            )
 
             self.assertEqual(response.reply_text, "你好，我是财务部门助手。")
             self.assertEqual(fake_client.calls[0], ("你好", "thread-123"))
-            self.assertEqual(fake_factory.agent_name, "finance-coordinator")
+            self.assertEqual(fake_factory.role_names, ["finance-coordinator"])
 
-    def test_conversation_router_passes_request_to_runtime(self):
-        """验证会话路由只负责边界收口，不再关心 DeerFlow 内部细节。"""
+    def test_conversation_router_returns_department_reply_and_trace(self):
+        """验证会话层只负责边界收口和思考摘要转发。"""
         router = ConversationRouter(
             ConversationService(
-                StubAgentRuntimeRepository(),
+                StubFinanceDepartmentService(),
                 ReplyTextSanitizer(),
             )
         )
         response = router.handle(ConversationRequest(user_input="你好", thread_id="cli-1"))
         self.assertEqual(response.reply_text, "thread=cli-1; input=你好")
+        self.assertEqual(len(response.role_traces), 1)
+        self.assertEqual(response.role_traces[0].display_name, "CoordinatorAgent")
 
     def test_conversation_service_strips_internal_thinking_text(self):
-        """验证会话服务会剔除底层运行时泄漏的内部思考片段。"""
-        class ThinkingRuntimeRepository(AgentRuntimeRepository):
-            """返回带内部思考片段的运行时替身。"""
+        """验证会话服务会剔除底层角色泄漏的内部思考片段。"""
+        from department.finance_department_response import FinanceDepartmentResponse
+        from department.role_trace import RoleTrace
 
-            def reply(self, request: AgentRuntimeRequest) -> AgentRuntimeResponse:
-                return AgentRuntimeResponse(
+        class ThinkingFinanceDepartmentService(StubFinanceDepartmentService):
+            """返回带思考片段的部门服务替身。"""
+
+            def reply(self, request: FinanceDepartmentRequest):
+                return FinanceDepartmentResponse(
                     reply_text="<think>内部思考</think>\n\n你好，已收到。",
-                    executed_tool_names=[],
+                    role_traces=[
+                        RoleTrace(
+                            role_name="finance-coordinator",
+                            display_name="CoordinatorAgent",
+                            requested_by=None,
+                            goal=request.user_input,
+                            thinking_summary="已读取请求。",
+                            depth=0,
+                        )
+                    ],
                 )
 
-        repository = ThinkingRuntimeRepository()
-        sanitizer = ReplyTextSanitizer()
-        service = ConversationService(repository, sanitizer)
-
+        service = ConversationService(
+            ThinkingFinanceDepartmentService(),
+            ReplyTextSanitizer(),
+        )
         response = service.reply(
             ConversationRequest(
                 user_input="你好",
@@ -352,6 +448,7 @@ class ConversationRouterEndToEndTest(unittest.TestCase):
             )
         )
         self.assertEqual(response.reply_text, "你好，已收到。")
+        self.assertEqual(len(response.role_traces), 1)
 
     def _register_finance_tool_context(self, temp_path: Path) -> None:
         """构造并注册财务工具上下文。"""
@@ -359,12 +456,15 @@ class ConversationRouterEndToEndTest(unittest.TestCase):
         journal_repository = SQLiteJournalRepository(database_path)
         chart_repository = SQLiteChartOfAccountsRepository(database_path)
         chart_service = ChartOfAccountsService(chart_repository)
+        cashier_repository = SQLiteCashierRepository(database_path)
         ApplicationBootstrapper(
             chart_of_accounts_repository=chart_repository,
             journal_repository=journal_repository,
             chart_of_accounts_service=chart_service,
+            cashier_repository=cashier_repository,
         ).initialize()
         accounting_service = AccountingService(journal_repository, chart_service)
+        cashier_service = CashierService(cashier_repository)
         memory_store_repository = MarkdownMemoryStoreRepository(
             long_term_memory_file=temp_path / "MEMORY.md",
             daily_memory_dir=temp_path / "memory",
@@ -374,18 +474,35 @@ class ConversationRouterEndToEndTest(unittest.TestCase):
         )
         memory_service = MemoryService(memory_store_repository, memory_index_repository)
         rules_service = RulesService(FileRulesRepository())
+        runtime_context = DepartmentRuntimeContext()
+        workbench_service = DepartmentWorkbenchService(
+            InMemoryDepartmentWorkbenchRepository()
+        )
+        role_catalog = FinanceDepartmentRoleCatalog()
+        collaboration_service = DepartmentCollaborationService(
+            role_catalog=role_catalog,
+            runtime_repository=StubDepartmentRoleRuntimeRepository(),
+            workbench_service=workbench_service,
+            runtime_context=runtime_context,
+        )
+        workbench_service.start_turn("test-thread", "测试用户请求")
         FinanceDepartmentToolContextRegistry.register(
             FinanceDepartmentToolContext(
                 record_voucher_router=RecordVoucherRouter(accounting_service),
                 query_vouchers_router=QueryVouchersRouter(accounting_service),
                 calculate_tax_router=CalculateTaxRouter(TaxService()),
                 audit_voucher_router=AuditVoucherRouter(AuditService(journal_repository)),
+                record_cash_transaction_router=RecordCashTransactionRouter(cashier_service),
+                query_cash_transactions_router=QueryCashTransactionsRouter(cashier_service),
                 store_memory_router=StoreMemoryRouter(memory_service),
                 search_memory_router=SearchMemoryRouter(memory_service),
                 reply_with_rules_router=ReplyWithRulesRouter(
                     rules_service,
                     memory_service,
                     ToolUsePolicy(),
+                ),
+                collaborate_with_department_role_router=CollaborateWithDepartmentRoleRouter(
+                    collaboration_service
                 ),
             )
         )

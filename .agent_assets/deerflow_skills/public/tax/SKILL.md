@@ -36,3 +36,4 @@ Requirements:
 
 - If the user asks about the latest tax policy, request policy research support first.
 - If the accounting basis is missing, say what bookkeeping evidence is required.
+- If payment timing or receipt timing affects the tax basis, request cashier confirmation first.

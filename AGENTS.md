@@ -63,7 +63,11 @@ ConversationRouter
   ↓
 ConversationService
   ↓
-DeerFlowAgentRuntimeRepository
+FinanceDepartmentService
+  ↓
+DepartmentWorkbenchService + DepartmentCollaborationService
+  ↓
+DeerFlowDepartmentRoleRuntimeRepository
   ↓
 DeerFlowClient（public embedded client）
   ↓
@@ -83,6 +87,7 @@ Repositories + SQLite / Markdown Memory
 ├── app/
 ├── conversation/
 ├── department/
+├── cashier/
 ├── accounting/
 ├── audit/
 ├── tax/
@@ -134,6 +139,7 @@ echo "LLM_API_KEY=your_key" > .env
 
 - `finance-core`
 - `coordinator`
+- `cashier`
 - `bookkeeping`
 - `policy-research`
 - `tax`
@@ -149,8 +155,11 @@ echo "LLM_API_KEY=your_key" > .env
 
 ### 当前财务 tools
 
+- `collaborate_with_department_role`
 - `record_voucher`
 - `query_vouchers`
+- `record_cash_transaction`
+- `query_cash_transactions`
 - `calculate_tax`
 - `audit_voucher`
 - `store_memory`
