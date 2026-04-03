@@ -88,6 +88,7 @@ Repositories + SQLite / Markdown Memory
 ├── conversation/
 ├── runtime/
 ├── department/
+│   └── roles/
 ├── cashier/
 ├── accounting/
 ├── audit/

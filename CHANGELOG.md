@@ -43,6 +43,7 @@
 ### 财务部门角色化
 
 - 新增 `department/` 模块
+- 角色定义从单一目录表拆到 `department/roles/`
 - 新增财务部门六角色目录：
   - `finance-coordinator`
   - `finance-cashier`
