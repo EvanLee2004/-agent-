@@ -10,6 +10,5 @@ opencode.json
 data/
 sessions/
 memory/*.md
-.agent_assets/cache/
-.agent_assets/runtime/
+.runtime/
 .deer-flow/

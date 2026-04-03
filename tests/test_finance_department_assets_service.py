@@ -24,6 +24,7 @@ class FinanceDepartmentAssetsServiceTest(unittest.TestCase):
             {
                 "finance-core",
                 "coordinator",
+                "cashier",
                 "bookkeeping",
                 "policy-research",
                 "tax",
@@ -32,7 +33,7 @@ class FinanceDepartmentAssetsServiceTest(unittest.TestCase):
         )
 
     def test_agent_assets_service_writes_all_role_configs(self):
-        """验证角色资产服务会为五个角色生成配置和 SOUL。"""
+        """验证角色资产服务会为六个角色生成配置和 SOUL。"""
         role_catalog = FinanceDepartmentRoleCatalog()
         assets_service = FinanceDepartmentAgentAssetsService(role_catalog)
 
@@ -41,10 +42,12 @@ class FinanceDepartmentAssetsServiceTest(unittest.TestCase):
             assets_service.prepare_agent_assets(runtime_home)
 
             coordinator_directory = runtime_home / "agents" / "finance-coordinator"
+            cashier_directory = runtime_home / "agents" / "finance-cashier"
             bookkeeping_directory = runtime_home / "agents" / "finance-bookkeeping"
             audit_directory = runtime_home / "agents" / "finance-audit"
 
             self.assertTrue((coordinator_directory / "config.yaml").exists())
+            self.assertTrue((cashier_directory / "config.yaml").exists())
             self.assertTrue((bookkeeping_directory / "config.yaml").exists())
             self.assertTrue((audit_directory / "SOUL.md").exists())
 

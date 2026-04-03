@@ -7,6 +7,7 @@ from typing import Optional
 from app.dependency_container import DependencyContainer
 from configuration.configuration_service import ConfigurationService
 from conversation.conversation_request import ConversationRequest
+from department.workbench.role_trace_formatter import RoleTraceFormatter
 
 
 class CliRouter:
@@ -14,9 +15,25 @@ class CliRouter:
 
     def __init__(self, configuration_service: ConfigurationService):
         self._configuration_service = configuration_service
+        self._role_trace_formatter = RoleTraceFormatter()
 
     def run(self) -> None:
-        """运行 CLI。"""
+        """运行 CLI。
+
+        CLI 是最终用户直接面对的入口，因此即使用户使用 `Ctrl+C` 主动结束会话，
+        也应该像普通终端产品一样安静退出，而不是把 Python 的中断栈信息直接打印出来。
+        """
+        try:
+            self._run_event_loop()
+        except KeyboardInterrupt:
+            print("\n\n再见！")
+
+    def _run_event_loop(self) -> None:
+        """运行异步事件循环。
+
+        之所以把 `asyncio.run(...)` 拆成独立方法，是为了让中断处理与测试替身更清晰，
+        避免在测试中直接 patch `asyncio.run` 造成未等待协程的噪音。
+        """
         asyncio.run(self._run_async())
 
     async def _run_async(self) -> None:
@@ -39,6 +56,9 @@ class CliRouter:
                     thread_id=thread_id,
                 )
             )
+            role_trace_text = self._role_trace_formatter.format(response.role_traces)
+            if role_trace_text:
+                print(role_trace_text)
             print(f"助手: {response.reply_text}\n")
         print("\n再见！")
 
@@ -64,5 +84,5 @@ class CliRouter:
     def _print_banner(self) -> None:
         """打印启动信息。"""
         print("=" * 50)
-        print("智能财务部门已启动 - 对话 / 记账 / 查账 / 税前准备 / 审核（quit 退出）")
+        print("智能财务部门已启动 - 对话 / 记账 / 资金 / 查账 / 税前准备 / 审核（quit 退出）")
         print("=" * 50 + "\n")

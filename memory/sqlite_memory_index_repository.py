@@ -194,7 +194,9 @@ class SQLiteMemoryIndexRepository(MemoryIndexRepository):
     """SQLite FTS5 记忆索引实现。"""
 
     def __init__(self, database_path: Optional[Path] = None):
-        self._database_path = database_path or Path(".agent_assets/cache/memory_search.sqlite")
+        # 记忆索引属于可随时重建的运行期产物，不应与长期维护的 prompt/skill 资产混放。
+        # 统一落到 `.runtime/` 下后，源码资产和运行状态的边界会更清楚，也更符合部署习惯。
+        self._database_path = database_path or Path(".runtime/memory/memory_search.sqlite")
 
     def rebuild_index(self, long_term_file: Path, daily_memory_dir: Path) -> None:
         """重建索引。"""

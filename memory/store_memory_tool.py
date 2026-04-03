@@ -3,7 +3,7 @@
 from langchain.tools import BaseTool
 from pydantic import BaseModel, Field
 
-from department.finance_department_tool_context_registry import FinanceDepartmentToolContextRegistry
+from runtime.deerflow.finance_department_tool_context_registry import FinanceDepartmentToolContextRegistry
 
 
 class StoreMemoryTool(BaseTool):

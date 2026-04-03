@@ -63,7 +63,11 @@ ConversationRouter
   ↓
 ConversationService
   ↓
-DeerFlowAgentRuntimeRepository
+FinanceDepartmentService
+  ↓
+department/workbench + department/collaboration
+  ↓
+runtime/deerflow/DeerFlowDepartmentRoleRuntimeRepository
   ↓
 DeerFlowClient（public embedded client）
   ↓
@@ -82,7 +86,12 @@ Repositories + SQLite / Markdown Memory
 ├── main.py
 ├── app/
 ├── conversation/
+├── runtime/
 ├── department/
+│   ├── collaboration/
+│   ├── roles/
+│   └── workbench/
+├── cashier/
 ├── accounting/
 ├── audit/
 ├── tax/
@@ -121,10 +130,12 @@ echo "LLM_API_KEY=your_key" > .env
 
 ## DeerFlow 接入约束
 
-- DeerFlow 运行时配置由 `conversation/` 下的适配层统一生成
-- 运行期资产统一落到 `.agent_assets/runtime/deerflow/`
+- DeerFlow 运行时配置由 `runtime/deerflow/` 下的适配层统一生成
+- 运行期资产统一落到 `.runtime/deerflow/`
 - DeerFlow skill 资产当前位于 `.agent_assets/deerflow_skills/public/`
-- 财务部门角色定义与 DeerFlow agent 资产生成位于 `department/`
+- 财务部门角色定义位于 `department/roles/`
+- 角色协作协议位于 `department/collaboration/`
+- 共享工作台与角色轨迹位于 `department/workbench/`
 - 不要重新引入自研 `ToolLoopService`
 - 不要重新创建 `llm/` 目录维持另一套聊天协议
 
@@ -134,6 +145,7 @@ echo "LLM_API_KEY=your_key" > .env
 
 - `finance-core`
 - `coordinator`
+- `cashier`
 - `bookkeeping`
 - `policy-research`
 - `tax`
@@ -149,8 +161,11 @@ echo "LLM_API_KEY=your_key" > .env
 
 ### 当前财务 tools
 
+- `collaborate_with_department_role`
 - `record_voucher`
 - `query_vouchers`
+- `record_cash_transaction`
+- `query_cash_transactions`
 - `calculate_tax`
 - `audit_voucher`
 - `store_memory`

@@ -9,6 +9,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 TARGET_DIRECTORIES = [
     PROJECT_ROOT / "app",
     PROJECT_ROOT / "conversation",
+    PROJECT_ROOT / "runtime",
     PROJECT_ROOT / "accounting",
     PROJECT_ROOT / "audit",
     PROJECT_ROOT / "tax",
@@ -16,6 +17,7 @@ TARGET_DIRECTORIES = [
     PROJECT_ROOT / "rules",
     PROJECT_ROOT / "configuration",
     PROJECT_ROOT / "department",
+    PROJECT_ROOT / "cashier",
 ]
 REMOVED_PATHS = [
     PROJECT_ROOT / "agents",
@@ -41,6 +43,26 @@ REMOVED_PATHS = [
     PROJECT_ROOT / ".agent_assets" / "skills" / "pdf",
     PROJECT_ROOT / ".agent_assets" / "skills" / "pptx",
     PROJECT_ROOT / ".agent_assets" / "skills" / "xlsx",
+    PROJECT_ROOT / "conversation" / "agent_runtime_repository.py",
+    PROJECT_ROOT / "conversation" / "agent_runtime_request.py",
+    PROJECT_ROOT / "conversation" / "agent_runtime_response.py",
+    PROJECT_ROOT / "conversation" / "deerflow_agent_runtime_repository.py",
+    PROJECT_ROOT / "conversation" / "deerflow_client_factory.py",
+    PROJECT_ROOT / "conversation" / "deerflow_department_role_runtime_repository.py",
+    PROJECT_ROOT / "conversation" / "deerflow_runtime_assets.py",
+    PROJECT_ROOT / "conversation" / "deerflow_runtime_assets_service.py",
+    PROJECT_ROOT / "conversation" / "deerflow_runtime_error.py",
+    PROJECT_ROOT / "department" / "collaborate_with_department_role_router.py",
+    PROJECT_ROOT / "department" / "collaborate_with_department_role_tool.py",
+    PROJECT_ROOT / "department" / "department_collaboration_command.py",
+    PROJECT_ROOT / "department" / "department_collaboration_service.py",
+    PROJECT_ROOT / "department" / "department_workbench.py",
+    PROJECT_ROOT / "department" / "department_workbench_repository.py",
+    PROJECT_ROOT / "department" / "department_workbench_service.py",
+    PROJECT_ROOT / "department" / "in_memory_department_workbench_repository.py",
+    PROJECT_ROOT / "department" / "role_trace.py",
+    PROJECT_ROOT / "department" / "role_trace_formatter.py",
+    PROJECT_ROOT / "department" / "role_trace_summary_builder.py",
 ]
 
 

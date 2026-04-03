@@ -2,8 +2,8 @@
 
 import os
 
-from conversation.deerflow_runtime_error import DeerFlowRuntimeError
-from conversation.deerflow_runtime_assets import DeerFlowRuntimeAssets
+from runtime.deerflow.deerflow_runtime_assets import DeerFlowRuntimeAssets
+from runtime.deerflow.deerflow_runtime_error import DeerFlowRuntimeError
 
 
 class DeerFlowClientFactory:
@@ -33,7 +33,7 @@ class DeerFlowClientFactory:
 
             # DeerFlow 当前版本会在多处重新解析配置和运行目录。
             # 这里显式注入环境变量，是为了把状态根目录锁进项目自身的
-            # `.agent_assets/runtime/deerflow/`，避免线程状态和临时文件泄漏到用户主目录。
+            # `.runtime/deerflow/`，避免线程状态和临时文件泄漏到用户主目录。
             os.environ["LLM_API_KEY"] = assets.api_key
             os.environ["DEER_FLOW_CONFIG_PATH"] = str(assets.config_path)
             os.environ["DEER_FLOW_EXTENSIONS_CONFIG_PATH"] = str(assets.extensions_config_path)

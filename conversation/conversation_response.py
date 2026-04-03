@@ -2,6 +2,8 @@
 
 from dataclasses import dataclass, field
 
+from department.workbench.role_trace import RoleTrace
+
 
 @dataclass(frozen=True)
 class ConversationResponse:
@@ -9,8 +11,8 @@ class ConversationResponse:
 
     Attributes:
         reply_text: 最终回复文本。
-        executed_tool_names: 已执行工具名列表。
+        role_traces: 当前回合角色协作轨迹。
     """
 
     reply_text: str
-    executed_tool_names: list[str] = field(default_factory=list)
+    role_traces: list[RoleTrace] = field(default_factory=list)

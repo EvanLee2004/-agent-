@@ -4,8 +4,8 @@
   <img src="assets/readme-hero.svg" alt="智能财务部门项目封面图" width="100%" />
 </p>
 
-面向小企业财务场景的智能财务多 Agent 部门产品。当前阶段已经把底层会话运行时切到 **DeerFlow public client**，并把财务部门角色目录、DeerFlow 角色资产和财务工具边界收口到正式工程结构中。  
-这一版的目标不是继续堆单点技巧，而是把 **DeerFlow 底座 + 财务部门业务壳 + 角色注册** 接稳，再逐步打开真实多角色协作。
+面向小企业财务场景的智能财务多 Agent 部门产品。当前阶段已经把底层会话运行时切到 **DeerFlow public client**，并把财务部门角色目录、共享工作台、DeerFlow 角色资产和财务工具边界收口到正式工程结构中。  
+这一版的目标不是继续堆单点技巧，而是把 **DeerFlow 底座 + 财务部门业务壳 + 角色协作协议** 接稳，再逐步打开真实多角色协作。
 
 ## 开发与架构来源
 
@@ -17,10 +17,12 @@
 
 - **凭证记账**：把自然语言业务转换为标准会计凭证并入账
 - **凭证查询**：按日期和状态检索历史凭证
+- **资金事实管理**：记录和查询收款、付款、报销支付等出纳事实
 - **税务测算**：支持小规模纳税人增值税、小型微利企业企业所得税基础测算
 - **凭证审核**：支持金额异常、摘要质量、重复入账等规则审核
 - **长期记忆与每日记忆**：支持显式写入、检索和召回
 - **规则问答**：支持基于项目规则和会计约束的说明性问答
+- **角色思考可视化**：展示每个财务角色的协作摘要，而不是暴露原始推理全文
 
 ## 当前阶段
 
@@ -29,13 +31,14 @@
 - DeerFlow 公开嵌入客户端接入
 - 财务工具注册到 DeerFlow runtime
 - DeerFlow skill 资产落地
-- 财务部门五角色目录落地
+- 财务部门六角色目录落地
 - DeerFlow 自定义角色资产自动生成
 - CLI 主链路切换到 DeerFlow 底层
+- 共享工作台与角色协作 trace 落地
 
 当前版本**尚未**完成：
 
-- 基于公开 client 的角色间编排协作
+- 基于真实业务状态的复杂多角色协同策略
 - 正式税务申报
 - API/Web 对外接口
 
@@ -50,11 +53,15 @@ ConversationRouter
   ↓
 ConversationService
   ↓
-DeerFlowAgentRuntimeRepository
+FinanceDepartmentService
+  ↓
+共享工作台 + 角色协作服务
+  ↓
+DeerFlowDepartmentRoleRuntimeRepository
   ↓
 DeerFlowClient（public embedded client）
   ↓
-财务部门角色资产 + DeerFlow skills + 财务工具
+财务部门角色资产 + DeerFlow skills + 财务工具 / 协作工具
   ↓
 Feature Routers
   ↓
@@ -74,9 +81,14 @@ SQLite / Markdown Memory
 ```text
 ├── main.py
 ├── app/                             # 启动入口与依赖装配
-├── conversation/                    # 会话边界与 DeerFlow 适配层
-├── department/                      # 财务部门角色目录、角色资产与工具上下文
+├── conversation/                    # 会话边界与用户可见响应收口
+├── runtime/                         # 第三方运行时适配层（当前为 DeerFlow）
+├── department/                      # 财务部门主域
+│   ├── collaboration/               # 角色协作协议与协作工具
+│   ├── roles/                       # 六个财务角色的独立定义
+│   └── workbench/                   # 共享工作台与角色轨迹
 ├── accounting/                      # 记账与凭证查询
+├── cashier/                         # 出纳事实与资金收付
 ├── audit/                           # 审核规则
 ├── tax/                             # 税务测算
 ├── memory/                          # 长期/每日记忆与搜索索引
@@ -125,7 +137,7 @@ LLM_API_KEY=your_key_here
 python main.py
 ```
 
-运行时会自动在 `.agent_assets/runtime/deerflow/` 下生成 DeerFlow 配置与状态目录；该目录为本地运行资产，已被忽略，不应提交到远端。
+运行时会自动在 `.runtime/deerflow/` 下生成 DeerFlow 配置与状态目录；该目录为本地运行资产，已被忽略，不应提交到远端。
 
 ## DeerFlow 接入方式
 
@@ -137,8 +149,11 @@ python main.py
 
 当前已接入的财务工具：
 
+- `collaborate_with_department_role`
 - `record_voucher`
 - `query_vouchers`
+- `record_cash_transaction`
+- `query_cash_transactions`
 - `calculate_tax`
 - `audit_voucher`
 - `store_memory`
@@ -149,6 +164,7 @@ python main.py
 
 - `.agent_assets/deerflow_skills/public/finance-core/SKILL.md`
 - `.agent_assets/deerflow_skills/public/coordinator/SKILL.md`
+- `.agent_assets/deerflow_skills/public/cashier/SKILL.md`
 - `.agent_assets/deerflow_skills/public/bookkeeping/SKILL.md`
 - `.agent_assets/deerflow_skills/public/policy-research/SKILL.md`
 - `.agent_assets/deerflow_skills/public/tax/SKILL.md`
@@ -173,7 +189,9 @@ python main.py
 - 财务部门角色目录与角色资产生成
 - DeerFlow public client 读取 skill
 - DeerFlow 工具注册
+- 角色协作服务与共享工作台
 - 记账与查账
+- 资金收付记录与查询
 - 税务测算
 - 凭证审核
 - 记忆写入与召回
@@ -183,9 +201,9 @@ python main.py
 
 - 已完成 DeerFlow 底层接入
 - 已完成财务 tools 对接
-- 已完成财务部门角色注册与 DeerFlow 角色资产生成
+- 已完成财务部门角色注册、角色资产生成与共享工作台
 - 已保留会计业务核心在本项目内
-- 下一步是基于公开 client 打开角色协作，而不是继续扩 runtime 杂项
+- 下一步是继续细化真实财务协同策略，而不是继续扩 runtime 杂项
 
 ## License
 
