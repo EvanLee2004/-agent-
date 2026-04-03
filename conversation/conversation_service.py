@@ -1,10 +1,10 @@
 """会话服务。"""
 
+from conversation.agent_runtime_repository import AgentRuntimeRepository
+from conversation.agent_runtime_request import AgentRuntimeRequest
 from conversation.conversation_request import ConversationRequest
 from conversation.conversation_response import ConversationResponse
-from conversation.prompt_context_service import PromptContextService
-from conversation.tool_loop_request import ToolLoopRequest
-from conversation.tool_loop_service import ToolLoopService
+from conversation.reply_text_sanitizer import ReplyTextSanitizer
 
 
 class ConversationService:
@@ -12,21 +12,28 @@ class ConversationService:
 
     def __init__(
         self,
-        prompt_context_service: PromptContextService,
-        tool_loop_service: ToolLoopService,
+        agent_runtime_repository: AgentRuntimeRepository,
+        reply_text_sanitizer: ReplyTextSanitizer,
     ):
-        self._prompt_context_service = prompt_context_service
-        self._tool_loop_service = tool_loop_service
+        self._agent_runtime_repository = agent_runtime_repository
+        self._reply_text_sanitizer = reply_text_sanitizer
 
     def reply(self, request: ConversationRequest) -> ConversationResponse:
-        """处理会话请求。"""
-        tool_loop_result = self._tool_loop_service.run_tool_loop(
-            ToolLoopRequest(
+        """处理会话请求。
+
+        Args:
+            request: 外层会话请求。
+
+        Returns:
+            用户可见的会话响应。
+        """
+        runtime_response = self._agent_runtime_repository.reply(
+            AgentRuntimeRequest(
                 user_input=request.user_input,
-                system_prompt=self._prompt_context_service.build_system_prompt(request.user_input),
+                thread_id=request.thread_id,
             )
         )
         return ConversationResponse(
-            reply_text=tool_loop_result.final_reply,
-            executed_tool_names=tool_loop_result.executed_tool_names,
+            reply_text=self._reply_text_sanitizer.sanitize(runtime_response.reply_text),
+            executed_tool_names=runtime_response.executed_tool_names,
         )

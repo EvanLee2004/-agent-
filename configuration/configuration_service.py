@@ -109,9 +109,9 @@ class ConfigurationService:
         provider = self._provider_catalog.get_provider(provider_name)
         if provider is None:
             raise ConfigurationError(f"不支持的 provider: {provider_name}")
-        if not provider.supports_native_tool_calling:
+        if not provider.supports_tool_calling:
             raise ConfigurationError(
-                f"Provider {provider_name} 不支持原生 function calling"
+                f"Provider {provider_name} 不支持工具调用"
             )
         return provider_name, provider
 

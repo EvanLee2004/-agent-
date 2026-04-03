@@ -2,29 +2,11 @@
 
 from accounting.accounting_service import AccountingService
 from accounting.query_vouchers_query import QueryVouchersQuery
-from conversation.tool_definition import ToolDefinition
 from conversation.tool_router import ToolRouter
 from conversation.tool_router_response import ToolRouterResponse
 
 
 DEFAULT_QUERY_LIMIT = 20
-QUERY_VOUCHERS_PARAMETERS = {
-    "type": "object",
-    "properties": {
-        "date": {
-            "type": "string",
-            "description": "可选日期过滤，例如 2024-03 或 2024-03-01",
-        },
-        "status": {
-            "type": "string",
-            "description": "可选状态过滤，例如 pending 或 approved",
-        },
-        "limit": {
-            "type": "integer",
-            "description": "最大返回条数，默认 20",
-        },
-    },
-}
 
 
 def _build_query(arguments: dict) -> QueryVouchersQuery:
@@ -74,14 +56,6 @@ class QueryVouchersRouter(ToolRouter):
 
     def __init__(self, accounting_service: AccountingService):
         self._accounting_service = accounting_service
-
-    def get_definition(self) -> ToolDefinition:
-        """返回工具定义。"""
-        return ToolDefinition(
-            name="query_vouchers",
-            description="查询已入账的凭证列表，可按日期和状态过滤。",
-            parameters=QUERY_VOUCHERS_PARAMETERS,
-        )
 
     def route(self, arguments: dict) -> ToolRouterResponse:
         """执行查账路由。"""

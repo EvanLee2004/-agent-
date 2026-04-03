@@ -13,14 +13,17 @@ from configuration.configuration_service import ConfigurationService
 from configuration.file_configuration_repository import FileConfigurationRepository
 from configuration.llm_configuration import LlmConfiguration
 from configuration.provider_catalog import ProviderCatalog
+from conversation.deerflow_agent_runtime_repository import DeerFlowAgentRuntimeRepository
+from conversation.deerflow_client_factory import DeerFlowClientFactory
+from conversation.deerflow_runtime_assets_service import DeerFlowRuntimeAssetsService
 from conversation.conversation_router import ConversationRouter
 from conversation.conversation_service import ConversationService
-from conversation.file_prompt_skill_repository import FilePromptSkillRepository
-from conversation.prompt_context_service import PromptContextService
-from conversation.tool_loop_service import ToolLoopService
-from conversation.tool_router_catalog import ToolRouterCatalog
+from conversation.reply_text_sanitizer import ReplyTextSanitizer
 from conversation.tool_use_policy import ToolUsePolicy
-from llm.openai_compatible_llm_chat_repository import OpenAiCompatibleLlmChatRepository
+from department.finance_department_agent_assets_service import FinanceDepartmentAgentAssetsService
+from department.finance_department_role_catalog import FinanceDepartmentRoleCatalog
+from department.finance_department_tool_context import FinanceDepartmentToolContext
+from department.finance_department_tool_context_registry import FinanceDepartmentToolContextRegistry
 from memory.markdown_memory_store_repository import MarkdownMemoryStoreRepository
 from memory.memory_service import MemoryService
 from memory.search_memory_router import SearchMemoryRouter
@@ -33,152 +36,120 @@ from tax.calculate_tax_router import CalculateTaxRouter
 from tax.tax_service import TaxService
 
 
-def _build_accounting_stack(agent_name: str) -> tuple[ChartOfAccountsService, AccountingService, SQLiteJournalRepository]:
+def _build_accounting_stack(
+    department_display_name: str,
+) -> tuple[AccountingService, SQLiteJournalRepository]:
     """构造账务相关组件。"""
     chart_repository = SQLiteChartOfAccountsRepository()
     journal_repository = SQLiteJournalRepository()
     chart_service = ChartOfAccountsService(chart_repository)
-    accounting_service = AccountingService(journal_repository, chart_service, agent_name)
-    return chart_service, accounting_service, journal_repository
+    accounting_service = AccountingService(
+        journal_repository,
+        chart_service,
+        department_display_name,
+    )
+    return accounting_service, journal_repository
 
 
-def _build_memory_service(agent_name: str) -> MemoryService:
+def _build_memory_service(department_display_name: str) -> MemoryService:
     """构造记忆服务。"""
     memory_store_repository = MarkdownMemoryStoreRepository()
     memory_index_repository = SQLiteMemoryIndexRepository()
-    return MemoryService(memory_store_repository, memory_index_repository, agent_name)
-
-
-def _build_rules_service(prompt_skill_repository: FilePromptSkillRepository) -> RulesService:
-    """构造规则服务。"""
-    return RulesService(FileRulesRepository(prompt_skill_repository))
-
-
-def _build_tool_router_catalog(
-    accounting_service: AccountingService,
-    tax_service: TaxService,
-    audit_service: AuditService,
-    memory_service: MemoryService,
-    rules_service: RulesService,
-    tool_use_policy: ToolUsePolicy,
-    agent_name: str,
-) -> ToolRouterCatalog:
-    """构造工具路由目录。"""
-    return ToolRouterCatalog(
-        _build_tool_routers(
-            accounting_service,
-            tax_service,
-            audit_service,
-            memory_service,
-            rules_service,
-            tool_use_policy,
-            agent_name,
-        )
+    return MemoryService(
+        memory_store_repository,
+        memory_index_repository,
+        department_display_name,
     )
 
 
-def _build_tool_routers(
+def _build_rules_service() -> RulesService:
+    """构造规则服务。"""
+    return RulesService(FileRulesRepository())
+
+
+def _build_finance_tool_context(
     accounting_service: AccountingService,
-    tax_service: TaxService,
-    audit_service: AuditService,
+    journal_repository: SQLiteJournalRepository,
     memory_service: MemoryService,
-    rules_service: RulesService,
     tool_use_policy: ToolUsePolicy,
-    agent_name: str,
-) -> list:
-    """构造工具路由实例列表。"""
-    return [
-        RecordVoucherRouter(accounting_service),
-        QueryVouchersRouter(accounting_service),
-        CalculateTaxRouter(tax_service),
-        AuditVoucherRouter(audit_service),
-        StoreMemoryRouter(memory_service),
-        SearchMemoryRouter(memory_service),
-        ReplyWithRulesRouter(rules_service, memory_service, tool_use_policy, agent_name),
-    ]
+    department_display_name: str,
+) -> FinanceDepartmentToolContext:
+    """构造 DeerFlow 财务工具上下文。
 
-
-def _build_prompt_context_service(
-    prompt_skill_repository: FilePromptSkillRepository,
-    memory_service: MemoryService,
-    chart_service: ChartOfAccountsService,
-    tool_use_policy: ToolUsePolicy,
-    agent_name: str,
-) -> PromptContextService:
-    """构造 prompt 上下文服务。"""
-    return PromptContextService(
-        prompt_skill_repository,
+    DeerFlow 的工具是通过 import 路径解析静态对象的，因此本项目需要在
+    依赖容器中统一装配 router，再注册到受控上下文注册器。这样做能把
+    第三方运行时的约束隔离在容器边界，不让业务服务感知外部框架细节。
+    """
+    rules_service = _build_rules_service()
+    tax_service = TaxService()
+    audit_service = AuditService(journal_repository)
+    record_voucher_router = RecordVoucherRouter(accounting_service)
+    query_vouchers_router = QueryVouchersRouter(accounting_service)
+    calculate_tax_router = CalculateTaxRouter(tax_service)
+    audit_voucher_router = AuditVoucherRouter(audit_service)
+    store_memory_router = StoreMemoryRouter(memory_service)
+    search_memory_router = SearchMemoryRouter(memory_service)
+    reply_with_rules_router = ReplyWithRulesRouter(
+        rules_service,
         memory_service,
-        chart_service,
         tool_use_policy,
-        agent_name,
+        department_display_name,
+    )
+    return FinanceDepartmentToolContext(
+        record_voucher_router=record_voucher_router,
+        query_vouchers_router=query_vouchers_router,
+        calculate_tax_router=calculate_tax_router,
+        audit_voucher_router=audit_voucher_router,
+        store_memory_router=store_memory_router,
+        search_memory_router=search_memory_router,
+        reply_with_rules_router=reply_with_rules_router,
     )
 
 
 def _build_conversation_service(
     llm_configuration: LlmConfiguration,
-    agent_name: str,
+    role_catalog: FinanceDepartmentRoleCatalog,
 ) -> ConversationService:
     """构造会话服务。"""
-    chart_service, accounting_service, journal_repository = _build_accounting_stack(agent_name)
-    memory_service = _build_memory_service(agent_name)
-    prompt_skill_repository = FilePromptSkillRepository()
-    tool_use_policy = ToolUsePolicy()
-    prompt_context_service = _build_prompt_context_service(
-        prompt_skill_repository,
-        memory_service,
-        chart_service,
-        tool_use_policy,
-        agent_name,
+    department_display_name = role_catalog.get_department_display_name()
+    accounting_service, journal_repository = _build_accounting_stack(
+        department_display_name
     )
-    tool_router_catalog = _build_conversation_tool_catalog(
+    memory_service = _build_memory_service(department_display_name)
+    tool_use_policy = ToolUsePolicy()
+    finance_tool_context = _build_finance_tool_context(
         accounting_service,
         journal_repository,
         memory_service,
-        prompt_skill_repository,
         tool_use_policy,
-        agent_name,
+        department_display_name,
     )
-    llm_chat_repository = OpenAiCompatibleLlmChatRepository(llm_configuration)
+    FinanceDepartmentToolContextRegistry.register(finance_tool_context)
+    department_agent_assets_service = FinanceDepartmentAgentAssetsService(role_catalog)
+    deerflow_runtime_repository = DeerFlowAgentRuntimeRepository(
+        configuration=llm_configuration,
+        runtime_assets_service=DeerFlowRuntimeAssetsService(department_agent_assets_service),
+        client_factory=DeerFlowClientFactory(),
+        agent_name=department_agent_assets_service.get_entry_role_name(),
+    )
     return ConversationService(
-        prompt_context_service,
-        ToolLoopService(llm_chat_repository, tool_router_catalog),
-    )
-
-
-def _build_conversation_tool_catalog(
-    accounting_service: AccountingService,
-    journal_repository: SQLiteJournalRepository,
-    memory_service: MemoryService,
-    prompt_skill_repository: FilePromptSkillRepository,
-    tool_use_policy: ToolUsePolicy,
-    agent_name: str,
-) -> ToolRouterCatalog:
-    """构造会话场景所需的工具目录。"""
-    rules_service = _build_rules_service(prompt_skill_repository)
-    return _build_tool_router_catalog(
-        accounting_service,
-        TaxService(),
-        AuditService(journal_repository),
-        memory_service,
-        rules_service,
-        tool_use_policy,
-        agent_name,
+        deerflow_runtime_repository,
+        ReplyTextSanitizer(),
     )
 
 
 class DependencyContainer:
     """依赖注入容器。"""
 
-    def __init__(self, llm_configuration: LlmConfiguration, agent_name: str = "智能会计"):
+    def __init__(self, llm_configuration: LlmConfiguration):
         self._llm_configuration = llm_configuration
-        self._agent_name = agent_name
+        self._role_catalog = FinanceDepartmentRoleCatalog()
 
     def build_conversation_router(self) -> ConversationRouter:
         """构造会话入口。"""
         conversation_service = _build_conversation_service(
             self._llm_configuration,
-            self._agent_name,
+            self._role_catalog,
         )
         return ConversationRouter(conversation_service)
 

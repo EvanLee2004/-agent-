@@ -23,5 +23,8 @@ class ConversationRouter:
         """
         try:
             return self._conversation_service.reply(request)
-        except ConversationError as error:
-            return ConversationResponse(reply_text=f"服务暂时不可用，请稍后重试。({str(error)})")
+        except ConversationError:
+            # 这里不把底层运行时细节直接暴露给最终用户。
+            # 当前系统正在切向 DeerFlow 底层，错误信息往往包含配置或第三方细节，
+            # 直接回显会降低产品稳定感，也会扩大排障信息暴露面。
+            return ConversationResponse(reply_text="服务暂时不可用，请稍后重试。")

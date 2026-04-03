@@ -2,7 +2,7 @@
   <!--
     README 封面图。
     设计目标：
-    1. 直接体现“智能会计”主题，而不是泛化 AI 图。
+    1. 直接体现“智能财务部门”主题，而不是泛化 AI 图。
     2. 同时展示凭证、税务、记忆、工具调用等项目核心能力。
     3. 使用 SVG，保证仓库内可直接展示且不依赖外部图床。
   -->
@@ -64,7 +64,7 @@
     <rect x="220" y="160" width="154" height="40" rx="20" fill="#E7F0FF"/>
     <text x="250" y="186" fill="#1C4ED8" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="20" font-weight="700">AI Accounting Agent</text>
 
-    <text x="220" y="270" fill="#17233A" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="64" font-weight="800">智能会计</text>
+    <text x="220" y="270" fill="#17233A" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="64" font-weight="800">智能财务部门</text>
     <text x="220" y="326" fill="#35507A" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="28" font-weight="600">Function Calling + Skills + 小企业账务引擎</text>
 
     <text x="220" y="390" fill="#4A5E7A" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="24" font-weight="500">把自然语言业务变成真实凭证、税额、审核结果与长期记忆。</text>

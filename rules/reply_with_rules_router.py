@@ -1,21 +1,11 @@
 """规则工具入口。"""
 
-from conversation.tool_definition import ToolDefinition
 from conversation.tool_router import ToolRouter
 from conversation.tool_router_response import ToolRouterResponse
 from conversation.tool_use_policy import ToolUsePolicy
 from memory.memory_context_query import MemoryContextQuery
 from memory.memory_service import MemoryService
 from rules.rules_service import RulesService
-
-
-REPLY_WITH_RULES_PARAMETERS = {
-    "type": "object",
-    "properties": {
-        "question": {"type": "string", "description": "用户当前的问题原文"},
-    },
-    "required": ["question"],
-}
 
 
 def _build_memory_notice() -> str:
@@ -31,20 +21,12 @@ class ReplyWithRulesRouter(ToolRouter):
         rules_service: RulesService,
         memory_service: MemoryService,
         tool_use_policy: ToolUsePolicy,
-        agent_name: str = "智能会计",
+        agent_name: str = "智能财务部门",
     ):
         self._rules_service = rules_service
         self._memory_service = memory_service
         self._tool_use_policy = tool_use_policy
         self._agent_name = agent_name
-
-    def get_definition(self) -> ToolDefinition:
-        """返回工具定义。"""
-        return ToolDefinition(
-            name="reply_with_rules",
-            description="获取项目当前的会计、报销、审核和记忆相关规则参考，用于回答规则类问题。",
-            parameters=REPLY_WITH_RULES_PARAMETERS,
-        )
 
     def route(self, arguments: dict) -> ToolRouterResponse:
         """执行规则工具。"""
