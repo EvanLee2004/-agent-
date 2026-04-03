@@ -81,7 +81,8 @@ SQLite / Markdown Memory
 ```text
 ├── main.py
 ├── app/                             # 启动入口与依赖装配
-├── conversation/                    # 会话边界与 DeerFlow 适配层
+├── conversation/                    # 会话边界与用户可见响应收口
+├── runtime/                         # 第三方运行时适配层（当前为 DeerFlow）
 ├── department/                      # 财务部门角色目录、共享工作台与协作协议
 ├── accounting/                      # 记账与凭证查询
 ├── cashier/                         # 出纳事实与资金收付
@@ -133,7 +134,7 @@ LLM_API_KEY=your_key_here
 python main.py
 ```
 
-运行时会自动在 `.agent_assets/runtime/deerflow/` 下生成 DeerFlow 配置与状态目录；该目录为本地运行资产，已被忽略，不应提交到远端。
+运行时会自动在 `.runtime/deerflow/` 下生成 DeerFlow 配置与状态目录；该目录为本地运行资产，已被忽略，不应提交到远端。
 
 ## DeerFlow 接入方式
 

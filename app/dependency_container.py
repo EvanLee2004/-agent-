@@ -17,9 +17,6 @@ from configuration.configuration_service import ConfigurationService
 from configuration.file_configuration_repository import FileConfigurationRepository
 from configuration.llm_configuration import LlmConfiguration
 from configuration.provider_catalog import ProviderCatalog
-from conversation.deerflow_client_factory import DeerFlowClientFactory
-from conversation.deerflow_department_role_runtime_repository import DeerFlowDepartmentRoleRuntimeRepository
-from conversation.deerflow_runtime_assets_service import DeerFlowRuntimeAssetsService
 from conversation.conversation_router import ConversationRouter
 from conversation.conversation_service import ConversationService
 from conversation.reply_text_sanitizer import ReplyTextSanitizer
@@ -43,6 +40,9 @@ from memory.store_memory_router import StoreMemoryRouter
 from rules.file_rules_repository import FileRulesRepository
 from rules.reply_with_rules_router import ReplyWithRulesRouter
 from rules.rules_service import RulesService
+from runtime.deerflow.deerflow_client_factory import DeerFlowClientFactory
+from runtime.deerflow.deerflow_department_role_runtime_repository import DeerFlowDepartmentRoleRuntimeRepository
+from runtime.deerflow.deerflow_runtime_assets_service import DeerFlowRuntimeAssetsService
 from tax.calculate_tax_router import CalculateTaxRouter
 from tax.tax_service import TaxService
 

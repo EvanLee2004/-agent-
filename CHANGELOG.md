@@ -37,7 +37,7 @@
 - 删除旧 `llm/` 目录与自研聊天协议层
 - 删除已失效的 `ToolDefinition` 协议残留
 - 删除会话层里不该承载的财务工具上下文残留
-- DeerFlow 运行目录收口到 `.agent_assets/runtime/deerflow/`
+- DeerFlow 运行目录收口到 `.runtime/deerflow/`
 - 新增 `DEER_FLOW_HOME` 注入，避免 DeerFlow 状态写入用户主目录
 
 ### 财务部门角色化

@@ -4,6 +4,7 @@
 rm -f data/ledger.db
 find memory -mindepth 1 -type f -name "*.md" -delete 2>/dev/null
 rm -f .agent_assets/cache/*.sqlite
+rm -rf .runtime/deerflow
 cat <<'EOF' > MEMORY.md
 # Long-Term Memory
 

@@ -3,15 +3,15 @@
 from typing import Optional
 
 from configuration.llm_configuration import LlmConfiguration
-from conversation.deerflow_client_factory import DeerFlowClientFactory
-from conversation.deerflow_runtime_assets import DeerFlowRuntimeAssets
-from conversation.deerflow_runtime_assets_service import DeerFlowRuntimeAssetsService
 from conversation.reply_text_sanitizer import ReplyTextSanitizer
 from department.department_error import DepartmentError
 from department.department_role_request import DepartmentRoleRequest
 from department.department_role_response import DepartmentRoleResponse
 from department.department_role_runtime_repository import DepartmentRoleRuntimeRepository
 from department.department_runtime_context import DepartmentRuntimeContext
+from runtime.deerflow.deerflow_client_factory import DeerFlowClientFactory
+from runtime.deerflow.deerflow_runtime_assets import DeerFlowRuntimeAssets
+from runtime.deerflow.deerflow_runtime_assets_service import DeerFlowRuntimeAssetsService
 
 
 DEFAULT_THREAD_ID = "finance-cli-session"

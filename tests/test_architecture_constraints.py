@@ -9,6 +9,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 TARGET_DIRECTORIES = [
     PROJECT_ROOT / "app",
     PROJECT_ROOT / "conversation",
+    PROJECT_ROOT / "runtime",
     PROJECT_ROOT / "accounting",
     PROJECT_ROOT / "audit",
     PROJECT_ROOT / "tax",
@@ -46,6 +47,11 @@ REMOVED_PATHS = [
     PROJECT_ROOT / "conversation" / "agent_runtime_request.py",
     PROJECT_ROOT / "conversation" / "agent_runtime_response.py",
     PROJECT_ROOT / "conversation" / "deerflow_agent_runtime_repository.py",
+    PROJECT_ROOT / "conversation" / "deerflow_client_factory.py",
+    PROJECT_ROOT / "conversation" / "deerflow_department_role_runtime_repository.py",
+    PROJECT_ROOT / "conversation" / "deerflow_runtime_assets.py",
+    PROJECT_ROOT / "conversation" / "deerflow_runtime_assets_service.py",
+    PROJECT_ROOT / "conversation" / "deerflow_runtime_error.py",
 ]
 
 

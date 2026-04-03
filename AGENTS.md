@@ -67,7 +67,7 @@ FinanceDepartmentService
   ↓
 DepartmentWorkbenchService + DepartmentCollaborationService
   ↓
-DeerFlowDepartmentRoleRuntimeRepository
+runtime/deerflow/DeerFlowDepartmentRoleRuntimeRepository
   ↓
 DeerFlowClient（public embedded client）
   ↓
@@ -86,6 +86,7 @@ Repositories + SQLite / Markdown Memory
 ├── main.py
 ├── app/
 ├── conversation/
+├── runtime/
 ├── department/
 ├── cashier/
 ├── accounting/
@@ -126,8 +127,8 @@ echo "LLM_API_KEY=your_key" > .env
 
 ## DeerFlow 接入约束
 
-- DeerFlow 运行时配置由 `conversation/` 下的适配层统一生成
-- 运行期资产统一落到 `.agent_assets/runtime/deerflow/`
+- DeerFlow 运行时配置由 `runtime/deerflow/` 下的适配层统一生成
+- 运行期资产统一落到 `.runtime/deerflow/`
 - DeerFlow skill 资产当前位于 `.agent_assets/deerflow_skills/public/`
 - 财务部门角色定义与 DeerFlow agent 资产生成位于 `department/`
 - 不要重新引入自研 `ToolLoopService`

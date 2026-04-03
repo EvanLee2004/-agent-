@@ -7,11 +7,11 @@ from typing import Any
 import yaml
 
 from configuration.llm_configuration import LlmConfiguration
-from conversation.deerflow_runtime_assets import DeerFlowRuntimeAssets
 from department.finance_department_agent_assets_service import FinanceDepartmentAgentAssetsService
+from runtime.deerflow.deerflow_runtime_assets import DeerFlowRuntimeAssets
 
 
-DEERFLOW_RUNTIME_ROOT = Path(".agent_assets/runtime/deerflow")
+DEERFLOW_RUNTIME_ROOT = Path(".runtime/deerflow")
 DEERFLOW_CONFIG_FILE_NAME = "config.yaml"
 DEERFLOW_EXTENSIONS_FILE_NAME = "extensions_config.json"
 DEERFLOW_CHECKPOINT_FILE_NAME = "checkpoints.sqlite"
