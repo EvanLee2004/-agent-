@@ -14,6 +14,7 @@ from department.finance_department_role_catalog import FinanceDepartmentRoleCata
 from department.finance_department_service import FinanceDepartmentService
 from department.finance_department_request import FinanceDepartmentRequest
 from department.in_memory_department_workbench_repository import InMemoryDepartmentWorkbenchRepository
+from department.role_trace_summary_builder import RoleTraceSummaryBuilder
 
 
 class FakeDepartmentRoleRuntimeRepository(DepartmentRoleRuntimeRepository):
@@ -48,6 +49,7 @@ class DepartmentCollaborationServiceTest(unittest.TestCase):
             runtime_repository=runtime_repository,
             workbench_service=workbench_service,
             runtime_context=runtime_context,
+            role_trace_summary_builder=RoleTraceSummaryBuilder(),
         )
 
         with runtime_context.open_scope("finance-coordinator", "thread-1", 0):
@@ -75,6 +77,7 @@ class DepartmentCollaborationServiceTest(unittest.TestCase):
             runtime_repository=FakeDepartmentRoleRuntimeRepository(),
             workbench_service=workbench_service,
             runtime_context=runtime_context,
+            role_trace_summary_builder=RoleTraceSummaryBuilder(),
         )
 
         with runtime_context.open_scope("finance-audit", "thread-2", 0):
@@ -97,6 +100,7 @@ class DepartmentCollaborationServiceTest(unittest.TestCase):
             role_catalog=role_catalog,
             role_runtime_repository=runtime_repository,
             workbench_service=workbench_service,
+            role_trace_summary_builder=RoleTraceSummaryBuilder(),
         )
 
         response = service.reply(

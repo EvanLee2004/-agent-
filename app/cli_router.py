@@ -18,7 +18,22 @@ class CliRouter:
         self._role_trace_formatter = RoleTraceFormatter()
 
     def run(self) -> None:
-        """运行 CLI。"""
+        """运行 CLI。
+
+        CLI 是最终用户直接面对的入口，因此即使用户使用 `Ctrl+C` 主动结束会话，
+        也应该像普通终端产品一样安静退出，而不是把 Python 的中断栈信息直接打印出来。
+        """
+        try:
+            self._run_event_loop()
+        except KeyboardInterrupt:
+            print("\n\n再见！")
+
+    def _run_event_loop(self) -> None:
+        """运行异步事件循环。
+
+        之所以把 `asyncio.run(...)` 拆成独立方法，是为了让中断处理与测试替身更清晰，
+        避免在测试中直接 patch `asyncio.run` 造成未等待协程的噪音。
+        """
         asyncio.run(self._run_async())
 
     async def _run_async(self) -> None:

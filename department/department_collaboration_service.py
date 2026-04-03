@@ -11,6 +11,7 @@ from department.department_runtime_context import DepartmentRuntimeContext
 from department.department_workbench_service import DepartmentWorkbenchService
 from department.finance_department_role_catalog import FinanceDepartmentRoleCatalog
 from department.role_trace import RoleTrace
+from department.role_trace_summary_builder import RoleTraceSummaryBuilder
 
 
 MAX_COLLABORATION_DEPTH = 4
@@ -52,11 +53,13 @@ class DepartmentCollaborationService:
         runtime_repository: DepartmentRoleRuntimeRepository,
         workbench_service: DepartmentWorkbenchService,
         runtime_context: DepartmentRuntimeContext,
+        role_trace_summary_builder: RoleTraceSummaryBuilder,
     ):
         self._role_catalog = role_catalog
         self._runtime_repository = runtime_repository
         self._workbench_service = workbench_service
         self._runtime_context = runtime_context
+        self._role_trace_summary_builder = role_trace_summary_builder
 
     def collaborate(self, command: DepartmentCollaborationCommand) -> DepartmentRoleResponse:
         """执行一次角色协作。
@@ -95,7 +98,7 @@ class DepartmentCollaborationService:
                 display_name=target_role.display_name,
                 requested_by=requester_role.display_name,
                 goal=command.goal,
-                thinking_summary=role_response.reply_text,
+                thinking_summary=self._role_trace_summary_builder.build(role_response.reply_text),
                 depth=current_depth + 1,
             ),
         )

@@ -1,0 +1,59 @@
+"""角色协作摘要构造器。"""
+
+from typing import Optional
+
+
+MAX_SUMMARY_CHARS = 180
+MIN_SENTENCE_SUMMARY_CHARS = 24
+SENTENCE_ENDINGS = ("。", "！", "？", "!", "?", "\n")
+
+
+class RoleTraceSummaryBuilder:
+    """把角色自然语言回复压缩为可展示的协作摘要。
+
+    角色对外回复面向最终用户，长度和语气都可能更完整；而协作轨迹需要的是“这一轮
+    角色做了什么判断”的摘要。把摘要收敛为独立构造器，可以避免在会话层、协作层和
+    展示层各自重复裁剪逻辑，保证 API、CLI 和未来前端看到的是同一份角色摘要。
+    """
+
+    def build(self, reply_text: str) -> str:
+        """根据角色回复生成摘要文本。
+
+        Args:
+            reply_text: 角色原始自然语言回复。
+
+        Returns:
+            适合作为角色协作轨迹展示的单段摘要文本。
+        """
+        normalized_text = self._normalize_whitespace(reply_text)
+        first_sentence = self._extract_first_sentence(normalized_text)
+        if self._is_preferred_summary(first_sentence):
+            return self._truncate(first_sentence)
+        return self._truncate(normalized_text)
+
+    def _normalize_whitespace(self, reply_text: str) -> str:
+        """归一化空白字符。
+
+        角色回复里常包含 Markdown 换行、列表或空行。轨迹摘要不需要保留这些排版；
+        统一压成单段文本后，能避免工作台里混入终端展示细节，保持摘要语义稳定。
+        """
+        return " ".join(reply_text.split()).strip()
+
+    def _extract_first_sentence(self, normalized_text: str) -> str:
+        """提取首句作为优先摘要候选。"""
+        for sentence_ending in SENTENCE_ENDINGS:
+            ending_index = normalized_text.find(sentence_ending)
+            if ending_index == -1:
+                continue
+            return normalized_text[: ending_index + 1].strip()
+        return normalized_text
+
+    def _is_preferred_summary(self, first_sentence: str) -> bool:
+        """判断首句是否足以表达本轮角色结论。"""
+        return len(first_sentence) >= MIN_SENTENCE_SUMMARY_CHARS
+
+    def _truncate(self, text: str) -> str:
+        """控制摘要上限，避免工作台保存过长文本。"""
+        if len(text) <= MAX_SUMMARY_CHARS:
+            return text
+        return text[: MAX_SUMMARY_CHARS - 1] + "…"

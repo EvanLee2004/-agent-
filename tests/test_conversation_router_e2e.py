@@ -50,6 +50,7 @@ from department.finance_department_service import FinanceDepartmentService
 from department.finance_department_tool_context import FinanceDepartmentToolContext
 from department.finance_department_tool_context_registry import FinanceDepartmentToolContextRegistry
 from department.in_memory_department_workbench_repository import InMemoryDepartmentWorkbenchRepository
+from department.role_trace_summary_builder import RoleTraceSummaryBuilder
 from memory.markdown_memory_store_repository import MarkdownMemoryStoreRepository
 from memory.memory_service import MemoryService
 from memory.search_memory_router import SearchMemoryRouter
@@ -484,6 +485,7 @@ class ConversationRouterEndToEndTest(unittest.TestCase):
             runtime_repository=StubDepartmentRoleRuntimeRepository(),
             workbench_service=workbench_service,
             runtime_context=runtime_context,
+            role_trace_summary_builder=RoleTraceSummaryBuilder(),
         )
         workbench_service.start_turn("test-thread", "测试用户请求")
         FinanceDepartmentToolContextRegistry.register(

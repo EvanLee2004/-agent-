@@ -34,6 +34,7 @@ from department.finance_department_service import FinanceDepartmentService
 from department.finance_department_tool_context import FinanceDepartmentToolContext
 from department.finance_department_tool_context_registry import FinanceDepartmentToolContextRegistry
 from department.in_memory_department_workbench_repository import InMemoryDepartmentWorkbenchRepository
+from department.role_trace_summary_builder import RoleTraceSummaryBuilder
 from memory.markdown_memory_store_repository import MarkdownMemoryStoreRepository
 from memory.memory_service import MemoryService
 from memory.search_memory_router import SearchMemoryRouter
@@ -145,6 +146,7 @@ def _build_conversation_service(
     memory_service = _build_memory_service(department_display_name)
     tool_use_policy = ToolUsePolicy()
     runtime_context = DepartmentRuntimeContext()
+    role_trace_summary_builder = RoleTraceSummaryBuilder()
     department_agent_assets_service = FinanceDepartmentAgentAssetsService(role_catalog)
     role_runtime_repository = DeerFlowDepartmentRoleRuntimeRepository(
         configuration=llm_configuration,
@@ -161,6 +163,7 @@ def _build_conversation_service(
         runtime_repository=role_runtime_repository,
         workbench_service=workbench_service,
         runtime_context=runtime_context,
+        role_trace_summary_builder=role_trace_summary_builder,
     )
     finance_tool_context = _build_finance_tool_context(
         accounting_service,
@@ -176,6 +179,7 @@ def _build_conversation_service(
         role_catalog=role_catalog,
         role_runtime_repository=role_runtime_repository,
         workbench_service=workbench_service,
+        role_trace_summary_builder=role_trace_summary_builder,
     )
     return ConversationService(
         finance_department_service,
