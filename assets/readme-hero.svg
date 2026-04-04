@@ -1,150 +1,175 @@
 <svg width="1280" height="720" viewBox="0 0 1280 720" fill="none" xmlns="http://www.w3.org/2000/svg">
   <!--
-    README 封面图。
+    README 新封面图。
     设计目标：
-    1. 直接体现“智能财务部门”主题，而不是泛化 AI 图。
-    2. 同时展示凭证、税务、记忆、工具调用等项目核心能力。
-    3. 使用 SVG，保证仓库内可直接展示且不依赖外部图床。
+    1. 明确传达“DeerFlow 底座 + 财务多角色部门 + 专业工具链”。
+    2. 弱化旧阶段的单点能力表述，突出当前真实产品结构。
+    3. 继续使用纯 SVG，保证仓库内可直接展示、可维护、无外部依赖。
   -->
   <defs>
-    <linearGradient id="bg" x1="66" y1="44" x2="1212" y2="692" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#FFF4E8"/>
-      <stop offset="0.55" stop-color="#F5F8FF"/>
-      <stop offset="1" stop-color="#E9FFF3"/>
+    <linearGradient id="bg" x1="84" y1="48" x2="1184" y2="674" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F9F3E9"/>
+      <stop offset="0.52" stop-color="#EEF5FF"/>
+      <stop offset="1" stop-color="#ECFFF4"/>
     </linearGradient>
-    <linearGradient id="panel" x1="177" y1="126" x2="1126" y2="618" gradientUnits="userSpaceOnUse">
+    <linearGradient id="frame" x1="146" y1="104" x2="1136" y2="608" gradientUnits="userSpaceOnUse">
       <stop stop-color="#FFFFFF" stop-opacity="0.96"/>
-      <stop offset="1" stop-color="#FBFCFF" stop-opacity="0.88"/>
+      <stop offset="1" stop-color="#F9FBFF" stop-opacity="0.90"/>
     </linearGradient>
-    <linearGradient id="accentBlue" x1="0" y1="0" x2="1" y2="1">
-      <stop stop-color="#2388FF"/>
-      <stop offset="1" stop-color="#114FD0"/>
+    <linearGradient id="navy" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#1A4FD7"/>
+      <stop offset="1" stop-color="#0E2E8A"/>
     </linearGradient>
-    <linearGradient id="accentOrange" x1="0" y1="0" x2="1" y2="1">
-      <stop stop-color="#FFB44D"/>
-      <stop offset="1" stop-color="#FF7F2A"/>
+    <linearGradient id="amber" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#FFBE63"/>
+      <stop offset="1" stop-color="#E97A1A"/>
     </linearGradient>
-    <linearGradient id="accentGreen" x1="0" y1="0" x2="1" y2="1">
-      <stop stop-color="#2FD08F"/>
-      <stop offset="1" stop-color="#13936A"/>
+    <linearGradient id="mint" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#46D6A5"/>
+      <stop offset="1" stop-color="#118764"/>
     </linearGradient>
-    <filter id="shadow" x="118" y="70" width="1040" height="580" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+    <linearGradient id="slate" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#334A6C"/>
+      <stop offset="1" stop-color="#1D2940"/>
+    </linearGradient>
+    <filter id="panelShadow" x="106" y="74" width="1068" height="574" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
       <feFlood flood-opacity="0" result="BackgroundImageFix"/>
       <feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/>
-      <feOffset dy="16"/>
+      <feOffset dy="18"/>
       <feGaussianBlur stdDeviation="24"/>
-      <feColorMatrix type="matrix" values="0 0 0 0 0.145098 0 0 0 0 0.219608 0 0 0 0 0.415686 0 0 0 0.12 0"/>
+      <feColorMatrix type="matrix" values="0 0 0 0 0.105882 0 0 0 0 0.14902 0 0 0 0 0.298039 0 0 0 0.14 0"/>
       <feBlend mode="normal" in2="BackgroundImageFix" result="effect1_dropShadow_hero"/>
       <feBlend mode="normal" in="SourceGraphic" in2="effect1_dropShadow_hero" result="shape"/>
     </filter>
-    <filter id="softGlow" x="0" y="0" width="1280" height="720" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+    <filter id="glow" x="0" y="0" width="1280" height="720" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
       <feFlood flood-opacity="0" result="BackgroundImageFix"/>
       <feBlend mode="normal" in="SourceGraphic" in2="BackgroundImageFix" result="shape"/>
-      <feGaussianBlur stdDeviation="40" result="effect1_foregroundBlur"/>
+      <feGaussianBlur stdDeviation="46" result="effect1_foregroundBlur"/>
     </filter>
   </defs>
 
   <rect width="1280" height="720" rx="28" fill="url(#bg)"/>
 
-  <!-- 背景氛围形状 -->
-  <g filter="url(#softGlow)" opacity="0.55">
-    <circle cx="1092" cy="112" r="96" fill="#7CC6FF"/>
-    <circle cx="199" cy="128" r="88" fill="#FFD08D"/>
-    <circle cx="1114" cy="594" r="112" fill="#8DE8BF"/>
+  <!-- 背景发光团块，用来制造更强的产品海报氛围 -->
+  <g filter="url(#glow)" opacity="0.48">
+    <circle cx="206" cy="124" r="96" fill="#FFC97A"/>
+    <circle cx="1096" cy="122" r="102" fill="#8EC9FF"/>
+    <circle cx="1096" cy="592" r="118" fill="#89E3BB"/>
   </g>
 
-  <!-- 主展示面板 -->
-  <g filter="url(#shadow)">
-    <rect x="166" y="110" width="948" height="492" rx="34" fill="url(#panel)"/>
-    <rect x="166" y="110" width="948" height="492" rx="34" stroke="#D9E4FF" stroke-width="1.5"/>
+  <!-- 主展示框 -->
+  <g filter="url(#panelShadow)">
+    <rect x="144" y="102" width="992" height="506" rx="36" fill="url(#frame)"/>
+    <rect x="144" y="102" width="992" height="506" rx="36" stroke="#D9E6FA" stroke-width="1.5"/>
   </g>
 
-  <!-- 左侧标题区 -->
+  <!-- 左侧文案区 -->
   <g>
-    <rect x="220" y="160" width="154" height="40" rx="20" fill="#E7F0FF"/>
-    <text x="250" y="186" fill="#1C4ED8" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="20" font-weight="700">AI Accounting Agent</text>
+    <rect x="206" y="156" width="196" height="40" rx="20" fill="#E7EFFD"/>
+    <text x="234" y="183" fill="#1845C7" font-family="Sora, PingFang SC, Microsoft YaHei, sans-serif" font-size="19" font-weight="700">DEERFLOW-NATIVE</text>
 
-    <text x="220" y="270" fill="#17233A" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="64" font-weight="800">智能财务部门</text>
-    <text x="220" y="326" fill="#35507A" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="28" font-weight="600">Function Calling + Skills + 小企业账务引擎</text>
+    <text x="206" y="266" fill="#16243A" font-family="Sora, PingFang SC, Microsoft YaHei, sans-serif" font-size="66" font-weight="800">智能财务部门</text>
+    <text x="206" y="322" fill="#32527B" font-family="Sora, PingFang SC, Microsoft YaHei, sans-serif" font-size="28" font-weight="600">多角色协作 · 财务工具链 · 多模型底座</text>
+    <text x="206" y="386" fill="#4F647E" font-family="IBM Plex Sans, PingFang SC, Microsoft YaHei, sans-serif" font-size="24" font-weight="500">用 DeerFlow runtime 驱动协调、记账、出纳、税务与审核，</text>
+    <text x="206" y="420" fill="#4F647E" font-family="IBM Plex Sans, PingFang SC, Microsoft YaHei, sans-serif" font-size="24" font-weight="500">把自然语言业务收口成凭证、报表、规则答复与可追踪协作。</text>
 
-    <text x="220" y="390" fill="#4A5E7A" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="24" font-weight="500">把自然语言业务变成真实凭证、税额、审核结果与长期记忆。</text>
-
-    <!-- 功能标签 -->
+    <!-- 宣传标签 -->
     <g>
-      <rect x="220" y="440" width="144" height="44" rx="22" fill="#F3F7FF"/>
-      <text x="251" y="469" fill="#2959CF" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="20" font-weight="700">复式记账</text>
+      <rect x="206" y="460" width="164" height="46" rx="23" fill="#F3F7FF"/>
+      <text x="238" y="490" fill="#2558CB" font-family="Sora, PingFang SC, Microsoft YaHei, sans-serif" font-size="20" font-weight="700">Role Agents</text>
 
-      <rect x="379" y="440" width="130" height="44" rx="22" fill="#FFF3E8"/>
-      <text x="412" y="469" fill="#D86C16" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="20" font-weight="700">税务计算</text>
+      <rect x="386" y="460" width="150" height="46" rx="23" fill="#FFF5EA"/>
+      <text x="420" y="490" fill="#D87418" font-family="Sora, PingFang SC, Microsoft YaHei, sans-serif" font-size="20" font-weight="700">Finance Tools</text>
 
-      <rect x="524" y="440" width="130" height="44" rx="22" fill="#ECFFF5"/>
-      <text x="557" y="469" fill="#0E8B61" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="20" font-weight="700">长期记忆</text>
+      <rect x="552" y="460" width="164" height="46" rx="23" fill="#ECFFF5"/>
+      <text x="585" y="490" fill="#11865E" font-family="Sora, PingFang SC, Microsoft YaHei, sans-serif" font-size="20" font-weight="700">Native Memory</text>
     </g>
 
-    <!-- 流程线 -->
-    <g opacity="0.92">
-      <rect x="220" y="522" width="115" height="58" rx="18" fill="#FFFFFF" stroke="#D8E4FF" stroke-width="1.5"/>
-      <text x="247" y="558" fill="#244672" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="20" font-weight="700">用户输入</text>
+    <!-- 底部流程带 -->
+    <g opacity="0.96">
+      <rect x="206" y="534" width="132" height="62" rx="19" fill="#FFFFFF" stroke="#D6E3F8" stroke-width="1.5"/>
+      <text x="234" y="562" fill="#5A708B" font-family="IBM Plex Sans, PingFang SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="700">INPUT</text>
+      <text x="224" y="585" fill="#203A5D" font-family="Sora, PingFang SC, Microsoft YaHei, sans-serif" font-size="20" font-weight="700">自然语言业务</text>
 
-      <path d="M345 551H395" stroke="#A4BCE8" stroke-width="4" stroke-linecap="round" stroke-dasharray="8 10"/>
+      <path d="M350 565H400" stroke="#A4BADF" stroke-width="4" stroke-linecap="round" stroke-dasharray="8 10"/>
 
-      <rect x="395" y="522" width="150" height="58" rx="18" fill="#FFFFFF" stroke="#D8E4FF" stroke-width="1.5"/>
-      <text x="423" y="558" fill="#244672" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="20" font-weight="700">Tool Runtime</text>
+      <rect x="400" y="534" width="166" height="62" rx="19" fill="#FFFFFF" stroke="#D6E3F8" stroke-width="1.5"/>
+      <text x="427" y="562" fill="#5A708B" font-family="IBM Plex Sans, PingFang SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="700">COORDINATION</text>
+      <text x="430" y="585" fill="#203A5D" font-family="Sora, PingFang SC, Microsoft YaHei, sans-serif" font-size="20" font-weight="700">角色协作与分派</text>
 
-      <path d="M555 551H605" stroke="#A4BCE8" stroke-width="4" stroke-linecap="round" stroke-dasharray="8 10"/>
+      <path d="M578 565H628" stroke="#A4BADF" stroke-width="4" stroke-linecap="round" stroke-dasharray="8 10"/>
 
-      <rect x="605" y="522" width="160" height="58" rx="18" fill="#FFFFFF" stroke="#D8E4FF" stroke-width="1.5"/>
-      <text x="634" y="558" fill="#244672" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="20" font-weight="700">凭证 / 税务 / 记忆</text>
+      <rect x="628" y="534" width="200" height="62" rx="19" fill="#FFFFFF" stroke="#D6E3F8" stroke-width="1.5"/>
+      <text x="660" y="562" fill="#5A708B" font-family="IBM Plex Sans, PingFang SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="700">OUTPUT</text>
+      <text x="655" y="585" fill="#203A5D" font-family="Sora, PingFang SC, Microsoft YaHei, sans-serif" font-size="20" font-weight="700">凭证 / 报表 / 审核</text>
     </g>
   </g>
 
-  <!-- 右侧产品插画区 -->
+  <!-- 右侧系统插画区 -->
   <g>
-    <!-- AI 节点 -->
-    <rect x="818" y="170" width="238" height="110" rx="28" fill="url(#accentBlue)"/>
-    <circle cx="868" cy="225" r="24" fill="#FFFFFF" fill-opacity="0.18"/>
-    <circle cx="1006" cy="225" r="24" fill="#FFFFFF" fill-opacity="0.18"/>
-    <circle cx="937" cy="205" r="14" fill="#FFFFFF"/>
-    <circle cx="892" cy="233" r="10" fill="#FFFFFF"/>
-    <circle cx="983" cy="233" r="10" fill="#FFFFFF"/>
-    <path d="M902 229L927 211" stroke="#FFFFFF" stroke-width="4" stroke-linecap="round"/>
-    <path d="M973 229L947 211" stroke="#FFFFFF" stroke-width="4" stroke-linecap="round"/>
-    <path d="M902 238H973" stroke="#FFFFFF" stroke-width="4" stroke-linecap="round"/>
-    <text x="842" y="266" fill="#FFFFFF" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="24" font-weight="700">Native Function Calling</text>
-
-    <!-- 凭证卡 -->
-    <rect x="774" y="318" width="172" height="196" rx="24" fill="#FFFFFF" stroke="#DCE6FA" stroke-width="1.5"/>
-    <rect x="800" y="346" width="84" height="18" rx="9" fill="#E7F0FF"/>
-    <rect x="894" y="346" width="26" height="18" rx="9" fill="#EAFBF1"/>
-    <text x="806" y="360" fill="#30589A" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="12" font-weight="700">JV-20240301-0001</text>
-    <text x="899" y="360" fill="#0C8D61" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="11" font-weight="700">OK</text>
-    <text x="800" y="394" fill="#1C2E4A" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="21" font-weight="700">报销差旅费</text>
-    <text x="800" y="424" fill="#59708C" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="15" font-weight="600">2024-03-01</text>
-    <rect x="800" y="446" width="120" height="14" rx="7" fill="#F0F4FB"/>
-    <rect x="800" y="474" width="88" height="14" rx="7" fill="#F0F4FB"/>
-    <rect x="800" y="508" width="120" height="34" rx="17" fill="#ECFFF5"/>
-    <text x="829" y="531" fill="#0E8B61" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="16" font-weight="700">借贷平衡</text>
-
-    <!-- 税务卡 -->
-    <rect x="966" y="318" width="124" height="154" rx="24" fill="#FFF8EF" stroke="#FFD7AA" stroke-width="1.5"/>
-    <circle cx="1028" cy="364" r="28" fill="url(#accentOrange)"/>
-    <text x="1010" y="372" fill="#FFFFFF" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="22" font-weight="800">¥</text>
-    <text x="993" y="420" fill="#A75810" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="17" font-weight="700">税额计算</text>
-    <text x="995" y="447" fill="#D86C16" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="28" font-weight="800">100.00</text>
-
-    <!-- 记忆卡 -->
-    <rect x="966" y="488" width="124" height="104" rx="24" fill="#F0FFF7" stroke="#BCEAD2" stroke-width="1.5"/>
-    <rect x="992" y="512" width="72" height="16" rx="8" fill="#D7F7E7"/>
-    <rect x="992" y="537" width="54" height="12" rx="6" fill="#E3FBF0"/>
-    <rect x="992" y="558" width="78" height="12" rx="6" fill="#E3FBF0"/>
-    <text x="999" y="584" fill="#13855F" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="16" font-weight="700">记住偏好</text>
+    <!-- DeerFlow 中枢 -->
+    <circle cx="890" cy="324" r="106" fill="#F6F9FF" stroke="#D6E2F7" stroke-width="2"/>
+    <circle cx="890" cy="324" r="76" fill="url(#navy)"/>
+    <text x="840" y="312" fill="#DCE8FF" font-family="IBM Plex Sans, PingFang SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="700">RUNTIME</text>
+    <text x="832" y="344" fill="#FFFFFF" font-family="Sora, PingFang SC, Microsoft YaHei, sans-serif" font-size="24" font-weight="800">DeerFlow</text>
 
     <!-- 连接线 -->
-    <path d="M936 280V314" stroke="#99B6EA" stroke-width="4" stroke-linecap="round"/>
-    <path d="M936 514V566H966" stroke="#99B6EA" stroke-width="4" stroke-linecap="round"/>
-    <path d="M946 396H966" stroke="#99B6EA" stroke-width="4" stroke-linecap="round"/>
+    <path d="M890 218V170" stroke="#9FB6DD" stroke-width="4" stroke-linecap="round"/>
+    <path d="M810 273L760 246" stroke="#9FB6DD" stroke-width="4" stroke-linecap="round"/>
+    <path d="M970 273L1024 246" stroke="#9FB6DD" stroke-width="4" stroke-linecap="round"/>
+    <path d="M812 378L758 412" stroke="#9FB6DD" stroke-width="4" stroke-linecap="round"/>
+    <path d="M968 378L1024 412" stroke="#9FB6DD" stroke-width="4" stroke-linecap="round"/>
+
+    <!-- 角色卡：协调 -->
+    <rect x="816" y="118" width="148" height="52" rx="18" fill="#FFFFFF" stroke="#D6E2F7" stroke-width="1.5"/>
+    <circle cx="842" cy="144" r="11" fill="url(#navy)"/>
+    <text x="862" y="139" fill="#58708F" font-family="IBM Plex Sans, PingFang SC, Microsoft YaHei, sans-serif" font-size="12" font-weight="700">COORDINATOR</text>
+    <text x="862" y="156" fill="#1D3658" font-family="Sora, PingFang SC, Microsoft YaHei, sans-serif" font-size="16" font-weight="700">协调角色</text>
+
+    <!-- 角色卡：记账 -->
+    <rect x="638" y="214" width="156" height="56" rx="18" fill="#FFFFFF" stroke="#D6E2F7" stroke-width="1.5"/>
+    <circle cx="666" cy="242" r="11" fill="url(#amber)"/>
+    <text x="686" y="236" fill="#7B5B36" font-family="IBM Plex Sans, PingFang SC, Microsoft YaHei, sans-serif" font-size="12" font-weight="700">BOOKKEEPING</text>
+    <text x="686" y="255" fill="#1D3658" font-family="Sora, PingFang SC, Microsoft YaHei, sans-serif" font-size="16" font-weight="700">凭证与账务</text>
+
+    <!-- 角色卡：出纳 -->
+    <rect x="1018" y="214" width="132" height="56" rx="18" fill="#FFFFFF" stroke="#D6E2F7" stroke-width="1.5"/>
+    <circle cx="1044" cy="242" r="11" fill="url(#mint)"/>
+    <text x="1064" y="236" fill="#427660" font-family="IBM Plex Sans, PingFang SC, Microsoft YaHei, sans-serif" font-size="12" font-weight="700">CASHIER</text>
+    <text x="1064" y="255" fill="#1D3658" font-family="Sora, PingFang SC, Microsoft YaHei, sans-serif" font-size="16" font-weight="700">资金事实</text>
+
+    <!-- 角色卡：税务 -->
+    <rect x="634" y="388" width="150" height="56" rx="18" fill="#FFFFFF" stroke="#D6E2F7" stroke-width="1.5"/>
+    <circle cx="662" cy="416" r="11" fill="url(#slate)"/>
+    <text x="682" y="410" fill="#5F6F82" font-family="IBM Plex Sans, PingFang SC, Microsoft YaHei, sans-serif" font-size="12" font-weight="700">TAX</text>
+    <text x="682" y="429" fill="#1D3658" font-family="Sora, PingFang SC, Microsoft YaHei, sans-serif" font-size="16" font-weight="700">税额与口径</text>
+
+    <!-- 角色卡：审核 -->
+    <rect x="1014" y="388" width="142" height="56" rx="18" fill="#FFFFFF" stroke="#D6E2F7" stroke-width="1.5"/>
+    <circle cx="1040" cy="416" r="11" fill="#E85C5C"/>
+    <text x="1060" y="410" fill="#896060" font-family="IBM Plex Sans, PingFang SC, Microsoft YaHei, sans-serif" font-size="12" font-weight="700">AUDIT</text>
+    <text x="1060" y="429" fill="#1D3658" font-family="Sora, PingFang SC, Microsoft YaHei, sans-serif" font-size="16" font-weight="700">风险审查</text>
+
+    <!-- 模型底座卡 -->
+    <rect x="742" y="466" width="218" height="106" rx="24" fill="#FFFFFF" stroke="#D6E2F7" stroke-width="1.5"/>
+    <text x="770" y="500" fill="#5A708B" font-family="IBM Plex Sans, PingFang SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="700">MODEL POOL</text>
+    <rect x="770" y="514" width="74" height="28" rx="14" fill="#EFF4FF"/>
+    <text x="787" y="533" fill="#2558CB" font-family="Sora, PingFang SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="700">MiniMax</text>
+    <rect x="852" y="514" width="78" height="28" rx="14" fill="#F6F0FF"/>
+    <text x="871" y="533" fill="#6C4DB8" font-family="Sora, PingFang SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="700">DeepSeek</text>
+    <rect x="770" y="548" width="72" height="28" rx="14" fill="#EDFDF6"/>
+    <text x="791" y="567" fill="#13885F" font-family="Sora, PingFang SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="700">OpenAI</text>
+    <text x="858" y="566" fill="#526985" font-family="IBM Plex Sans, PingFang SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="600">统一配置 · 角色可扩展</text>
+
+    <!-- 财务成果卡 -->
+    <rect x="980" y="474" width="144" height="118" rx="24" fill="#FFF9F1" stroke="#F1D7AF" stroke-width="1.5"/>
+    <text x="1008" y="507" fill="#8C6837" font-family="IBM Plex Sans, PingFang SC, Microsoft YaHei, sans-serif" font-size="14" font-weight="700">OUTPUTS</text>
+    <rect x="1008" y="520" width="88" height="12" rx="6" fill="#FFE0B3"/>
+    <rect x="1008" y="542" width="70" height="12" rx="6" fill="#FFE0B3"/>
+    <rect x="1008" y="564" width="92" height="12" rx="6" fill="#FFE0B3"/>
+    <text x="1008" y="589" fill="#A26A1C" font-family="Sora, PingFang SC, Microsoft YaHei, sans-serif" font-size="17" font-weight="700">凭证 · 报表 · 规则</text>
   </g>
 
-  <!-- 底部小字 -->
-  <text x="876" y="640" fill="#62809D" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="18" font-weight="600">会计凭证 · 税务计算 · 审核规则 · 记忆检索</text>
+  <!-- 底部宣传语 -->
+  <text x="742" y="640" fill="#627F9B" font-family="IBM Plex Sans, PingFang SC, Microsoft YaHei, sans-serif" font-size="18" font-weight="600">协调、记账、出纳、税务、审核在同一 DeerFlow 底座上协同工作</text>
 </svg>

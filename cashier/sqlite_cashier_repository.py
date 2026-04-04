@@ -7,9 +7,9 @@ from cashier.cash_transaction import CashTransaction
 from cashier.cashier_repository import CashierRepository
 from cashier.query_cash_transactions_query import QueryCashTransactionsQuery
 from cashier.record_cash_transaction_command import RecordCashTransactionCommand
+from configuration.defaults import DEFAULT_CASHIER_DB
 
 
-DEFAULT_CASHIER_DB = "data/ledger.db"
 CREATE_CASH_TRANSACTION_TABLE_SQL = """
 CREATE TABLE IF NOT EXISTS cash_transaction (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

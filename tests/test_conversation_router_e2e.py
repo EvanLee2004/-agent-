@@ -5,6 +5,7 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import yaml
 
@@ -26,7 +27,9 @@ from cashier.query_cash_transactions_tool import query_cash_transactions_tool
 from cashier.record_cash_transaction_router import RecordCashTransactionRouter
 from cashier.record_cash_transaction_tool import record_cash_transaction_tool
 from cashier.sqlite_cashier_repository import SQLiteCashierRepository
+from configuration.deerflow_runtime_configuration import DeerFlowRuntimeConfiguration
 from configuration.llm_configuration import LlmConfiguration
+from configuration.llm_model_profile import LlmModelProfile
 from conversation.conversation_request import ConversationRequest
 from conversation.conversation_router import ConversationRouter
 from conversation.conversation_service import ConversationService
@@ -136,6 +139,37 @@ class ConversationRouterEndToEndTest(unittest.TestCase):
         """重置全局上下文，避免跨测试污染。"""
         FinanceDepartmentToolContextRegistry.reset()
 
+    def _build_single_model_configuration(
+        self,
+        *,
+        profile_name: str = "minimax-main",
+        provider_name: str = "minimax",
+        model_name: str = "MiniMax-M2.7",
+        base_url: str = "https://api.minimaxi.com/v1",
+        api_key_env: str = "MINIMAX_API_KEY",
+        api_key: str = "test-key",
+        runtime_configuration: DeerFlowRuntimeConfiguration | None = None,
+    ) -> LlmConfiguration:
+        """构造测试使用的单模型配置。
+
+        现在项目已经不再支持旧单模型入参，因此测试里统一通过模型池结构构造配置。
+        这样既能覆盖当前真实代码路径，也能避免测试继续帮历史兼容分支“续命”。
+        """
+        return LlmConfiguration(
+            models=(
+                LlmModelProfile(
+                    name=profile_name,
+                    provider_name=provider_name,
+                    model_name=model_name,
+                    base_url=base_url,
+                    api_key_env=api_key_env,
+                    api_key=api_key,
+                ),
+            ),
+            default_model_name=profile_name,
+            runtime_configuration=runtime_configuration,
+        )
+
     def test_runtime_assets_service_writes_minimal_deerflow_files(self):
         """验证 DeerFlow 运行时资产文件可生成且结构正确。"""
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -143,10 +177,29 @@ class ConversationRouterEndToEndTest(unittest.TestCase):
             skills_root = Path(temp_dir) / "skills"
             skills_root.mkdir(parents=True, exist_ok=True)
             configuration = LlmConfiguration(
-                provider_name="minimax",
-                model_name="MiniMax-M2.7",
-                base_url="https://api.minimaxi.com/v1",
-                api_key="test-key",
+                models=(
+                    LlmModelProfile(
+                        name="minimax-main",
+                        provider_name="minimax",
+                        model_name="MiniMax-M2.7",
+                        base_url="https://api.minimaxi.com/v1",
+                        api_key_env="MINIMAX_API_KEY",
+                        api_key="minimax-key",
+                    ),
+                    LlmModelProfile(
+                        name="deepseek-research",
+                        provider_name="deepseek",
+                        model_name="deepseek-reasoner",
+                        base_url="https://api.deepseek.com/v1",
+                        api_key_env="DEEPSEEK_API_KEY",
+                        api_key="deepseek-key",
+                    ),
+                ),
+                default_model_name="deepseek-research",
+                runtime_configuration=DeerFlowRuntimeConfiguration(
+                    tool_search_enabled=True,
+                    sandbox_allow_host_bash=True,
+                ),
             )
             assets = DeerFlowRuntimeAssetsService(
                 FinanceDepartmentAgentAssetsService(FinanceDepartmentRoleCatalog()),
@@ -157,16 +210,90 @@ class ConversationRouterEndToEndTest(unittest.TestCase):
             config_data = yaml.safe_load(assets.config_path.read_text(encoding="utf-8"))
             extensions_data = json.loads(assets.extensions_config_path.read_text(encoding="utf-8"))
 
-            self.assertEqual(config_data["models"][0]["model"], "MiniMax-M2.7")
-            self.assertEqual(config_data["tools"][0]["name"], "collaborate_with_department_role")
+            self.assertEqual(config_data["models"][0]["name"], "deepseek-research")
+            self.assertEqual(config_data["models"][1]["name"], "minimax-main")
             self.assertEqual(config_data["skills"]["path"], str(skills_root.resolve()))
+            self.assertEqual(config_data["tool_search"]["enabled"], True)
+            self.assertEqual(config_data["sandbox"]["allow_host_bash"], True)
+            self.assertTrue(
+                {
+                    "web",
+                    "file:read",
+                    "file:write",
+                    "bash",
+                    "finance",
+                }.issubset({item["name"] for item in config_data["tool_groups"]})
+            )
+            self.assertTrue(
+                {
+                    "web_search",
+                    "web_fetch",
+                    "image_search",
+                    "ls",
+                    "read_file",
+                    "write_file",
+                    "str_replace",
+                    "bash",
+                    "collaborate_with_department_role",
+                }.issubset({item["name"] for item in config_data["tools"]})
+            )
             self.assertEqual(extensions_data["skills"]["finance-core"]["enabled"], True)
             self.assertEqual(extensions_data["skills"]["cashier"]["enabled"], True)
             self.assertEqual(assets.runtime_home, (runtime_root / "home").resolve())
+            self.assertEqual(
+                assets.environment_variables,
+                {
+                    "MINIMAX_API_KEY": "minimax-key",
+                    "DEEPSEEK_API_KEY": "deepseek-key",
+                },
+            )
             coordinator_config = runtime_root / "home" / "agents" / "finance-coordinator" / "config.yaml"
             cashier_config = runtime_root / "home" / "agents" / "finance-cashier" / "config.yaml"
             self.assertTrue(coordinator_config.exists())
             self.assertTrue(cashier_config.exists())
+
+    def test_deerflow_client_factory_uses_runtime_configuration(self):
+        """验证 DeerFlowClient 工厂会透传运行时开关与环境变量。"""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            runtime_root = Path(temp_dir) / "runtime"
+            skills_root = Path(temp_dir) / "skills"
+            skills_root.mkdir(parents=True, exist_ok=True)
+            runtime_configuration = DeerFlowRuntimeConfiguration(
+                thinking_enabled=False,
+                subagent_enabled=True,
+                plan_mode=True,
+            )
+            assets = DeerFlowRuntimeAssetsService(
+                FinanceDepartmentAgentAssetsService(FinanceDepartmentRoleCatalog()),
+                runtime_root=runtime_root,
+                skills_root=skills_root,
+            ).prepare_assets(
+                LlmConfiguration(
+                    models=(
+                        LlmModelProfile(
+                            name="openai-main",
+                            provider_name="openai",
+                            model_name="gpt-4.1-mini",
+                            base_url="https://api.openai.com/v1",
+                            api_key_env="OPENAI_API_KEY",
+                            api_key="openai-test-key",
+                        ),
+                    ),
+                    default_model_name="openai-main",
+                    runtime_configuration=runtime_configuration,
+                )
+            )
+
+            with patch("deerflow.client.DeerFlowClient") as deerflow_client_class:
+                DeerFlowClientFactory().create_client(assets, "finance-coordinator")
+
+            deerflow_client_class.assert_called_once()
+            _, keyword_arguments = deerflow_client_class.call_args
+            self.assertEqual(keyword_arguments["thinking_enabled"], False)
+            self.assertEqual(keyword_arguments["subagent_enabled"], True)
+            self.assertEqual(keyword_arguments["plan_mode"], True)
+            self.assertEqual(keyword_arguments["agent_name"], "finance-coordinator")
+            self.assertEqual(os.environ["OPENAI_API_KEY"], "openai-test-key")
 
     def test_deerflow_memory_enabled_in_generated_config(self):
         """验证生成的 DeerFlow 配置启用了原生记忆机制，且关键参数符合预期。"""
@@ -174,12 +301,7 @@ class ConversationRouterEndToEndTest(unittest.TestCase):
             runtime_root = Path(temp_dir) / "runtime"
             skills_root = Path(temp_dir) / "skills"
             skills_root.mkdir(parents=True, exist_ok=True)
-            configuration = LlmConfiguration(
-                provider_name="minimax",
-                model_name="MiniMax-M2.7",
-                base_url="https://api.minimaxi.com/v1",
-                api_key="test-key",
-            )
+            configuration = self._build_single_model_configuration()
             assets = DeerFlowRuntimeAssetsService(
                 FinanceDepartmentAgentAssetsService(FinanceDepartmentRoleCatalog()),
                 runtime_root=runtime_root,
@@ -197,12 +319,7 @@ class ConversationRouterEndToEndTest(unittest.TestCase):
 
     def test_deerflow_public_client_can_read_generated_skills(self):
         """验证公开 DeerFlowClient 能读取当前部门全部 skill。"""
-        configuration = LlmConfiguration(
-            provider_name="minimax",
-            model_name="MiniMax-M2.7",
-            base_url="https://api.minimaxi.com/v1",
-            api_key="test-key",
-        )
+        configuration = self._build_single_model_configuration()
         assets = DeerFlowRuntimeAssetsService(
             FinanceDepartmentAgentAssetsService(FinanceDepartmentRoleCatalog())
         ).prepare_assets(configuration)
@@ -228,12 +345,7 @@ class ConversationRouterEndToEndTest(unittest.TestCase):
         """验证 DeerFlow 能从配置中加载全部财务工具。"""
         with tempfile.TemporaryDirectory() as temp_dir:
             self._register_finance_tool_context(Path(temp_dir))
-            configuration = LlmConfiguration(
-                provider_name="minimax",
-                model_name="MiniMax-M2.7",
-                base_url="https://api.minimaxi.com/v1",
-                api_key="test-key",
-            )
+            configuration = self._build_single_model_configuration()
             assets = DeerFlowRuntimeAssetsService(
                 FinanceDepartmentAgentAssetsService(FinanceDepartmentRoleCatalog())
             ).prepare_assets(configuration)
@@ -246,6 +358,13 @@ class ConversationRouterEndToEndTest(unittest.TestCase):
             # store_memory / search_memory 已移除，改由 DeerFlow 原生记忆接管。
             self.assertTrue(
                 {
+                    "web_search",
+                    "web_fetch",
+                    "image_search",
+                    "ls",
+                    "read_file",
+                    "write_file",
+                    "str_replace",
                     "collaborate_with_department_role",
                     "record_voucher",
                     "query_vouchers",
@@ -391,12 +510,7 @@ class ConversationRouterEndToEndTest(unittest.TestCase):
             skills_root = Path(temp_dir) / "skills"
             skills_root.mkdir(parents=True, exist_ok=True)
             repository = DeerFlowDepartmentRoleRuntimeRepository(
-                configuration=LlmConfiguration(
-                    provider_name="minimax",
-                    model_name="MiniMax-M2.7",
-                    base_url="https://api.minimaxi.com/v1",
-                    api_key="test-key",
-                ),
+                configuration=self._build_single_model_configuration(),
                 runtime_assets_service=DeerFlowRuntimeAssetsService(
                     runtime_root=runtime_root,
                     skills_root=skills_root,

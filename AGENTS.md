@@ -8,9 +8,10 @@
 这一阶段的真实目标是：
 
 - 用 **DeerFlow public client** 作为底层 agent runtime
-- 用本项目自己的财务业务代码承载记账、查账、审核、税务测算和记忆
+- 用本项目自己的财务业务代码承载记账、查账、审核与税务测算
 - 把“智能财务部门”的角色目录、角色资产和工具边界收口到正式结构
 - 只依赖 DeerFlow 的公开嵌入入口，不把业务代码绑到内部实现
+- 配置结构尽量与 DeerFlow 官方 `config.yaml` 保持同构，尤其是 `models:` 和 runtime 开关
 
 ## 最重要的规则
 
@@ -35,6 +36,7 @@
 
 5. **业务逻辑优先**
    - 通用 orchestration 交给 DeerFlow
+   - 运行时记忆交给 DeerFlow native memory
    - 财务业务规则必须留在本项目：
      - 凭证
      - 分录
@@ -77,7 +79,7 @@ Feature Routers
   ↓
 Feature Services
   ↓
-Repositories + SQLite / Markdown Memory
+Repositories + SQLite 业务存储 + DeerFlow Native Memory / Checkpointer
 ```
 
 ## 当前目录结构
@@ -95,7 +97,6 @@ Repositories + SQLite / Markdown Memory
 ├── accounting/
 ├── audit/
 ├── tax/
-├── memory/
 ├── rules/
 ├── configuration/
 ├── .agent_assets/
@@ -115,7 +116,7 @@ python main.py
 
 ### 配置 API Key
 ```bash
-echo "LLM_API_KEY=your_key" > .env
+echo "MINIMAX_API_KEY=your_key" > .env
 ```
 
 ### 运行测试
@@ -168,9 +169,18 @@ echo "LLM_API_KEY=your_key" > .env
 - `query_cash_transactions`
 - `calculate_tax`
 - `audit_voucher`
-- `store_memory`
-- `search_memory`
 - `reply_with_rules`
+
+### 当前 DeerFlow 基础工具组
+
+- `web_search`
+- `web_fetch`
+- `image_search`
+- `ls`
+- `read_file`
+- `write_file`
+- `str_replace`
+- `bash`
 
 ## 编码要求
 

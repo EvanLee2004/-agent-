@@ -1,5 +1,29 @@
 # CHANGELOG
 
+## 2026-04-04
+
+### DeerFlow 底层继续对齐
+
+- 新增 `DeerFlowRuntimeConfiguration`，把 `thinking_enabled`、`subagent_enabled`、`plan_mode`、`tool_search` 和 `sandbox` 参数从硬编码改为配置化
+- `DeerFlowClientFactory` 改为按统一配置透传 runtime 开关，不再把 client 行为写死
+- `DeerFlowRuntimeAssets` 与运行时资产服务新增 runtime 配置透传
+- `DeerFlowConfigDocumentFactory` 改为按统一配置生成 `tool_search` 与 `sandbox` 段
+
+### 多模型配置收口
+
+- 新增 `LlmModelProfile` 模型池结构
+- `LlmConfiguration` 升级为 DeerFlow 风格 `default_model + models[]`
+- `ConfigurationService` 支持旧单模型配置自动提升到新结构
+- `ConfigurationService` 支持多环境变量 API Key 与 DeerFlow runtime 段持久化
+- `config.json` 示例升级为 DeerFlow 风格结构
+
+### 测试与文档
+
+- 新增 `tests/test_configuration_service.py`
+- 扩展 DeerFlow E2E 测试，覆盖多模型顺序、环境变量注入和 runtime 开关透传
+- 更新 `README.md`、`AGENTS.md`，删除已失效的 `store_memory` / `search_memory` 说明
+- 明确当前运行时记忆由 DeerFlow native memory 负责，而不是项目自维护记忆工具
+
 ## 2026-04-03
 
 ### DeerFlow 底层接入

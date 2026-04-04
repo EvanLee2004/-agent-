@@ -1,5 +1,36 @@
 {
-  "provider": "minimax",
-  "model": "MiniMax-M2.7",
-  "base_url": "https://api.minimax.chat/v1"
+  "default_model": "minimax-main",
+  "models": [
+    {
+      "name": "minimax-main",
+      "provider": "minimax",
+      "model": "MiniMax-M2.7",
+      "base_url": "https://api.minimaxi.com/v1",
+      "api_key_env": "MINIMAX_API_KEY",
+      "display_name": "MiniMax M2.7",
+      "use": "langchain_openai:ChatOpenAI",
+      "supports_thinking": true,
+      "supports_vision": true,
+      "request_timeout": 600.0,
+      "max_retries": 2,
+      "max_tokens": 4096,
+      "temperature": 1.0
+    }
+  ],
+  "deerflow_runtime": {
+    "client": {
+      "thinking_enabled": true,
+      "subagent_enabled": false,
+      "plan_mode": false
+    },
+    "tool_search": {
+      "enabled": false
+    },
+    "sandbox": {
+      "use": "deerflow.sandbox.local:LocalSandboxProvider",
+      "allow_host_bash": false,
+      "bash_output_max_chars": 20000,
+      "read_file_output_max_chars": 50000
+    }
+  }
 }

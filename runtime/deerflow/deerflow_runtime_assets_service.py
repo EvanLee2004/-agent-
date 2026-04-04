@@ -89,5 +89,22 @@ class DeerFlowRuntimeAssetsService:
             runtime_home=runtime_home.resolve(),
             skills_path=self._skills_root.resolve(),
             available_skills=set(self._available_skills),
-            api_key=configuration.api_key,
+            environment_variables=self._build_runtime_environment_variables(configuration),
+            runtime_configuration=configuration.runtime_configuration,
         )
+
+    def _build_runtime_environment_variables(
+        self,
+        configuration: LlmConfiguration,
+    ) -> dict[str, str]:
+        """构造 DeerFlow 运行时所需的环境变量映射。
+
+        现在配置层已经支持多模型，因此运行时不能再只注入单个 `LLM_API_KEY`。
+        DeerFlow 会在解析每个模型条目时按 `api_key: $ENV_NAME` 读取环境变量，
+        所以这里必须把所有已启用模型对应的密钥都注入进去，才能保证任一模型被选中时
+        都能正常启动。
+        """
+        environment_variables: dict[str, str] = {}
+        for model in configuration.list_models():
+            environment_variables[model.api_key_env] = model.api_key
+        return environment_variables

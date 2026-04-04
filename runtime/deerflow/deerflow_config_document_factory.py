@@ -6,7 +6,21 @@ from typing import Any
 from configuration.llm_configuration import LlmConfiguration
 from runtime.deerflow.deerflow_model_document_factory import DeerFlowModelDocumentFactory
 from runtime.deerflow.deerflow_tool_catalog import DeerFlowToolCatalog
-from runtime.deerflow.deerflow_tool_spec import DEERFLOW_TOOL_GROUP_NAME
+
+
+def _build_tool_group_documents(tool_catalog: DeerFlowToolCatalog) -> list[dict[str, str]]:
+    """根据工具目录生成 tool group 文档。
+
+    DeerFlow 会先按 `tool_groups` 过滤 agent 可见的配置工具，再解析实际工具对象。
+    如果这里仍然只写单个 `finance` 组，即使后面把 `ls` / `read_file` / `web_search`
+    等基础工具加入了 `tools`，自定义角色也依然看不到它们。这里统一从工具目录反推
+    tool group，可避免“工具注册了但角色永远不可见”的隐蔽错配。
+    """
+    group_names: list[str] = []
+    for spec in tool_catalog.list_specs():
+        if spec.group not in group_names:
+            group_names.append(spec.group)
+    return [{"name": group_name} for group_name in group_names]
 
 
 class DeerFlowConfigDocumentFactory:
@@ -40,19 +54,20 @@ class DeerFlowConfigDocumentFactory:
         Returns:
             可直接序列化为 `config.yaml` 的配置字典。
         """
+        runtime_configuration = configuration.runtime_configuration
         return {
             "config_version": 5,
             "log_level": "info",
             "token_usage": {"enabled": False},
-            "models": [self._model_document_factory.build(configuration)],
-            "tool_groups": [{"name": DEERFLOW_TOOL_GROUP_NAME}],
+            "models": self._model_document_factory.build_documents(configuration),
+            "tool_groups": _build_tool_group_documents(self._tool_catalog),
             "tools": self._build_tool_documents(),
-            "tool_search": {"enabled": False},
+            "tool_search": {"enabled": runtime_configuration.tool_search_enabled},
             "sandbox": {
-                "use": "deerflow.sandbox.local:LocalSandboxProvider",
-                "allow_host_bash": False,
-                "bash_output_max_chars": 20000,
-                "read_file_output_max_chars": 50000,
+                "use": runtime_configuration.sandbox_use_path,
+                "allow_host_bash": runtime_configuration.sandbox_allow_host_bash,
+                "bash_output_max_chars": runtime_configuration.sandbox_bash_output_max_chars,
+                "read_file_output_max_chars": runtime_configuration.sandbox_read_file_output_max_chars,
             },
             "skills": {
                 "path": str(skills_root.resolve()),
@@ -85,7 +100,7 @@ class DeerFlowConfigDocumentFactory:
         return [
             {
                 "name": spec.name,
-                "group": DEERFLOW_TOOL_GROUP_NAME,
+                "group": spec.group,
                 "use": spec.use_path,
             }
             for spec in self._tool_catalog.list_specs()

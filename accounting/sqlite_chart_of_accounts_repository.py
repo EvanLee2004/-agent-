@@ -6,9 +6,7 @@ from typing import Optional
 
 from accounting.account_subject import AccountSubject
 from accounting.chart_of_accounts_repository import ChartOfAccountsRepository
-
-
-DEFAULT_ACCOUNTING_DB = "data/ledger.db"
+from configuration.defaults import DEFAULT_ACCOUNTING_DB
 
 
 def _build_subject_row(subject: AccountSubject) -> tuple[str, str, str, str, str]:

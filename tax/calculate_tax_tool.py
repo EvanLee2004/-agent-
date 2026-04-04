@@ -20,7 +20,11 @@ class CalculateTaxTool(BaseTool):
         amount: float = Field(..., description="计税金额")
         includes_tax: bool = Field(
             ...,
-            description="仅当用户明确说“含税”或“价税合计”时填 true；否则默认 false",
+            description="仅当用户明确说\"含税\"或\"价税合计\"时填 true；否则默认 false",
+        )
+        cost: float = Field(
+            default=0.0,
+            description="成本费用（仅企业所得税用），如收入100万成本60万则填600000",
         )
         description: str = Field(default="", description="业务场景说明，可选")
 
@@ -38,6 +42,7 @@ class CalculateTaxTool(BaseTool):
                 "taxpayer_type": payload.taxpayer_type,
                 "amount": payload.amount,
                 "includes_tax": payload.includes_tax,
+                "cost": payload.cost,
                 "description": payload.description,
             }
         )

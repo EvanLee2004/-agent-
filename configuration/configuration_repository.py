@@ -5,7 +5,12 @@ from typing import Optional
 
 
 class ConfigurationRepository(ABC):
-    """配置仓储接口。"""
+    """配置仓储接口。
+
+    模型配置与环境变量读取都统一经过这一层，目的是把“配置文件格式如何落盘”和
+    “环境变量如何读取/更新”从配置服务中剥离出去。这样后续无论切到别的持久化介质，
+    配置服务都只需要继续处理业务校验，不需要知道底层文件细节。
+    """
 
     @abstractmethod
     def load_config_data(self) -> Optional[dict]:
@@ -26,19 +31,23 @@ class ConfigurationRepository(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def load_api_key(self) -> str:
-        """读取 API 密钥。
+    def load_env_value(self, env_name: str) -> str:
+        """读取指定环境变量值。
+
+        Args:
+            env_name: 环境变量名。
 
         Returns:
-            已保存的 API 密钥；不存在时返回空字符串。
+            当前环境变量值；不存在时返回空字符串。
         """
         raise NotImplementedError
 
     @abstractmethod
-    def save_api_key(self, api_key: str) -> None:
-        """保存 API 密钥。
+    def save_env_value(self, env_name: str, env_value: str) -> None:
+        """保存指定环境变量值。
 
         Args:
-            api_key: 需要写入的 API 密钥。
+            env_name: 环境变量名。
+            env_value: 需要写入的环境变量值。
         """
         raise NotImplementedError

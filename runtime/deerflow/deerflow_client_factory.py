@@ -34,15 +34,20 @@ class DeerFlowClientFactory:
             # DeerFlow 当前版本会在多处重新解析配置和运行目录。
             # 这里显式注入环境变量，是为了把状态根目录锁进项目自身的
             # `.runtime/deerflow/`，避免线程状态和临时文件泄漏到用户主目录。
-            os.environ["LLM_API_KEY"] = assets.api_key
+            for env_name, env_value in assets.environment_variables.items():
+                os.environ[env_name] = env_value
             os.environ["DEER_FLOW_CONFIG_PATH"] = str(assets.config_path)
             os.environ["DEER_FLOW_EXTENSIONS_CONFIG_PATH"] = str(assets.extensions_config_path)
             os.environ["DEER_FLOW_HOME"] = str(assets.runtime_home)
+            runtime_configuration = assets.runtime_configuration
             return DeerFlowClient(
                 config_path=str(assets.config_path),
-                thinking_enabled=True,
-                subagent_enabled=False,
-                plan_mode=False,
+                # 这些开关必须来自统一配置对象，而不是在工厂里写死。
+                # 否则即使 `config.json` 已经声明启用 subagent / plan mode，
+                # 真实运行出来的 client 仍然会悄悄退回默认值。
+                thinking_enabled=runtime_configuration.thinking_enabled,
+                subagent_enabled=runtime_configuration.subagent_enabled,
+                plan_mode=runtime_configuration.plan_mode,
                 agent_name=agent_name,
                 available_skills=set(assets.available_skills),
             )

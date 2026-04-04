@@ -8,6 +8,7 @@ from audit.audit_request import AuditRequest
 from audit.audit_result import AuditResult
 from audit.audit_target import AuditTarget
 from audit.audit_voucher_command import AuditVoucherCommand
+from configuration.defaults import HIGH_AMOUNT_THRESHOLD, LOW_AMOUNT_THRESHOLD
 
 
 SEVERITY_ORDER = {
@@ -16,8 +17,6 @@ SEVERITY_ORDER = {
     "high": 3,
 }
 
-HIGH_AMOUNT_THRESHOLD = 50000.0
-LOW_AMOUNT_THRESHOLD = 10.0
 DUPLICATE_TOLERANCE = 0.01
 
 
@@ -168,9 +167,20 @@ class AuditService:
         return []
 
     def _has_duplicate_voucher(self, current_voucher, all_vouchers: list) -> bool:
-        """判断是否重复凭证。"""
+        """判断是否重复凭证。
+
+        判断逻辑：遍历所有凭证，对每个非自身的凭证，检查：
+        - 日期相同
+        - 摘要相同
+        - 金额相同（误差小于 DUPLICATE_TOLERANCE）
+
+        使用 == 而不是 != 来跳过自身：这是因为 all_vouchers 中可能包含
+        current_voucher 自身（当调用者传入的是 all_vouchers 的引用时），
+        或者数据源有重复记录。跳过自身可以避免误报。
+        """
         for voucher in all_vouchers:
             if voucher.voucher_id == current_voucher.voucher_id:
+                # 跳过自身，防止自身被标记为重复（当 all_vouchers 包含 current_voucher 时）
                 continue
             if voucher.voucher_date != current_voucher.voucher_date:
                 continue

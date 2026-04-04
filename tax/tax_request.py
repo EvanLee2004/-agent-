@@ -17,7 +17,6 @@ TAX_TYPE_ALIASES = {
 
 TAXPAYER_TYPE_ALIASES = {
     "small_scale_vat_taxpayer": "small_scale_vat_taxpayer",
-    "small_scale_vat_taxaxpayer": "small_scale_vat_taxpayer",
     "小规模纳税人": "small_scale_vat_taxpayer",
     "小规模增值税纳税人": "small_scale_vat_taxpayer",
     "small_low_profit_enterprise": "small_low_profit_enterprise",
@@ -33,6 +32,7 @@ class TaxRequest:
     taxpayer_type: TaxpayerType
     amount: float
     includes_tax: bool = False
+    cost: float = 0.0
     description: Optional[str] = None
 
     @classmethod
@@ -43,6 +43,7 @@ class TaxRequest:
             taxpayer_type=TaxpayerType(cls._normalize_taxpayer_type(data["taxpayer_type"])),
             amount=float(data["amount"]),
             includes_tax=bool(data.get("includes_tax", False)),
+            cost=float(data.get("cost", 0.0)),
             description=str(data.get("description", "")).strip() or None,
         )
         request.validate()
@@ -52,6 +53,10 @@ class TaxRequest:
         """校验税务请求。"""
         if self.amount <= 0:
             raise TaxError("税务计算金额必须为正数")
+        if self.cost < 0:
+            raise TaxError("成本不能为负数")
+        if self.cost > self.amount:
+            raise TaxError("成本不能大于收入")
 
     @staticmethod
     def _normalize_tax_type(value: object) -> str:

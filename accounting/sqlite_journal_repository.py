@@ -9,9 +9,9 @@ from accounting.journal_repository import JournalRepository
 from accounting.journal_voucher import JournalVoucher
 from accounting.query_vouchers_query import QueryVouchersQuery
 from accounting.record_voucher_command import RecordVoucherCommand
+from configuration.defaults import DEFAULT_ACCOUNTING_DB
 
 
-DEFAULT_ACCOUNTING_DB = "data/ledger.db"
 CREATE_VOUCHER_TABLE_SQL = """
 CREATE TABLE IF NOT EXISTS journal_voucher (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

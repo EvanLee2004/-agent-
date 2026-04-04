@@ -6,6 +6,7 @@ from pathlib import Path
 
 import yaml
 
+from department.finance_department_constants import DEERFLOW_BASE_TOOL_GROUP_NAMES
 from department.finance_department_agent_assets_service import FinanceDepartmentAgentAssetsService
 from department.finance_department_role_catalog import FinanceDepartmentRoleCatalog
 
@@ -55,4 +56,7 @@ class FinanceDepartmentAssetsServiceTest(unittest.TestCase):
                 (coordinator_directory / "config.yaml").read_text(encoding="utf-8")
             )
             self.assertEqual(coordinator_config["skills"], ["finance-core", "coordinator"])
-            self.assertEqual(coordinator_config["tool_groups"], ["finance"])
+            self.assertEqual(
+                coordinator_config["tool_groups"],
+                list(DEERFLOW_BASE_TOOL_GROUP_NAMES),
+            )

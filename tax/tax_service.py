@@ -108,9 +108,15 @@ class TaxService:
 
     def _calculate_small_low_profit_cit(self, request: TaxRequest) -> TaxComputationResult:
         """计算小型微利企业企业所得税。"""
-        taxable_base = round(request.amount, 2)
+        taxable_base = round(request.amount - request.cost, 2)
         payable_tax = round(taxable_base * SMALL_LOW_PROFIT_EFFECTIVE_CIT_RATE, 2)
-        formula = f"应纳税所得额 {taxable_base:.2f} x 25% x 20% = 应纳企业所得税 {payable_tax:.2f}"
+        if request.cost > 0:
+            formula = (
+                f"收入 {request.amount:.2f} - 成本费用 {request.cost:.2f} = "
+                f"应纳税所得额 {taxable_base:.2f} x 25% x 20% = 应纳企业所得税 {payable_tax:.2f}"
+            )
+        else:
+            formula = f"应纳税所得额 {taxable_base:.2f} x 25% x 20% = 应纳企业所得税 {payable_tax:.2f}"
         return TaxComputationResult(
             tax_type=request.tax_type,
             taxpayer_type=request.taxpayer_type,
@@ -120,7 +126,7 @@ class TaxService:
             formula=formula,
             policy_basis=_build_small_low_profit_cit_policy_basis(),
             notes=[
-                "当前计算把输入金额直接视为应纳税所得额。",
+                "当前结果已根据收入和成本费用计算应纳税所得额。",
                 "是否满足从业人数、资产总额等资格条件，需要结合企业实际情况人工确认。",
             ],
         )

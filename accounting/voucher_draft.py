@@ -5,10 +5,9 @@ from typing import Optional
 
 from accounting.accounting_error import AccountingError
 from accounting.voucher_line_draft import VoucherLineDraft
+from configuration.defaults import HIGH_AMOUNT_THRESHOLD, LOW_AMOUNT_THRESHOLD
 
 
-HIGH_AMOUNT_THRESHOLD = 50000.0
-LOW_AMOUNT_THRESHOLD = 10.0
 BALANCE_TOLERANCE = 0.01
 
 
