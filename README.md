@@ -47,6 +47,36 @@
 - 正式税务申报
 - API/Web 对外接口
 
+## DeerFlow 能力状态
+
+本节明确区分"刻意限制"和"尚未接入"的能力，避免给人"全能力等价 DeerFlow 官方"的错觉。
+
+### 刻意限制（配置中已关闭，等待业务场景成熟）
+
+| 能力 | 配置路径 | 当前值 | 原因 |
+|------|----------|--------|------|
+| `subagent_enabled` | `deerflow_runtime.client.subagent_enabled` | `false` | DeerFlow 原生 subagent 委派需要更复杂的多角色协同策略。当前财务部门协作协议由本项目自己维护（`department/collaboration/`），在业务策略成熟前不开启。 |
+| `plan_mode` | `deerflow_runtime.client.plan_mode` | `false` | Plan mode 会强制启用 TodoList 中间件，适用于结构化规划场景。当前财务对话以记账/审核/税务为主，无需此能力。 |
+| `tool_search` | `deerflow_runtime.tool_search.enabled` | `false` | 工具搜索允许模型自动从配置中发现和调用工具。当前财务工具集已由本项目明确注册，无需动态搜索。开启会增加延迟和不确定性。 |
+
+### 尚未接入（代码层面未连接）
+
+| 能力 | 状态 | 说明 |
+|------|------|------|
+| `MCP extensions` | 未配置 | `extensions_config.json` 中 `mcpServers` 为空。如需接入外部 MCP 服务（如飞书、云文档），需要在此配置。 |
+| `stream artifacts` | 已收集但未暴露 | `stream()` 返回的 `values` 事件中包含 `artifacts` 字段，当前仅拼接 AI 文本，未转发给前端。 |
+| `uploads` | 未使用 | `DeerFlowClient.upload_files()` 等接口未接入，如需支持文件上传场景（如上传发票图片），需要单独实现路由。 |
+| `checkpointer` 多实例隔离 | 同实例共享 | 当前所有角色共享同一个 SQLite checkpointer（`.runtime/deerflow/checkpoints.sqlite`）。API 并发场景下需要按请求/用户隔离。 |
+
+### 已正常接入的能力
+
+| 能力 | 说明 |
+|------|------|
+| `thinking_enabled` | 模型扩展思考能力，已启用 |
+| `memory` | DeerFlow 原生记忆，每轮对话后自动提取事实并注入下一轮 system prompt |
+| `stream()` | 正确使用 `stream()` 而非 `chat()`，保证多段 AI 输出完整拼接 |
+| `reset_agent()` | 每次 `reply()` 前调用，确保 memory/skills 上下文刷新 |
+
 ## 当前架构
 
 ```text

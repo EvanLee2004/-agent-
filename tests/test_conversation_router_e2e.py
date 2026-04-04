@@ -84,11 +84,47 @@ from tax.tax_service import TaxService
 
 
 class FakeDeerFlowClient:
-    """用于验证 DeerFlow 角色仓储的测试替身。"""
+    """用于验证 DeerFlow 角色仓储的测试替身。
+
+    支持 stream() 方式和 chat() 方式调用，以适配改进后的仓储实现。
+    """
 
     def __init__(self, reply_text: str):
         self._reply_text = reply_text
         self.calls: list[tuple[str, str | None]] = []
+        self.reset_agent_calls: int = 0
+
+    def reset_agent(self) -> None:
+        """记录 reset_agent 调用。"""
+        self.reset_agent_calls += 1
+
+    def stream(self, message: str, *, thread_id: str | None = None):
+        """模拟 stream() 返回多段 AI 文本事件。"""
+        from collections.abc import Generator
+        from dataclasses import dataclass
+
+        @dataclass
+        class FakeStreamEvent:
+            type: str
+            data: dict
+
+        self.calls.append((message, thread_id))
+        # 模拟 DeerFlow stream() 产生多个 AI 文本段
+        # 第一段：思考或开头
+        yield FakeStreamEvent(
+            type="messages-tuple",
+            data={"type": "ai", "content": "好的，", "id": "msg-1"},
+        )
+        # 第二段：主要内容
+        yield FakeStreamEvent(
+            type="messages-tuple",
+            data={"type": "ai", "content": self._reply_text, "id": "msg-2"},
+        )
+        # 结束事件
+        yield FakeStreamEvent(
+            type="end",
+            data={"usage": {"input_tokens": 10, "output_tokens": 20, "total_tokens": 30}},
+        )
 
     def chat(self, message: str, *, thread_id: str | None = None) -> str:
         """记录调用并返回预设文本。"""
@@ -534,7 +570,7 @@ class ConversationRouterEndToEndTest(unittest.TestCase):
             self.assertNotIn("memory_context", rules_result["payload"])
 
     def test_deerflow_role_runtime_repository_uses_thread_identifier(self):
-        """验证 DeerFlow 角色运行时仓储会透传线程标识。"""
+        """验证 DeerFlow 角色运行时仓储会透传线程标识并正确刷新 memory。"""
         fake_client = FakeDeerFlowClient("你好，我是财务部门助手。")
         fake_factory = FakeDeerFlowClientFactory(fake_client)
 
@@ -563,9 +599,13 @@ class ConversationRouterEndToEndTest(unittest.TestCase):
                 )
             )
 
-            self.assertEqual(response.reply_text, "你好，我是财务部门助手。")
+            # 验证 reset_agent 被调用（memory 刷新）
+            self.assertEqual(fake_client.reset_agent_calls, 1)
+            # 验证线程标识透传
             self.assertEqual(fake_client.calls[0], ("你好", "thread-123"))
             self.assertEqual(fake_factory.role_names, ["finance-coordinator"])
+            # 验证完整 AI 文本被拼接（两段 "好的，" + "你好，我是财务部门助手。"）
+            self.assertEqual(response.reply_text, "好的，你好，我是财务部门助手。")
 
     def test_conversation_router_returns_department_reply_and_trace(self):
         """验证会话层只负责边界收口和思考摘要转发。"""
