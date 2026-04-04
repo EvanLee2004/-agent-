@@ -2,6 +2,30 @@
 
 长期稳定的用户偏好、事实和决策。
 
+## 2026-04-04 架构评审与重构
+
+### 架构评审结论（P0/P1 问题）
+
+1. **P0: 三库各自独立 initialize_storage 无原子性**
+   - `ApplicationBootstrapper.initialize()` 改为单连接执行所有 CREATE TABLE
+   - 中间失败自动回滚，不会留不一致状态
+
+2. **P1: 工厂硬编码无法注入 mock**
+   - `FinanceDomainServiceFactory.build()` / `ApplicationBootstrapperFactory.build()` 新增可选 repository 参数
+   - 调用方可注入 mock 或不同实现，保留默认值向后兼容
+
+3. **P1: DependencyContainer 名不副实**
+   - 改名 `AppServiceFactory`，统一创建并复用三个 repository 实例
+   - `ConversationRouterFactory` 改为接收 repository 参数注入
+
+### 接口变更
+- `ChartOfAccountsRepository` / `JournalRepository` / `CashierRepository` 新增 `database_path` 属性
+- SQLite 实现暴露 `CREATE_*_TABLE_SQL` 模块级常量
+
+### 测试覆盖
+- 当前：66 个单元测试全部通过
+- 新增：`test_cashier_service.py`, `test_chart_of_accounts_service.py`
+
 ## 2026-04-04 优化工作记录
 
 ### 已完成的CRITICAL优化
@@ -25,10 +49,6 @@
      - DB路径：`DEFAULT_ACCOUNTING_DB`, `DEFAULT_CASHIER_DB`
      - 金额阈值：`HIGH_AMOUNT_THRESHOLD`, `LOW_AMOUNT_THRESHOLD`
    - 消除多处硬编码重复
-
-### 测试覆盖
-- 当前：46 个单元测试全部通过
-- 新增：`test_tax_service.py`, `test_audit_service.py`
 
 ## engineering_rules
 - 2026-04-02 用户提供的长期规则必须按类别分组存储，并且后续只按当前任务检索相关类别，禁止每次一次性全量加载所有规则。

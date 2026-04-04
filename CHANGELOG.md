@@ -2,6 +2,15 @@
 
 ## 2026-04-04
 
+### 架构重构（原子初始化 + 工厂 DI 支持）
+
+- `ApplicationBootstrapper.initialize()` 改为单连接执行所有 `CREATE TABLE`，中间失败自动回滚
+- `FinanceDomainServiceFactory.build()` / `ApplicationBootstrapperFactoryFactory.build()` 新增可选 repository 参数
+- `DependencyContainer` 改名 `AppServiceFactory`，统一创建并复用三个 repository 实例
+- `ConversationRouterFactory` 改为接收 repository 参数注入，不再自己 new 具体实现
+- `ChartOfAccountsRepository` / `JournalRepository` / `CashierRepository` 新增 `database_path` 属性
+- SQLite 实现暴露 `CREATE_*_TABLE_SQL` 模块级常量
+
 ### DeerFlow 底层继续对齐
 
 - 新增 `DeerFlowRuntimeConfiguration`，把 `thinking_enabled`、`subagent_enabled`、`plan_mode`、`tool_search` 和 `sandbox` 参数从硬编码改为配置化
