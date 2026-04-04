@@ -99,6 +99,7 @@ class AuditService:
         flags = self._collect_audit_flags(target_vouchers, all_vouchers)
 
         risk_level = self._resolve_risk_level(flags)
+        self._update_voucher_status(target_vouchers, flags)
         return AuditResult(
             audited_voucher_ids=[voucher.voucher_id for voucher in target_vouchers],
             risk_level=risk_level,
@@ -220,3 +221,22 @@ class AuditService:
         if highest_level >= SEVERITY_ORDER["medium"]:
             return "medium"
         return "low"
+
+    def _update_voucher_status(
+        self, target_vouchers: list, flags: list[AuditFlag]
+    ) -> None:
+        """更新凭证审核状态。
+
+        无高危/中危标记的凭证标为已审核；有任一高危或中危标记的保持 pending，
+        由人工后续复核后手动更新状态。
+        """
+        needs_review = any(
+            flag.severity in ("high", "medium") for flag in flags
+        )
+        new_status = "pending" if needs_review else "reviewed"
+        for voucher in target_vouchers:
+            self._journal_repository.update_status(
+                voucher_id=voucher.voucher_id,
+                status=new_status,
+                reviewed_by="audit",
+            )
