@@ -60,8 +60,18 @@ class DeerFlowClientFactory:
             已完成配置绑定的 DeerFlowClient。
 
         Note:
-            该方法会向 os.environ 写入环境变量。在并发场景下，
-            调用方应确保不同请求拥有独立的 assets（特别是 runtime_home）。
+            该方法会向 os.environ 写入环境变量。
+
+            **重要区分**：
+            - **runtime_root 隔离**（传入独立的 `assets.runtime_root`）= 文件路径隔离。
+              这是必要的，但**不充分**——它只能隔离 config.yaml / checkpoint.sqlite / home/
+              等文件路径，不能隔离进程级 os.environ 写入。
+            - **os.environ 隔离** = 进程级环境变量隔离，目前仍未解决。
+              不同请求即使使用不同的 runtime_root，在同一进程内调用 create_client()
+              仍然会互相覆盖 DEER_FLOW_HOME / API keys 等全局变量。
+
+            因此：传入独立 runtime_root 是必要前提，但并发场景还需额外解决 os.environ
+            污染问题（目前暂未实现，需要 DeerFlow 底层支持参数传入或 API 入口层处理）。
         """
         try:
             from deerflow.client import DeerFlowClient
