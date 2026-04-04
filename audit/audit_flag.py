@@ -9,4 +9,5 @@ class AuditFlag:
 
     code: str
     severity: str
+    voucher_id: int
     message: str

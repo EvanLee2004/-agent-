@@ -27,6 +27,7 @@ def _build_unbalanced_flag(
     return AuditFlag(
         code="UNBALANCED",
         severity="high",
+        voucher_id=voucher.voucher_id,
         message=f"凭证 {voucher.voucher_id} 借贷不平衡：借方 {total_debit:.2f}，贷方 {total_credit:.2f}",
     )
 
@@ -36,6 +37,7 @@ def _build_large_amount_flag(voucher, total_amount: float) -> AuditFlag:
     return AuditFlag(
         code="LARGE_AMOUNT",
         severity="high",
+        voucher_id=voucher.voucher_id,
         message=f"凭证 {voucher.voucher_id} 金额 {total_amount:.2f}元，超过项目预设审核阈值",
     )
 
@@ -45,6 +47,7 @@ def _build_small_amount_flag(voucher, total_amount: float) -> AuditFlag:
     return AuditFlag(
         code="SMALL_AMOUNT",
         severity="low",
+        voucher_id=voucher.voucher_id,
         message=f"凭证 {voucher.voucher_id} 金额 {total_amount:.2f}元，金额过小，建议复核",
     )
 
@@ -54,6 +57,7 @@ def _build_weak_summary_flag(voucher) -> AuditFlag:
     return AuditFlag(
         code="WEAK_SUMMARY",
         severity="medium",
+        voucher_id=voucher.voucher_id,
         message=f"凭证 {voucher.voucher_id} 摘要过短，难以支持后续审阅与追踪",
     )
 
@@ -63,6 +67,7 @@ def _build_duplicate_flag(voucher) -> AuditFlag:
     return AuditFlag(
         code="POSSIBLE_DUPLICATE",
         severity="medium",
+        voucher_id=voucher.voucher_id,
         message=f"凭证 {voucher.voucher_id} 与已有凭证在日期、摘要和金额上高度重复",
     )
 
@@ -72,6 +77,7 @@ def _build_missing_line_description_flag(voucher) -> AuditFlag:
     return AuditFlag(
         code="MISSING_LINE_DESCRIPTION",
         severity="low",
+        voucher_id=voucher.voucher_id,
         message=f"凭证 {voucher.voucher_id} 存在未填写分录说明的行",
     )
 
@@ -223,18 +229,23 @@ class AuditService:
         return "low"
 
     def _update_voucher_status(
-        self, target_vouchers: list, flags: list[AuditFlag]
+        self, target_vouchers: list, all_flags: list[AuditFlag]
     ) -> None:
-        """更新凭证审核状态。
+        """按凭证分组判断并更新状态。
 
-        无高危/中危标记的凭证标为已审核；有任一高危或中危标记的保持 pending，
-        由人工后续复核后手动更新状态。
+        每张凭证独立判断：有高危或中危标记的保持 pending，
+        其余标为 reviewed。
         """
-        needs_review = any(
-            flag.severity in ("high", "medium") for flag in flags
-        )
-        new_status = "pending" if needs_review else "reviewed"
+        flags_by_voucher: dict[int, list[AuditFlag]] = {}
+        for flag in all_flags:
+            flags_by_voucher.setdefault(flag.voucher_id, []).append(flag)
+
         for voucher in target_vouchers:
+            voucher_flags = flags_by_voucher.get(voucher.voucher_id, [])
+            needs_review = any(
+                flag.severity in ("high", "medium") for flag in voucher_flags
+            )
+            new_status = "pending" if needs_review else "reviewed"
             self._journal_repository.update_status(
                 voucher_id=voucher.voucher_id,
                 status=new_status,

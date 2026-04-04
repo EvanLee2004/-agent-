@@ -43,6 +43,7 @@ class FakeJournalRepository(JournalRepository):
 
     def __init__(self, vouchers: list[FakeVoucher] = None):
         self._vouchers = vouchers or []
+        self._status_updates: list[tuple[int, str, str]] = []
 
     @property
     def database_path(self) -> str:
@@ -75,7 +76,7 @@ class FakeJournalRepository(JournalRepository):
         reviewed_by: Optional[str],
     ) -> None:
         """更新凭证状态。"""
-        pass
+        self._status_updates.append((voucher_id, status, reviewed_by or ""))
 
 
 class TestAuditServiceDuplicateDetection(unittest.TestCase):
@@ -256,6 +257,52 @@ class TestAuditServiceAmountThreshold(unittest.TestCase):
 
         flags = service._build_amount_flags(voucher)
         self.assertEqual(len(flags), 0)
+
+
+class TestAuditServiceStatusUpdate(unittest.TestCase):
+    """审核服务状态更新测试。"""
+
+    def _make_voucher(
+        self,
+        voucher_id: int,
+        debit: float,
+        credit: float,
+        summary: str = "正常业务描述",
+    ) -> FakeVoucher:
+        """创建测试用凭证。"""
+        return FakeVoucher(
+            voucher_id=voucher_id,
+            voucher_number=f"V{voucher_id:04d}",
+            voucher_date="2024-01-01",
+            summary=summary,
+            lines=[FakeVoucherLine("1001", "银行存款", debit, credit, "描述")],
+        )
+
+    def test_per_voucher_status_one_risky_one_clean(self):
+        """测试一张凭证有问题、一张合规，按凭证独立判断状态。
+
+        凭证1：大额（60000元）→ 有高危标记 → status=pending
+        凭证2：正常金额（1000元）→ 无标记 → status=reviewed
+        """
+        clean_voucher = self._make_voucher(1, 1000.0, 1000.0)
+        risky_voucher = self._make_voucher(2, 60000.0, 60000.0)
+        vouchers = [clean_voucher, risky_voucher]
+
+        repo = FakeJournalRepository(vouchers)
+        service = AuditService(repo)
+
+        command = AuditVoucherCommand(
+            audit_request=AuditRequest(target=AuditTarget.ALL)
+        )
+        result = service.audit_voucher(command)
+
+        self.assertEqual(len(result.audited_voucher_ids), 2)
+        status_map = {v_id: status for v_id, status, _ in repo._status_updates}
+
+        # 有问题的凭证保持 pending
+        self.assertEqual(status_map[2], "pending")
+        # 合规的凭证变为 reviewed
+        self.assertEqual(status_map[1], "reviewed")
 
 
 if __name__ == "__main__":
