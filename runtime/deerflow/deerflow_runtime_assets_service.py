@@ -84,6 +84,7 @@ class DeerFlowRuntimeAssetsService:
             encoding="utf-8",
         )
         return DeerFlowRuntimeAssets(
+            runtime_root=self._runtime_root.resolve(),
             config_path=config_path,
             extensions_config_path=extensions_config_path,
             runtime_home=runtime_home.resolve(),

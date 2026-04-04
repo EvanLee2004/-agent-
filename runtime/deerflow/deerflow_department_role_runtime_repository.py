@@ -97,36 +97,48 @@ class DeerFlowDepartmentRoleRuntimeRepository(DepartmentRoleRuntimeRepository):
         user_input: str,
         thread_id: str,
     ) -> str:
-        """从 DeerFlow stream() 中拼接完整 AI 文本。
+        """从 DeerFlow stream() 中提取最终回复文本。
 
-        DeerFlow stream() 会产生多种事件类型：
-        - messages-tuple (type=ai): AI 文本片段
-        - messages-tuple (type=tool): tool 调用结果
-        - values: 完整状态快照
+        DeerFlow stream() 在 embedded mode 下产生完整 AIMessage 事件，而非 token delta。
+        一个 turn 中可能出现多个 AI 消息（例如：中间回复 -> 工具调用 -> 最终回复）。
+        chat() 故意只返回最后一个非空 AI 文本，这是正确的语义：
+        用户可见的最终回复不应包含"我先查一下"这类中间话术。
+
+        我们使用 stream() 而非 chat()，是为了保留完整事件供未来扩展
+        （tool trace、usage 统计、artifacts），但最终 reply_text 仍然取
+        最后一个非空 AI 文本，与 chat() 语义对齐。
+
+        DeerFlow stream() 产生的事件类型：
+        - messages-tuple (type=ai): AI 消息片段
+        - messages-tuple (type=ai, tool_calls): AI 发起工具调用
+        - messages-tuple (type=tool): 工具执行结果
+        - values: 完整状态快照（含 artifacts）
         - end: 流结束，包含累计 usage
-
-        我们只拼接所有 type=ai 的 content 字段，保留完整的 AI 回复。
-        后续可扩展：收集 tool_calls 用于 trace、收集 usage 用于计量。
         """
-        full_text_parts: list[str] = []
-        # 预留扩展点：未来可收集 tool_events / usage 等
+        last_ai_text: str = ""
+        # 预留扩展点：收集 tool_events / cumulative_usage / artifacts
         # tool_events: list[dict] = []
         # cumulative_usage: dict[str, int] = {}
+        # artifacts: list[Any] = []
 
         for event in client.stream(user_input, thread_id=thread_id):
-            # 收集 AI 文本段
+            # 收集最后一个非空 AI 文本作为最终回复
+            # 注意：中间 AI 文本（如"我先查一下"）不加入最终回复
             if event.type == "messages-tuple" and event.data.get("type") == "ai":
                 content = event.data.get("content", "")
                 if content:
-                    full_text_parts.append(content)
+                    last_ai_text = content
             # 预留：收集 tool 调用事件供未来 trace 使用
             # elif event.type == "messages-tuple" and event.data.get("type") == "tool":
             #     tool_events.append(event.data)
             # 预留：收集 end 事件中的 usage
             # elif event.type == "end":
             #     cumulative_usage = event.data.get("usage", {})
+            # 预留：收集 values 事件中的 artifacts
+            # elif event.type == "values":
+            #     artifacts.extend(event.data.get("artifacts", []))
 
-        return "".join(full_text_parts)
+        return last_ai_text
 
     def _get_client(self, role_name: str):
         """按需获取某个角色对应的 DeerFlowClient。

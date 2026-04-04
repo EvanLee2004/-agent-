@@ -64,9 +64,9 @@
 | 能力 | 状态 | 说明 |
 |------|------|------|
 | `MCP extensions` | 未配置 | `extensions_config.json` 中 `mcpServers` 为空。如需接入外部 MCP 服务（如飞书、云文档），需要在此配置。 |
-| `stream artifacts` | 已收集但未暴露 | `stream()` 返回的 `values` 事件中包含 `artifacts` 字段，当前仅拼接 AI 文本，未转发给前端。 |
+| `stream artifacts` | 尚未收集 | `stream()` 返回的 `values` 事件中包含 `artifacts` 字段，当前代码仅保留注释扩展位，尚未实现收集。 |
 | `uploads` | 未使用 | `DeerFlowClient.upload_files()` 等接口未接入，如需支持文件上传场景（如上传发票图片），需要单独实现路由。 |
-| `checkpointer` 多实例隔离 | 同实例共享 | 当前所有角色共享同一个 SQLite checkpointer（`.runtime/deerflow/checkpoints.sqlite`）。API 并发场景下需要按请求/用户隔离。 |
+| `checkpointer` 多实例隔离 | 已支持隔离 | 通过 `DepartmentOrchestrationFactory(runtime_root=...)` 可为每个请求创建独立的运行时目录，checkpoint 随之隔离。API 并发场景需要自行确保每个请求使用独立 runtime_root。 |
 
 ### 已正常接入的能力
 
@@ -74,7 +74,7 @@
 |------|------|
 | `thinking_enabled` | 模型扩展思考能力，已启用 |
 | `memory` | DeerFlow 原生记忆，每轮对话后自动提取事实并注入下一轮 system prompt |
-| `stream()` | 正确使用 `stream()` 而非 `chat()`，保证多段 AI 输出完整拼接 |
+| `stream()` | 正确使用 `stream()` 而非 `chat()`，保留完整事件流供未来扩展（tool trace、usage、artifacts），最终 reply 取最后一个非空 AI 文本 |
 | `reset_agent()` | 每次 `reply()` 前调用，确保 memory/skills 上下文刷新 |
 
 ## 当前架构

@@ -87,6 +87,8 @@ class FakeDeerFlowClient:
     """用于验证 DeerFlow 角色仓储的测试替身。
 
     支持 stream() 方式和 chat() 方式调用，以适配改进后的仓储实现。
+    模拟 DeerFlow embedded mode 的真实行为：一个 turn 中产生多个 AIMessage，
+    分别是中间回复、工具调用、工具结果、最终回复。
     """
 
     def __init__(self, reply_text: str):
@@ -99,8 +101,16 @@ class FakeDeerFlowClient:
         self.reset_agent_calls += 1
 
     def stream(self, message: str, *, thread_id: str | None = None):
-        """模拟 stream() 返回多段 AI 文本事件。"""
-        from collections.abc import Generator
+        """模拟 DeerFlow embedded mode stream() 的完整 turn 流程。
+
+        模拟一个典型场景：
+        1. AI 先发中间回复（如"好的，我帮你查一下"）
+        2. AI 发起工具调用
+        3. 工具执行（DeerFlow 不直接发 tool 事件，由 agent 处理）
+        4. AI 发最终回复（这是唯一应该进入 reply_text 的内容）
+
+        注意：最终 reply 应该只取最后一个非空 AI 文本。
+        """
         from dataclasses import dataclass
 
         @dataclass
@@ -109,17 +119,30 @@ class FakeDeerFlowClient:
             data: dict
 
         self.calls.append((message, thread_id))
-        # 模拟 DeerFlow stream() 产生多个 AI 文本段
-        # 第一段：思考或开头
+
+        # 第一个 AI 事件：中间话术（不应进入最终回复）
         yield FakeStreamEvent(
             type="messages-tuple",
-            data={"type": "ai", "content": "好的，", "id": "msg-1"},
+            data={"type": "ai", "content": "好的，我帮你处理。", "id": "msg-1"},
         )
-        # 第二段：主要内容
+
+        # 第二个 AI 事件：发起工具调用
         yield FakeStreamEvent(
             type="messages-tuple",
-            data={"type": "ai", "content": self._reply_text, "id": "msg-2"},
+            data={
+                "type": "ai",
+                "content": "",
+                "id": "msg-2",
+                "tool_calls": [{"name": "record_voucher", "args": {}, "id": "call-1"}],
+            },
         )
+
+        # 最终 AI 事件：实际回复（这是唯一应该进入 reply_text 的）
+        yield FakeStreamEvent(
+            type="messages-tuple",
+            data={"type": "ai", "content": self._reply_text, "id": "msg-3"},
+        )
+
         # 结束事件
         yield FakeStreamEvent(
             type="end",
@@ -604,8 +627,9 @@ class ConversationRouterEndToEndTest(unittest.TestCase):
             # 验证线程标识透传
             self.assertEqual(fake_client.calls[0], ("你好", "thread-123"))
             self.assertEqual(fake_factory.role_names, ["finance-coordinator"])
-            # 验证完整 AI 文本被拼接（两段 "好的，" + "你好，我是财务部门助手。"）
-            self.assertEqual(response.reply_text, "好的，你好，我是财务部门助手。")
+            # 验证最终 reply 只取最后一个非空 AI 文本
+            # 中间话术"好的，我帮你处理。"不应出现在最终回复中
+            self.assertEqual(response.reply_text, "你好，我是财务部门助手。")
 
     def test_conversation_router_returns_department_reply_and_trace(self):
         """验证会话层只负责边界收口和思考摘要转发。"""
