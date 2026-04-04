@@ -1,7 +1,5 @@
 """Provider 目录服务。"""
 
-from typing import Optional
-
 from configuration.provider_metadata import ProviderMetadata
 
 
@@ -14,7 +12,6 @@ class ProviderCatalog:
 
     PROVIDERS: dict[str, ProviderMetadata] = {
         "minimax": ProviderMetadata(
-            name="MiniMax",
             models=[
                 "MiniMax-M2.7",
                 "MiniMax-M2.5",
@@ -23,33 +20,22 @@ class ProviderCatalog:
                 "MiniMax-M2.1-highspeed",
                 "MiniMax-M2",
             ],
-            default_model="MiniMax-M2.7",
-            base_url="https://api.minimax.chat/v1",
-            default_api_key_env="MINIMAX_API_KEY",
             supports_tool_calling=True,
             allow_custom_models=True,
         ),
         "deepseek": ProviderMetadata(
-            name="DeepSeek",
             models=["deepseek-chat", "deepseek-reasoner", "deepseek-coder"],
-            default_model="deepseek-chat",
-            base_url="https://api.deepseek.com/v1",
-            default_api_key_env="DEEPSEEK_API_KEY",
             supports_tool_calling=True,
             allow_custom_models=True,
         ),
         "openai": ProviderMetadata(
-            name="OpenAI",
             models=["gpt-4.1-mini", "gpt-4.1", "gpt-4o-mini"],
-            default_model="gpt-4.1-mini",
-            base_url="https://api.openai.com/v1",
-            default_api_key_env="OPENAI_API_KEY",
             supports_tool_calling=True,
             allow_custom_models=True,
         ),
     }
 
-    def get_provider(self, provider_name: str) -> Optional[ProviderMetadata]:
+    def get_provider(self, provider_name: str) -> ProviderMetadata | None:
         """按名称获取 provider。
 
         Args:
@@ -59,11 +45,3 @@ class ProviderCatalog:
             对应的 provider 元数据；不存在时返回 `None`。
         """
         return self.PROVIDERS.get(provider_name)
-
-    def list_provider_names(self) -> list[str]:
-        """列出全部 provider 名称。
-
-        Returns:
-            支持的 provider 名称列表。
-        """
-        return list(self.PROVIDERS.keys())

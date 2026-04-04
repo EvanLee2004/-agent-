@@ -13,18 +13,20 @@
 
 - 新增 `LlmModelProfile` 模型池结构
 - `LlmConfiguration` 升级为 DeerFlow 风格 `default_model + models[]`
-- `ConfigurationService` 支持旧单模型配置自动提升到新结构
+- `ConfigurationService` 收口为 DeerFlow 风格模型池校验，不再继续保留旧单模型分支
 - `ConfigurationService` 支持多环境变量 API Key 与 DeerFlow runtime 段持久化
 - `config.json` 示例升级为 DeerFlow 风格结构
 
 ### 测试与文档
 
 - 新增 `tests/test_configuration_service.py`
+- 新增 `tests/test_file_configuration_repository.py`，覆盖 `.env` 读写与同进程回读边界
 - 扩展 DeerFlow E2E 测试，覆盖多模型顺序、环境变量注入和 runtime 开关透传
 - 更新 `README.md`、`AGENTS.md`，删除已失效的 `store_memory` / `search_memory` 说明
 - 明确当前运行时记忆由 DeerFlow native memory 负责，而不是项目自维护记忆工具
 - 删除未被项目运行路径使用的 `opencode.json`
 - `requirements.txt` 更新为 DeerFlow harness 最新 commit，并保持 `langchain` 在当前可解兼容版本 `1.2.10`
+- 清理 `.gitignore` 中遗留的 `sessions/`、`memory/*.md`、`.deer-flow/` 等过时忽略项
 
 ## 2026-04-03
 
@@ -104,4 +106,3 @@
 - 重构为按功能模块组织的结构
 - 主账收口到 `account_subject`、`journal_voucher`、`journal_line`
 - 长期记忆统一写入 `MEMORY.md`
-- 每日记忆统一写入 `memory/YYYY-MM-DD.md`

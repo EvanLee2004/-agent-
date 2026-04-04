@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 from typing import Optional
 
+from dotenv import dotenv_values
 from dotenv import load_dotenv
 
 from configuration.configuration_repository import ConfigurationRepository
@@ -46,6 +47,22 @@ def _upsert_env_lines(
     return normalized_lines
 
 
+def _read_env_value_from_file(env_name: str) -> str:
+    """从 `.env` 文件中读取环境变量值。
+
+    这里显式在读取阶段再次解析 `.env`，不是重复造 `python-dotenv` 的轮子，而是为了解决
+    一个真实边界：同一进程里如果先调用 `save_env_value()` 更新了 `.env`，仅依赖模块导入
+    时那一次 `load_dotenv()` 并不能保证 `os.environ` 立刻反映最新值。把文件读取补在
+    仓储层，能够让“保存后再立即读取”的行为保持稳定，而不用把刷新环境变量的职责泄漏到
+    配置服务或 CLI。
+    """
+    if not ENV_FILE.exists():
+        return ""
+    env_values = dotenv_values(ENV_FILE)
+    env_value = env_values.get(env_name)
+    return str(env_value).strip() if env_value else ""
+
+
 class FileConfigurationRepository(ConfigurationRepository):
     """基于文件系统的配置仓储实现。"""
 
@@ -83,7 +100,10 @@ class FileConfigurationRepository(ConfigurationRepository):
         Returns:
             当前环境变量值；不存在时返回空字符串。
         """
-        return os.getenv(env_name, "").strip()
+        environment_value = os.getenv(env_name, "").strip()
+        if environment_value:
+            return environment_value
+        return _read_env_value_from_file(env_name)
 
     def save_env_value(self, env_name: str, env_value: str) -> None:
         """保存环境变量值到 `.env` 文件。

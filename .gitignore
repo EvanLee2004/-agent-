@@ -8,7 +8,4 @@ __pycache__/
 .ruff_cache/
 opencode.json
 data/
-sessions/
-memory/*.md
 .runtime/
-.deer-flow/

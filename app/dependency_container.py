@@ -29,10 +29,6 @@ class DependencyContainer:
         """构造引导器。"""
         return ApplicationBootstrapperFactory().build()
 
-    def build_configuration_service(self) -> ConfigurationService:
-        """构造配置服务。"""
-        return ConfigurationService(FileConfigurationRepository(), ProviderCatalog())
-
     @staticmethod
     def create_configuration_service() -> ConfigurationService:
         """构造独立配置服务。
