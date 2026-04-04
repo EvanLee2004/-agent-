@@ -545,15 +545,23 @@ class ConversationRouterEndToEndTest(unittest.TestCase):
                 tool_names = {tool.name for tool in mock_tools}
                 self.assertTrue(expected_tool_names.issubset(tool_names))
 
-    def test_deerflow_subagent_enabled_includes_task_tool(self):
-        """验证 subagent_enabled=True 时，task 工具被加入可用工具集。
+    def test_deerflow_subagent_enabled_parameter_passthrough(self):
+        """验证 DeerFlowClient 构造时正确透传 subagent_enabled=True 参数。
 
-        当 subagent_enabled=True 时，DeerFlow 的内置 task_tool 会被注册为可用工具。
-        该工具允许 coordinator 将复杂多步任务委托给 DeerFlow 原生的 general-purpose 子代理。
+        本测试验证点：
+        - create_client() 调用时，subagent_enabled=True 正确传递到 DeerFlowClient 构造函数
 
-        注意：subagent_enabled=True 只会让 task 工具可用，task 具体调用哪个 subagent
-        类型（如 general-purpose / bash）由 task 工具的 subagent_type 参数决定。
-        当前配置的 DeerFlow 默认只启用 general-purpose，bash 需要 sandbox allow_host_bash。
+        本测试的局限性（不测试什么）：
+        - DeerFlowClient 是 lazy agent：真正的工具加载发生在 _ensure_agent()，
+          即首次 stream() 调用时，而非构造函数中。因此本测试不能验证
+          "task 工具在首次 stream() 时真正加入可用工具集"——这需要真实 API key
+          和完整的 DeerFlow runtime，属于集成测试范畴。
+
+        关于 task 工具可见性的说明：
+        - 当 subagent_enabled=True 时，DeerFlow 内部 get_available_tools(..., subagent_enabled=True)
+          会把 task_tool 加入返回列表（参见 deerflow/tools/tools.py:68-70）
+        - 但该 lazy load 路径需要真实 API 调用才能端到端验证
+        - 参数透传是 task 工具最终可见的必要前提
         """
         with tempfile.TemporaryDirectory() as temp_dir:
             self._register_finance_tool_context(Path(temp_dir))
@@ -570,31 +578,15 @@ class ConversationRouterEndToEndTest(unittest.TestCase):
                 FinanceDepartmentAgentAssetsService(FinanceDepartmentRoleCatalog())
             ).prepare_assets(configuration)
 
-            # 模拟 get_available_tools 返回的工具集合
-            all_tool_names = [
-                "web_search", "web_fetch", "image_search", "ls", "read_file",
-                "write_file", "str_replace", "collaborate_with_department_role",
-                "record_voucher", "query_vouchers", "record_cash_transaction",
-                "query_cash_transactions", "calculate_tax", "audit_voucher",
-                "reply_with_rules", "task",  # task 工具在 subagent_enabled=True 时出现
-            ]
-
-            class MockTool:
-                def __init__(self, name):
-                    self.name = name
-
-            mock_tools = [MockTool(name) for name in all_tool_names]
-
-            with patch("deerflow.tools.get_available_tools", return_value=mock_tools) as mock_get_tools:
-                # 验证 DeerFlowClient 被调用时传入了 subagent_enabled=True
-                with patch("deerflow.client.DeerFlowClient") as mock_client_class:
-                    DeerFlowClientFactory().create_client(assets, "finance-coordinator")
-                    # 验证 client 被调用
-                    mock_client_class.assert_called_once()
-                    _, kwargs = mock_client_class.call_args
-                    self.assertEqual(kwargs["subagent_enabled"], True)
-                    self.assertEqual(kwargs["thinking_enabled"], True)
-                    self.assertEqual(kwargs["plan_mode"], False)
+            with patch("deerflow.client.DeerFlowClient") as mock_client_class:
+                DeerFlowClientFactory().create_client(assets, "finance-coordinator")
+                # 验证 DeerFlowClient 构造函数被调用，且 subagent_enabled=True
+                mock_client_class.assert_called_once()
+                _, kwargs = mock_client_class.call_args
+                self.assertEqual(kwargs["subagent_enabled"], True)
+                self.assertEqual(kwargs["thinking_enabled"], True)
+                self.assertEqual(kwargs["plan_mode"], False)
+                self.assertEqual(kwargs["agent_name"], "finance-coordinator")
 
     def test_record_voucher_and_query_tools_complete_bookkeeping_flow(self):
         """验证记账和查账工具可完成主业务闭环。"""
