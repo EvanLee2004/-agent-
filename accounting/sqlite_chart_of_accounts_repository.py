@@ -6,7 +6,7 @@ from typing import Optional
 
 from accounting.account_subject import AccountSubject
 from accounting.chart_of_accounts_repository import ChartOfAccountsRepository
-from configuration.defaults import DEFAULT_ACCOUNTING_DB
+from configuration.defaults import DEFAULT_DB
 
 CREATE_ACCOUNT_SUBJECT_TABLE_SQL = """
 CREATE TABLE IF NOT EXISTS account_subject (
@@ -33,7 +33,7 @@ def _build_subject_row(subject: AccountSubject) -> tuple[str, str, str, str, str
 class SQLiteChartOfAccountsRepository(ChartOfAccountsRepository):
     """SQLite 科目仓储实现。"""
 
-    def __init__(self, database_path: str = DEFAULT_ACCOUNTING_DB):
+    def __init__(self, database_path: str = DEFAULT_DB):
         self._database_path = database_path
 
     @property

@@ -10,7 +10,7 @@ from accounting.journal_repository import JournalRepository
 from accounting.journal_voucher import JournalVoucher
 from accounting.query_vouchers_query import QueryVouchersQuery
 from accounting.record_voucher_command import RecordVoucherCommand
-from configuration.defaults import DEFAULT_ACCOUNTING_DB
+from configuration.defaults import DEFAULT_DB
 
 
 CREATE_VOUCHER_TABLE_SQL = """
@@ -165,7 +165,7 @@ def _load_voucher_lines(
 class SQLiteJournalRepository(JournalRepository):
     """SQLite 凭证仓储实现。"""
 
-    def __init__(self, database_path: str = DEFAULT_ACCOUNTING_DB):
+    def __init__(self, database_path: str = DEFAULT_DB):
         self._database_path = database_path
 
     @property

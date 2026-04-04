@@ -8,7 +8,7 @@ from cashier.cashier_error import CashierError
 from cashier.cashier_repository import CashierRepository
 from cashier.query_cash_transactions_query import QueryCashTransactionsQuery
 from cashier.record_cash_transaction_command import RecordCashTransactionCommand
-from configuration.defaults import DEFAULT_CASHIER_DB
+from configuration.defaults import DEFAULT_DB
 
 
 CREATE_CASH_TRANSACTION_TABLE_SQL = """
@@ -51,7 +51,7 @@ def _build_cash_transaction(row: sqlite3.Row) -> CashTransaction:
 class SQLiteCashierRepository(CashierRepository):
     """SQLite 出纳仓储实现。"""
 
-    def __init__(self, database_path: str = DEFAULT_CASHIER_DB):
+    def __init__(self, database_path: str = DEFAULT_DB):
         self._database_path = database_path
 
     @property

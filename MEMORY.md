@@ -2,6 +2,26 @@
 
 长期稳定的用户偏好、事实和决策。
 
+## 2026-04-04 Bug 修复
+
+### 代码审查发现的问题
+
+1. **tax/tax_service.py 第 128 行：else 分支死代码**
+   - 第 127 行 `formula = "无需缴纳企业所得税"` 立即被第 128 行覆盖
+   - 修复：删除第 128 行
+   - 根因：拷贝粘贴 elif 公式时残留
+
+2. **configuration/defaults.py：数据库路径重复定义**
+   - `DEFAULT_ACCOUNTING_DB` 和 `DEFAULT_CASHIER_DB` 值完全相同
+   - 修复：合并为 `DEFAULT_DB`，三个 SQLite 仓储统一引用
+
+3. **department/collaboration/department_collaboration_service.py：Optional 导入**
+   - 该文件第 26 行实际使用了 `Optional[str]`，review 说"未使用"不准确
+   - 保留该导入
+
+### 验证
+- 66 个单元测试全部通过
+
 ## 2026-04-04 架构评审与重构
 
 ### 架构评审结论（P0/P1 问题）

@@ -125,7 +125,6 @@ class TaxService:
             formula = f"应纳税所得额 {taxable_base:.2f} x 25% x 20% = 应纳企业所得税 {payable_tax:.2f}"
         else:
             formula = f"应纳税所得额 {taxable_base:.2f}，无需缴纳企业所得税"
-            formula = f"应纳税所得额 {taxable_base:.2f} x 25% x 20% = 应纳企业所得税 {payable_tax:.2f}"
         return TaxComputationResult(
             tax_type=request.tax_type,
             taxpayer_type=request.taxpayer_type,
