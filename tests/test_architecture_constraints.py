@@ -13,7 +13,6 @@ TARGET_DIRECTORIES = [
     PROJECT_ROOT / "accounting",
     PROJECT_ROOT / "audit",
     PROJECT_ROOT / "tax",
-    PROJECT_ROOT / "memory",
     PROJECT_ROOT / "rules",
     PROJECT_ROOT / "configuration",
     PROJECT_ROOT / "department",
@@ -63,6 +62,27 @@ REMOVED_PATHS = [
     PROJECT_ROOT / "department" / "role_trace.py",
     PROJECT_ROOT / "department" / "role_trace_formatter.py",
     PROJECT_ROOT / "department" / "role_trace_summary_builder.py",
+    # 自研记忆模块（已被 DeerFlow 原生记忆接管）
+    PROJECT_ROOT / "memory" / "markdown_memory_store_repository.py",
+    PROJECT_ROOT / "memory" / "memory_chunk.py",
+    PROJECT_ROOT / "memory" / "memory_context_query.py",
+    PROJECT_ROOT / "memory" / "memory_decision.py",
+    PROJECT_ROOT / "memory" / "memory_error.py",
+    PROJECT_ROOT / "memory" / "memory_index_repository.py",
+    PROJECT_ROOT / "memory" / "memory_record.py",
+    PROJECT_ROOT / "memory" / "memory_scope.py",
+    PROJECT_ROOT / "memory" / "memory_search_result.py",
+    PROJECT_ROOT / "memory" / "memory_service.py",
+    PROJECT_ROOT / "memory" / "memory_store_repository.py",
+    PROJECT_ROOT / "memory" / "search_memory_query.py",
+    PROJECT_ROOT / "memory" / "search_memory_router.py",
+    PROJECT_ROOT / "memory" / "search_memory_tool.py",
+    PROJECT_ROOT / "memory" / "sqlite_memory_index_repository.py",
+    PROJECT_ROOT / "memory" / "store_memory_command.py",
+    PROJECT_ROOT / "memory" / "store_memory_router.py",
+    PROJECT_ROOT / "memory" / "store_memory_tool.py",
+    # 工具使用策略（依赖方已随记忆迁移一并移除）
+    PROJECT_ROOT / "conversation" / "tool_use_policy.py",
 ]
 
 

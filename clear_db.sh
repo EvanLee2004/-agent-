@@ -1,15 +1,7 @@
 #!/bin/bash
-# 一键清除测试数据和记忆
+# 一键清除测试数据和 DeerFlow 运行时状态
+# 记忆数据现在由 DeerFlow 原生管理，存放在 .runtime/deerflow/home/agents/*/memory.json
 
 rm -f data/ledger.db
-find memory -mindepth 1 -type f -name "*.md" -delete 2>/dev/null
-rm -f .runtime/memory/*.sqlite
 rm -rf .runtime/deerflow
-cat <<'EOF' > MEMORY.md
-# Long-Term Memory
-
-长期稳定的用户偏好、事实和决策。
-
-首次运行后，系统会把真正需要长期保留的信息追加到这里。
-EOF
-echo "已清除账目数据库和记忆"
+echo "已清除账目数据库和 DeerFlow 运行时状态（含记忆）"

@@ -4,7 +4,6 @@ from configuration.llm_configuration import LlmConfiguration
 from conversation.conversation_router import ConversationRouter
 from conversation.conversation_service import ConversationService
 from conversation.reply_text_sanitizer import ReplyTextSanitizer
-from conversation.tool_use_policy import ToolUsePolicy
 from department.collaboration.department_collaboration_service import DepartmentCollaborationService
 from department.finance_department_role_catalog import FinanceDepartmentRoleCatalog
 from runtime.deerflow.finance_department_tool_context_registry import FinanceDepartmentToolContextRegistry
@@ -62,9 +61,6 @@ class ConversationRouterFactory:
             accounting_service=domain_services.accounting_service,
             journal_repository=domain_services.journal_repository,
             cashier_service=domain_services.cashier_service,
-            memory_service=domain_services.memory_service,
-            tool_use_policy=ToolUsePolicy(),
-            department_display_name=domain_services.department_display_name,
             collaboration_service=collaboration_service,
         )
         FinanceDepartmentToolContextRegistry.register(finance_tool_context)

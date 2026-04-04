@@ -7,16 +7,18 @@ from accounting.sqlite_journal_repository import SQLiteJournalRepository
 from app.finance_domain_service_bundle import FinanceDomainServiceBundle
 from cashier.cashier_service import CashierService
 from cashier.sqlite_cashier_repository import SQLiteCashierRepository
-from memory.markdown_memory_store_repository import MarkdownMemoryStoreRepository
-from memory.memory_service import MemoryService
-from memory.sqlite_memory_index_repository import SQLiteMemoryIndexRepository
 
 
 class FinanceDomainServiceFactory:
     """负责装配财务领域服务。
 
-    记账、出纳和记忆都属于财务业务本身，不应该混进 DeerFlow 运行时或会话边界工厂里。
-    单独抽一层领域服务工厂，可以让“业务对象如何组装”与“多 Agent 如何协作”解耦。
+    记账和出纳属于财务业务本身，不应该混进 DeerFlow 运行时或会话边界工厂里。
+    单独抽一层领域服务工厂，可以让"业务对象如何组装"与"多 Agent 如何协作"解耦。
+
+    记忆服务已从工厂中移除：记忆功能切换至 DeerFlow 原生机制，DeerFlow 在每轮对话
+    结束后自动提取事实并写入每个 agent 独立的 memory.json，由 DeerFlow 自行管理
+    记忆生命周期，不再需要项目层构造 MarkdownMemoryStoreRepository 或
+    SQLiteMemoryIndexRepository。
     """
 
     def build(self, department_display_name: str) -> FinanceDomainServiceBundle:
@@ -37,15 +39,9 @@ class FinanceDomainServiceFactory:
             department_display_name,
         )
         cashier_service = CashierService(SQLiteCashierRepository())
-        memory_service = MemoryService(
-            MarkdownMemoryStoreRepository(),
-            SQLiteMemoryIndexRepository(),
-            department_display_name,
-        )
         return FinanceDomainServiceBundle(
             department_display_name=department_display_name,
             accounting_service=accounting_service,
             journal_repository=journal_repository,
             cashier_service=cashier_service,
-            memory_service=memory_service,
         )

@@ -8,8 +8,6 @@ from audit.audit_voucher_router import AuditVoucherRouter
 from cashier.query_cash_transactions_router import QueryCashTransactionsRouter
 from cashier.record_cash_transaction_router import RecordCashTransactionRouter
 from department.collaboration.collaborate_with_department_role_router import CollaborateWithDepartmentRoleRouter
-from memory.search_memory_router import SearchMemoryRouter
-from memory.store_memory_router import StoreMemoryRouter
 from rules.reply_with_rules_router import ReplyWithRulesRouter
 from tax.calculate_tax_router import CalculateTaxRouter
 
@@ -22,6 +20,10 @@ class FinanceDepartmentToolContext:
     应用层那样在运行时逐个注入依赖。这里将路由对象聚合成受控上下文，是为了把这一
     第三方运行时约束限制在 `runtime/deerflow/`，避免财务业务模块反过来感知底层
     agent 引擎的装配方式。
+
+    记忆功能已切换为 DeerFlow 原生机制（memory.enabled=True），由 DeerFlow 在每轮
+    对话结束后自动提取事实并注入 system prompt，不再需要 store_memory /
+    search_memory 工具路由。
     """
 
     record_voucher_router: RecordVoucherRouter
@@ -30,7 +32,5 @@ class FinanceDepartmentToolContext:
     audit_voucher_router: AuditVoucherRouter
     record_cash_transaction_router: RecordCashTransactionRouter
     query_cash_transactions_router: QueryCashTransactionsRouter
-    store_memory_router: StoreMemoryRouter
-    search_memory_router: SearchMemoryRouter
     reply_with_rules_router: ReplyWithRulesRouter
     collaborate_with_department_role_router: CollaborateWithDepartmentRoleRouter

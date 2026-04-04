@@ -60,7 +60,20 @@ class DeerFlowConfigDocumentFactory:
             },
             "title": {"enabled": False, "max_words": 6, "max_chars": 60, "model_name": None},
             "summarization": {"enabled": False},
-            "memory": {"enabled": False},
+            "memory": {
+                # 启用 DeerFlow 原生记忆机制。
+                # DeerFlow 会在每轮对话结束后用 LLM 自动提取对话事实，写入
+                # `.runtime/deerflow/home/agents/{agent_name}/memory.json`，
+                # 并在下一轮对话开始时自动注入 system prompt。
+                # 不再需要 store_memory / search_memory 工具，也不再需要
+                # 项目自维护的 Markdown + SQLite 记忆模块。
+                "enabled": True,
+                "debounce_seconds": 30,
+                "max_facts": 100,
+                "fact_confidence_threshold": 0.7,
+                "injection_enabled": True,
+                "max_injection_tokens": 2000,
+            },
             "checkpointer": {
                 "type": "sqlite",
                 "connection_string": str(checkpoint_path.resolve()),

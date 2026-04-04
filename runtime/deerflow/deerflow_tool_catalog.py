@@ -42,14 +42,6 @@ class DeerFlowToolCatalog:
                 "audit.audit_voucher_tool:audit_voucher_tool",
             ),
             DeerFlowToolSpec(
-                "store_memory",
-                "memory.store_memory_tool:store_memory_tool",
-            ),
-            DeerFlowToolSpec(
-                "search_memory",
-                "memory.search_memory_tool:search_memory_tool",
-            ),
-            DeerFlowToolSpec(
                 "reply_with_rules",
                 "rules.reply_with_rules_tool:reply_with_rules_tool",
             ),

@@ -31,7 +31,6 @@ from conversation.conversation_request import ConversationRequest
 from conversation.conversation_router import ConversationRouter
 from conversation.conversation_service import ConversationService
 from conversation.reply_text_sanitizer import ReplyTextSanitizer
-from conversation.tool_use_policy import ToolUsePolicy
 from department.collaboration.collaborate_with_department_role_router import CollaborateWithDepartmentRoleRouter
 from department.collaboration.department_collaboration_service import DepartmentCollaborationService
 from department.department_role_request import DepartmentRoleRequest
@@ -46,13 +45,6 @@ from department.workbench.department_workbench_service import DepartmentWorkbenc
 from department.workbench.in_memory_department_workbench_repository import InMemoryDepartmentWorkbenchRepository
 from department.workbench.role_trace_factory import RoleTraceFactory
 from department.workbench.role_trace_summary_builder import RoleTraceSummaryBuilder
-from memory.markdown_memory_store_repository import MarkdownMemoryStoreRepository
-from memory.memory_service import MemoryService
-from memory.search_memory_router import SearchMemoryRouter
-from memory.search_memory_tool import search_memory_tool
-from memory.sqlite_memory_index_repository import SQLiteMemoryIndexRepository
-from memory.store_memory_router import StoreMemoryRouter
-from memory.store_memory_tool import store_memory_tool
 from rules.file_rules_repository import FileRulesRepository
 from rules.reply_with_rules_router import ReplyWithRulesRouter
 from rules.reply_with_rules_tool import reply_with_rules_tool
@@ -176,6 +168,33 @@ class ConversationRouterEndToEndTest(unittest.TestCase):
             self.assertTrue(coordinator_config.exists())
             self.assertTrue(cashier_config.exists())
 
+    def test_deerflow_memory_enabled_in_generated_config(self):
+        """验证生成的 DeerFlow 配置启用了原生记忆机制，且关键参数符合预期。"""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            runtime_root = Path(temp_dir) / "runtime"
+            skills_root = Path(temp_dir) / "skills"
+            skills_root.mkdir(parents=True, exist_ok=True)
+            configuration = LlmConfiguration(
+                provider_name="minimax",
+                model_name="MiniMax-M2.7",
+                base_url="https://api.minimaxi.com/v1",
+                api_key="test-key",
+            )
+            assets = DeerFlowRuntimeAssetsService(
+                FinanceDepartmentAgentAssetsService(FinanceDepartmentRoleCatalog()),
+                runtime_root=runtime_root,
+                skills_root=skills_root,
+            ).prepare_assets(configuration)
+
+            config_data = yaml.safe_load(assets.config_path.read_text(encoding="utf-8"))
+            memory_config = config_data["memory"]
+
+            # DeerFlow 原生记忆必须启用，且注入行为开启，才能自动向 system prompt 注入记忆。
+            self.assertTrue(memory_config["enabled"])
+            self.assertTrue(memory_config["injection_enabled"])
+            self.assertGreater(memory_config["max_facts"], 0)
+            self.assertGreater(memory_config["fact_confidence_threshold"], 0.0)
+
     def test_deerflow_public_client_can_read_generated_skills(self):
         """验证公开 DeerFlowClient 能读取当前部门全部 skill。"""
         configuration = LlmConfiguration(
@@ -224,6 +243,7 @@ class ConversationRouterEndToEndTest(unittest.TestCase):
             DeerFlowClientFactory().create_client(assets, "finance-coordinator")
             tool_names = {tool.name for tool in get_available_tools(include_mcp=False)}
 
+            # store_memory / search_memory 已移除，改由 DeerFlow 原生记忆接管。
             self.assertTrue(
                 {
                     "collaborate_with_department_role",
@@ -233,11 +253,11 @@ class ConversationRouterEndToEndTest(unittest.TestCase):
                     "query_cash_transactions",
                     "calculate_tax",
                     "audit_voucher",
-                    "store_memory",
-                    "search_memory",
                     "reply_with_rules",
                 }.issubset(tool_names)
             )
+            self.assertNotIn("store_memory", tool_names)
+            self.assertNotIn("search_memory", tool_names)
 
     def test_record_voucher_and_query_tools_complete_bookkeeping_flow(self):
         """验证记账和查账工具可完成主业务闭环。"""
@@ -345,26 +365,21 @@ class ConversationRouterEndToEndTest(unittest.TestCase):
             self.assertEqual(audit_result["success"], True)
             self.assertEqual(audit_result["payload"]["risk_level"], "high")
 
-    def test_memory_and_rules_tools_cooperate(self):
-        """验证记忆工具与规则工具可协同工作。"""
+    def test_reply_with_rules_tool_returns_rules_reference(self):
+        """验证规则工具返回规则参考文本，不再携带记忆上下文注入。
+
+        记忆由 DeerFlow 原生机制自动注入 system prompt，规则工具不再承担记忆召回职责。
+        """
         with tempfile.TemporaryDirectory() as temp_dir:
             self._register_finance_tool_context(Path(temp_dir))
 
-            store_result = json.loads(
-                store_memory_tool.invoke(
-                    {
-                        "scope": "long_term",
-                        "category": "preference",
-                        "content": "用户希望报销说明默认写得简洁。",
-                    }
-                )
-            )
-            search_result = json.loads(search_memory_tool.invoke({"query": "报销说明怎么写"}))
-            rules_result = json.loads(reply_with_rules_tool.invoke({"question": "你记住了什么？"}))
+            rules_result = json.loads(reply_with_rules_tool.invoke({"question": "凭证如何记账？"}))
 
-            self.assertEqual(store_result["success"], True)
-            self.assertEqual(search_result["payload"]["count"], 1)
-            self.assertIn("memory_notice", rules_result["payload"])
+            self.assertEqual(rules_result["success"], True)
+            self.assertIn("rules_reference", rules_result["payload"])
+            # 记忆相关字段已从规则工具响应中移除
+            self.assertNotIn("memory_notice", rules_result["payload"])
+            self.assertNotIn("memory_context", rules_result["payload"])
 
     def test_deerflow_role_runtime_repository_uses_thread_identifier(self):
         """验证 DeerFlow 角色运行时仓储会透传线程标识。"""
@@ -467,14 +482,6 @@ class ConversationRouterEndToEndTest(unittest.TestCase):
         ).initialize()
         accounting_service = AccountingService(journal_repository, chart_service)
         cashier_service = CashierService(cashier_repository)
-        memory_store_repository = MarkdownMemoryStoreRepository(
-            long_term_memory_file=temp_path / "MEMORY.md",
-            daily_memory_dir=temp_path / "memory",
-        )
-        memory_index_repository = SQLiteMemoryIndexRepository(
-            temp_path / ".runtime" / "memory" / "memory_search.sqlite"
-        )
-        memory_service = MemoryService(memory_store_repository, memory_index_repository)
         rules_service = RulesService(FileRulesRepository())
         runtime_context = DepartmentRuntimeContext()
         workbench_service = DepartmentWorkbenchService(
@@ -497,13 +504,7 @@ class ConversationRouterEndToEndTest(unittest.TestCase):
                 audit_voucher_router=AuditVoucherRouter(AuditService(journal_repository)),
                 record_cash_transaction_router=RecordCashTransactionRouter(cashier_service),
                 query_cash_transactions_router=QueryCashTransactionsRouter(cashier_service),
-                store_memory_router=StoreMemoryRouter(memory_service),
-                search_memory_router=SearchMemoryRouter(memory_service),
-                reply_with_rules_router=ReplyWithRulesRouter(
-                    rules_service,
-                    memory_service,
-                    ToolUsePolicy(),
-                ),
+                reply_with_rules_router=ReplyWithRulesRouter(rules_service),
                 collaborate_with_department_role_router=CollaborateWithDepartmentRoleRouter(
                     collaboration_service
                 ),
