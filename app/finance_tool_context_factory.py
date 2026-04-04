@@ -9,11 +9,8 @@ from audit.audit_voucher_router import AuditVoucherRouter
 from cashier.cashier_service import CashierService
 from cashier.query_cash_transactions_router import QueryCashTransactionsRouter
 from cashier.record_cash_transaction_router import RecordCashTransactionRouter
-from department.collaboration.collaborate_with_department_role_router import (
-    CollaborateWithDepartmentRoleRouter,
-)
-from department.collaboration.department_collaboration_service import (
-    DepartmentCollaborationService,
+from department.collaboration.generate_fiscal_task_prompt_router import (
+    GenerateFiscalTaskPromptRouter,
 )
 from rules.file_rules_repository import FileRulesRepository
 from rules.reply_with_rules_router import ReplyWithRulesRouter
@@ -32,8 +29,9 @@ class FinanceToolContextFactory:
     这个工厂把所有工具路由装配集中起来，是为了把第三方运行时的特殊约束隔离到
     一个地方，避免依赖容器继续膨胀成系统耦合中心。
 
-    记忆工具（store_memory / search_memory）已从工具上下文中移除，由 DeerFlow
-    原生记忆机制接管，不再需要工厂层感知记忆服务。
+    阶段 3 说明：多 agent 协作已迁移至 DeerFlow 原生 task/subagent 机制，
+    collaborate_with_department_role 工具和 DepartmentCollaborationService 已移除。
+    generate_fiscal_task_prompt_router 为自包含组件，直接持有 FiscalRolePromptBuilder。
     """
 
     def build(
@@ -41,7 +39,6 @@ class FinanceToolContextFactory:
         accounting_service: AccountingService,
         journal_repository: JournalRepository,
         cashier_service: CashierService,
-        collaboration_service: DepartmentCollaborationService,
     ) -> FinanceDepartmentToolContext:
         """构造财务工具上下文。
 
@@ -49,7 +46,6 @@ class FinanceToolContextFactory:
             accounting_service: 记账服务。
             journal_repository: 凭证仓储。
             cashier_service: 出纳服务。
-            collaboration_service: 部门协作服务。
 
         Returns:
             DeerFlow 工具可消费的统一上下文。
@@ -64,7 +60,5 @@ class FinanceToolContextFactory:
             reply_with_rules_router=ReplyWithRulesRouter(
                 RulesService(FileRulesRepository())
             ),
-            collaborate_with_department_role_router=CollaborateWithDepartmentRoleRouter(
-                collaboration_service
-            ),
+            generate_fiscal_task_prompt_router=GenerateFiscalTaskPromptRouter(),
         )

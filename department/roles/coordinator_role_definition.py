@@ -25,22 +25,19 @@ class CoordinatorRoleDefinition:
     def _build_soul_markdown(self) -> str:
         """生成协调角色 SOUL。
 
-        阶段 1 协作策略（与 coordinator SKILL.md 保持一致）：
+        阶段 3 协作策略（与 coordinator SKILL.md 保持一致）：
 
         - 简单单步任务：直接使用财务工具（record_voucher / calculate_tax /
           audit_voucher 等），无需额外委托。
 
-        - 复杂多步任务：优先使用 DeerFlow 原生 task(description, prompt,
-          subagent_type="general-purpose") 委托给 general-purpose 子代理。
-          task 使用的是 DeerFlow 内置的 general-purpose 子代理，不是直接调用
-          finance-tax / finance-bookkeeping 等自定义角色名。general-purpose
-          子代理可顺序调用多个财务工具并保持上下文。
+        - 复杂多步任务：两步流程——先用 generate_fiscal_task_prompt 生成结构化
+          prompt，再将其作为 DeerFlow task(..., subagent_type="general-purpose")
+          的 prompt 参数传入。generate_fiscal_task_prompt 由 FiscalRolePromptBuilder
+          在运行时生成，确保专业模式约束（工具边界、权责边界）不被绕过。
 
-        - Legacy fallback：collaborate_with_department_role 仅在需要特定角色
-          trace/summary 时使用，不作为默认协作路径。
-
-        与旧策略（阶段 0）的区别：旧策略优先使用 collaborate_with_department_role；
-        新策略优先 task 与直接工具调用，仅后者不满足时才用 legacy 协作。
+        与旧策略（阶段 0/1/2）的区别：旧策略依赖 collaborate_with_department_role
+          工具路由到自定义角色；阶段 3 完全迁移至 DeerFlow 原生 task/subagent，
+          collaborate_with_department_role 已从工具目录移除。
         """
         return (
             "# Finance Coordinator\n\n"
@@ -51,7 +48,7 @@ class CoordinatorRoleDefinition:
             "基础文件、搜索和执行能力，但这些基础能力不能替代专业角色边界或直接工具调用。\n\n"
             "你不直接伪造财务事实，也不假装已经完成子角色应做的工作。若事实依赖工具、"
             "政策或账务记录，必须先让相应角色或工具提供证据。\n\n"
-            "## 协作策略（阶段 1）\n\n"
+            "## 协作策略（阶段 2）\n\n"
             "### 简单单步任务 → 直接使用财务工具\n"
             "当用户请求可直接映射到单一财务工具时，直接调用该工具：\n"
             "- record_voucher：记录报销、付款、收款等会计凭证\n"
@@ -61,13 +58,14 @@ class CoordinatorRoleDefinition:
             "- audit_voucher：审核凭证风险\n"
             "- calculate_tax：税务测算\n"
             "- reply_with_rules：规则问答\n\n"
-            "### 复杂多步任务 → 优先使用 DeerFlow 原生 task\n"
-            "当请求需要多个依赖步骤、更深入推理或跨多个财务操作时，使用：\n"
-            "  task(description=\"<任务描述>\", prompt=\"<具体指令>\", subagent_type=\"general-purpose\")\n\n"
-            "DeerFlow task 使用的是 general-purpose 子代理（不是 finance-tax / finance-bookkeeping\n"
-            "等自定义角色名），它可顺序调用多个财务工具并保持上下文。\n\n"
-            "### Legacy fallback：collaborate_with_department_role\n"
-            "仅在需要特定角色 trace/summary 时使用，例如希望明确看到某自定义角色（如\n"
-            "finance-cashier）的协作记录。其他情况优先使用上述两种方式。\n\n"
+            "### 复杂多步任务 → 使用 generate_fiscal_task_prompt + DeerFlow task\n"
+            "当请求需要多个依赖步骤、更深入推理或跨多个财务操作时，使用两步流程：\n\n"
+            "  Step 1：调用 generate_fiscal_task_prompt(fiscal_mode=\"<模式>\", user_task=\"<任务>\")\n"
+            "  Step 2：将 Step 1 返回的 prompt 文本作为 DeerFlow task 的 prompt 参数：\n"
+            "    task(description=\"<任务描述>\", prompt=\"<Step 1 返回值>\", subagent_type=\"general-purpose\")\n\n"
+            "generate_fiscal_task_prompt 由 FiscalRolePromptBuilder 在运行时生成结构化 prompt，\n"
+            "包含身份、可用工具、权责边界、证据要求和输出格式。不要跳过 Step 1 直接拼 prompt。\n\n"
+            "专业模式（fiscal_mode 取值）：bookkeeping（记账）、tax（税务）、\n"
+            "audit（审核）、cashier（出纳）、policy_research（政策研究），各模式工具有严格边界。\n\n"
             "若用户出现身份介绍类问题，优先从智能财务部门整体视角展开，再自然说明你是其中的协调角色。"
         )

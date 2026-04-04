@@ -7,7 +7,7 @@ from accounting.record_voucher_router import RecordVoucherRouter
 from audit.audit_voucher_router import AuditVoucherRouter
 from cashier.query_cash_transactions_router import QueryCashTransactionsRouter
 from cashier.record_cash_transaction_router import RecordCashTransactionRouter
-from department.collaboration.collaborate_with_department_role_router import CollaborateWithDepartmentRoleRouter
+from department.collaboration.generate_fiscal_task_prompt_router import GenerateFiscalTaskPromptRouter
 from rules.reply_with_rules_router import ReplyWithRulesRouter
 from tax.calculate_tax_router import CalculateTaxRouter
 
@@ -21,9 +21,11 @@ class FinanceDepartmentToolContext:
     第三方运行时约束限制在 `runtime/deerflow/`，避免财务业务模块反过来感知底层
     agent 引擎的装配方式。
 
-    记忆功能已切换为 DeerFlow 原生机制（memory.enabled=True），由 DeerFlow 在每轮
-    对话结束后自动提取事实并注入 system prompt，不再需要 store_memory /
-    search_memory 工具路由。
+    阶段 3 说明：多 agent 协作已切换为 DeerFlow 原生 task/subagent 机制，
+    collaborate_with_department_role 工具已移除。财务专业化 prompt 生成由
+    generate_fiscal_task_prompt 工具提供（阶段 2 落地）。
+
+    记忆功能由 DeerFlow 原生机制接管（memory.enabled=True）。
     """
 
     record_voucher_router: RecordVoucherRouter
@@ -33,4 +35,4 @@ class FinanceDepartmentToolContext:
     record_cash_transaction_router: RecordCashTransactionRouter
     query_cash_transactions_router: QueryCashTransactionsRouter
     reply_with_rules_router: ReplyWithRulesRouter
-    collaborate_with_department_role_router: CollaborateWithDepartmentRoleRouter
+    generate_fiscal_task_prompt_router: GenerateFiscalTaskPromptRouter

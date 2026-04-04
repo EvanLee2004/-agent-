@@ -36,11 +36,8 @@ from conversation.conversation_request import ConversationRequest
 from conversation.conversation_router import ConversationRouter
 from conversation.conversation_service import ConversationService
 from conversation.reply_text_sanitizer import ReplyTextSanitizer
-from department.collaboration.collaborate_with_department_role_router import (
-    CollaborateWithDepartmentRoleRouter,
-)
-from department.collaboration.department_collaboration_service import (
-    DepartmentCollaborationService,
+from department.collaboration.generate_fiscal_task_prompt_router import (
+    GenerateFiscalTaskPromptRouter,
 )
 from department.department_role_request import DepartmentRoleRequest
 from department.department_role_response import DepartmentRoleResponse
@@ -58,7 +55,7 @@ from department.workbench.department_workbench_service import DepartmentWorkbenc
 from department.workbench.in_memory_department_workbench_repository import (
     InMemoryDepartmentWorkbenchRepository,
 )
-from department.workbench.role_trace_factory import RoleTraceFactory
+from department.workbench.collaboration_step_factory import CollaborationStepFactory
 from department.workbench.role_trace_summary_builder import RoleTraceSummaryBuilder
 from rules.file_rules_repository import FileRulesRepository
 from rules.reply_with_rules_router import ReplyWithRulesRouter
@@ -212,18 +209,17 @@ class StubFinanceDepartmentService(FinanceDepartmentService):
 
     def reply(self, request: FinanceDepartmentRequest):
         from department.finance_department_response import FinanceDepartmentResponse
-        from department.workbench.role_trace import RoleTrace
+        from department.workbench.collaboration_step import CollaborationStep
+        from department.workbench.collaboration_step_type import CollaborationStepType
 
         return FinanceDepartmentResponse(
             reply_text=f"thread={request.thread_id}; input={request.user_input}",
-            role_traces=[
-                RoleTrace(
-                    role_name="finance-coordinator",
-                    display_name="CoordinatorAgent",
-                    requested_by=None,
+            collaboration_steps=[
+                CollaborationStep(
                     goal=request.user_input,
-                    thinking_summary="已接收并汇总请求。",
-                    depth=0,
+                    step_type=CollaborationStepType.FINAL_REPLY,
+                    tool_name="",
+                    summary="已接收并汇总请求。",
                 )
             ],
         )
@@ -333,7 +329,7 @@ class ConversationRouterEndToEndTest(unittest.TestCase):
                     "write_file",
                     "str_replace",
                     "bash",
-                    "collaborate_with_department_role",
+                    "generate_fiscal_task_prompt",
                 }.issubset({item["name"] for item in config_data["tools"]})
             )
             self.assertEqual(extensions_data["skills"]["finance-core"]["enabled"], True)
@@ -508,7 +504,17 @@ class ConversationRouterEndToEndTest(unittest.TestCase):
         self.assertEqual(os.environ["DEER_FLOW_HOME"], str(assets.runtime_home))
 
     def test_deerflow_tool_registry_loads_custom_finance_tools(self):
-        """验证 DeerFlow 能从配置中加载全部财务工具。"""
+        """验证 DeerFlow 能从配置中加载全部财务工具（不含 legacy 协作工具）。
+
+        阶段 3 完整财务工具集（10 个 finance 组工具）：
+        - 直接工具：record_voucher / query_vouchers / record_cash_transaction /
+          query_cash_transactions / calculate_tax / audit_voucher / reply_with_rules
+        - 协作工具：generate_fiscal_task_prompt（阶段 2/3）
+        - 基础工具：web_search / web_fetch / image_search / ls / read_file / write_file / str_replace
+
+        collaborate_with_department_role 已于阶段 3 从工具目录移除。
+        基础工具来自 DeerFlow 内置，finance 组工具由 DeerFlowToolCatalog 统一维护。
+        """
         with tempfile.TemporaryDirectory() as temp_dir:
             self._register_finance_tool_context(Path(temp_dir))
             configuration = self._build_single_model_configuration()
@@ -524,7 +530,7 @@ class ConversationRouterEndToEndTest(unittest.TestCase):
                 "read_file",
                 "write_file",
                 "str_replace",
-                "collaborate_with_department_role",
+                "generate_fiscal_task_prompt",
                 "record_voucher",
                 "query_vouchers",
                 "record_cash_transaction",
@@ -544,6 +550,8 @@ class ConversationRouterEndToEndTest(unittest.TestCase):
                 DeerFlowClientFactory().create_client(assets, "finance-coordinator")
                 tool_names = {tool.name for tool in mock_tools}
                 self.assertTrue(expected_tool_names.issubset(tool_names))
+                # 阶段 3：明确验证 legacy 协作工具不在 catalog 中
+                self.assertNotIn("collaborate_with_department_role", tool_names)
 
     def test_deerflow_subagent_enabled_parameter_passthrough(self):
         """验证 DeerFlowClient 构造时正确透传 subagent_enabled=True 参数。
@@ -767,13 +775,15 @@ class ConversationRouterEndToEndTest(unittest.TestCase):
             ConversationRequest(user_input="你好", thread_id="cli-1")
         )
         self.assertEqual(response.reply_text, "thread=cli-1; input=你好")
-        self.assertEqual(len(response.role_traces), 1)
-        self.assertEqual(response.role_traces[0].display_name, "CoordinatorAgent")
+        self.assertEqual(len(response.collaboration_steps), 1)
+        self.assertEqual(response.collaboration_steps[0].goal, "你好")
+        self.assertEqual(response.collaboration_steps[0].summary, "已接收并汇总请求。")
 
     def test_conversation_service_strips_internal_thinking_text(self):
         """验证会话服务会剔除底层角色泄漏的内部思考片段。"""
         from department.finance_department_response import FinanceDepartmentResponse
-        from department.workbench.role_trace import RoleTrace
+        from department.workbench.collaboration_step import CollaborationStep
+        from department.workbench.collaboration_step_type import CollaborationStepType
 
         class ThinkingFinanceDepartmentService(StubFinanceDepartmentService):
             """返回带思考片段的部门服务替身。"""
@@ -781,14 +791,12 @@ class ConversationRouterEndToEndTest(unittest.TestCase):
             def reply(self, request: FinanceDepartmentRequest):
                 return FinanceDepartmentResponse(
                     reply_text="<think>内部思考</think>\n\n你好，已收到。",
-                    role_traces=[
-                        RoleTrace(
-                            role_name="finance-coordinator",
-                            display_name="CoordinatorAgent",
-                            requested_by=None,
+                    collaboration_steps=[
+                        CollaborationStep(
                             goal=request.user_input,
-                            thinking_summary="已读取请求。",
-                            depth=0,
+                            step_type=CollaborationStepType.FINAL_REPLY,
+                            tool_name="",
+                            summary="已读取请求。",
                         )
                     ],
                 )
@@ -804,10 +812,10 @@ class ConversationRouterEndToEndTest(unittest.TestCase):
             )
         )
         self.assertEqual(response.reply_text, "你好，已收到。")
-        self.assertEqual(len(response.role_traces), 1)
+        self.assertEqual(len(response.collaboration_steps), 1)
 
     def _register_finance_tool_context(self, temp_path: Path) -> None:
-        """构造并注册财务工具上下文。"""
+        """构造并注册财务工具上下文（阶段 3：不含 legacy 协作层）。"""
         database_path = str(temp_path / "ledger.db")
         journal_repository = SQLiteJournalRepository(database_path)
         chart_repository = SQLiteChartOfAccountsRepository(database_path)
@@ -822,17 +830,8 @@ class ConversationRouterEndToEndTest(unittest.TestCase):
         accounting_service = AccountingService(journal_repository, chart_service)
         cashier_service = CashierService(cashier_repository)
         rules_service = RulesService(FileRulesRepository())
-        runtime_context = DepartmentRuntimeContext()
         workbench_service = DepartmentWorkbenchService(
             InMemoryDepartmentWorkbenchRepository()
-        )
-        role_catalog = FinanceDepartmentRoleCatalog()
-        collaboration_service = DepartmentCollaborationService(
-            role_catalog=role_catalog,
-            runtime_repository=StubDepartmentRoleRuntimeRepository(),
-            workbench_service=workbench_service,
-            runtime_context=runtime_context,
-            role_trace_factory=RoleTraceFactory(RoleTraceSummaryBuilder()),
         )
         workbench_service.start_turn("test-thread", "测试用户请求")
         FinanceDepartmentToolContextRegistry.register(
@@ -850,8 +849,6 @@ class ConversationRouterEndToEndTest(unittest.TestCase):
                     cashier_service
                 ),
                 reply_with_rules_router=ReplyWithRulesRouter(rules_service),
-                collaborate_with_department_role_router=CollaborateWithDepartmentRoleRouter(
-                    collaboration_service
-                ),
+                generate_fiscal_task_prompt_router=GenerateFiscalTaskPromptRouter(),
             )
         )

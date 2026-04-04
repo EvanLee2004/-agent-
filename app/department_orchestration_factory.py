@@ -5,14 +5,13 @@ from typing import Optional
 
 from configuration.llm_configuration import LlmConfiguration
 from conversation.reply_text_sanitizer import ReplyTextSanitizer
-from department.collaboration.department_collaboration_service import DepartmentCollaborationService
 from department.department_runtime_context import DepartmentRuntimeContext
 from department.finance_department_agent_assets_service import FinanceDepartmentAgentAssetsService
 from department.finance_department_role_catalog import FinanceDepartmentRoleCatalog
 from department.finance_department_service import FinanceDepartmentService
 from department.workbench.department_workbench_service import DepartmentWorkbenchService
 from department.workbench.in_memory_department_workbench_repository import InMemoryDepartmentWorkbenchRepository
-from department.workbench.role_trace_factory import RoleTraceFactory
+from department.workbench.collaboration_step_factory import CollaborationStepFactory
 from department.workbench.role_trace_summary_builder import RoleTraceSummaryBuilder
 from runtime.deerflow.deerflow_client_factory import DeerFlowClientFactory
 from runtime.deerflow.deerflow_department_role_runtime_repository import DeerFlowDepartmentRoleRuntimeRepository
@@ -25,8 +24,12 @@ from app.department_orchestration_bundle import DepartmentOrchestrationBundle
 class DepartmentOrchestrationFactory:
     """负责装配财务部门协作层。
 
-    角色目录、共享工作台、DeerFlow 角色运行时和协作服务都属于"部门编排"问题域。
+    角色目录、共享工作台、DeerFlow 角色运行时都属于"部门编排"问题域。
     把这些对象集中在一个工厂中，是为了让会话入口不再理解部门内部的中间部件。
+
+    阶段 3 说明：多 agent 协作已迁移至 DeerFlow 原生 task/subagent 机制，
+    DepartmentCollaborationService 不再作为装配对象。协作路由（如 generate_fiscal_task_prompt）
+    为自包含组件，不依赖外部协作服务。
 
     并发安全说明：
     每个 build() 调用会产生独立的运行时资产集合（通过独立的 runtime_root）。
@@ -57,10 +60,10 @@ class DepartmentOrchestrationFactory:
         """构造部门协作层对象集合。
 
         Returns:
-            对外暴露的部门入口服务和角色协作服务。
+            对外暴露的部门入口服务（通过 DeerFlow 原生 task 实现多 agent 协作）。
         """
         runtime_context = DepartmentRuntimeContext()
-        role_trace_factory = RoleTraceFactory(RoleTraceSummaryBuilder())
+        collaboration_step_factory = CollaborationStepFactory(RoleTraceSummaryBuilder())
         role_runtime_repository = DeerFlowDepartmentRoleRuntimeRepository(
             configuration=self._configuration,
             runtime_assets_service=DeerFlowRuntimeAssetsService(
@@ -74,20 +77,12 @@ class DepartmentOrchestrationFactory:
         workbench_service = DepartmentWorkbenchService(
             InMemoryDepartmentWorkbenchRepository()
         )
-        collaboration_service = DepartmentCollaborationService(
-            role_catalog=self._role_catalog,
-            runtime_repository=role_runtime_repository,
-            workbench_service=workbench_service,
-            runtime_context=runtime_context,
-            role_trace_factory=role_trace_factory,
-        )
         finance_department_service = FinanceDepartmentService(
             role_catalog=self._role_catalog,
             role_runtime_repository=role_runtime_repository,
             workbench_service=workbench_service,
-            role_trace_factory=role_trace_factory,
+            collaboration_step_factory=collaboration_step_factory,
         )
         return DepartmentOrchestrationBundle(
             finance_department_service=finance_department_service,
-            collaboration_service=collaboration_service,
         )

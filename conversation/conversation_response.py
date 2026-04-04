@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass, field
 
-from department.workbench.role_trace import RoleTrace
+from department.workbench.collaboration_step import CollaborationStep
 
 
 @dataclass(frozen=True)
@@ -11,8 +11,8 @@ class ConversationResponse:
 
     Attributes:
         reply_text: 最终回复文本。
-        role_traces: 当前回合角色协作轨迹。
+        collaboration_steps: 当前回合协作步骤。
     """
 
     reply_text: str
-    role_traces: list[RoleTrace] = field(default_factory=list)
+    collaboration_steps: list[CollaborationStep] = field(default_factory=list)

@@ -63,11 +63,6 @@ class DeerFlowToolCatalog:
                 "deerflow.sandbox.tools:bash_tool",
             ),
             DeerFlowToolSpec(
-                "collaborate_with_department_role",
-                FINANCE_TOOL_GROUP_NAME,
-                "department.collaboration.collaborate_with_department_role_tool:collaborate_with_department_role_tool",
-            ),
-            DeerFlowToolSpec(
                 "record_voucher",
                 FINANCE_TOOL_GROUP_NAME,
                 "accounting.record_voucher_tool:record_voucher_tool",
@@ -101,5 +96,10 @@ class DeerFlowToolCatalog:
                 "reply_with_rules",
                 FINANCE_TOOL_GROUP_NAME,
                 "rules.reply_with_rules_tool:reply_with_rules_tool",
+            ),
+            DeerFlowToolSpec(
+                "generate_fiscal_task_prompt",
+                FINANCE_TOOL_GROUP_NAME,
+                "department.collaboration.generate_fiscal_task_prompt_tool:generate_fiscal_task_prompt_tool",
             ),
         )

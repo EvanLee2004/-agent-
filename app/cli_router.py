@@ -7,7 +7,7 @@ from typing import Optional
 from app.dependency_container import AppServiceFactory
 from configuration.configuration_service import ConfigurationService
 from conversation.conversation_request import ConversationRequest
-from department.workbench.role_trace_formatter import RoleTraceFormatter
+from department.workbench.collaboration_step_formatter import CollaborationStepFormatter
 
 
 class CliRouter:
@@ -15,7 +15,7 @@ class CliRouter:
 
     def __init__(self, configuration_service: ConfigurationService):
         self._configuration_service = configuration_service
-        self._role_trace_formatter = RoleTraceFormatter()
+        self._collaboration_step_formatter = CollaborationStepFormatter()
 
     def run(self) -> None:
         """运行 CLI。
@@ -56,9 +56,9 @@ class CliRouter:
                     thread_id=thread_id,
                 )
             )
-            role_trace_text = self._role_trace_formatter.format(response.role_traces)
-            if role_trace_text:
-                print(role_trace_text)
+            collaboration_step_text = self._collaboration_step_formatter.format(response.collaboration_steps)
+            if collaboration_step_text:
+                print(collaboration_step_text)
             print(f"助手: {response.reply_text}\n")
         print("\n再见！")
 

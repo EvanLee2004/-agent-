@@ -10,6 +10,7 @@ from department.finance_department_constants import DEERFLOW_BASE_TOOL_GROUP_NAM
 from department.finance_department_agent_assets_service import FinanceDepartmentAgentAssetsService
 from department.finance_department_role_catalog import FinanceDepartmentRoleCatalog
 from department.roles.coordinator_role_definition import CoordinatorRoleDefinition
+from runtime.deerflow.deerflow_tool_catalog import DeerFlowToolCatalog
 
 
 class FinanceDepartmentAssetsServiceTest(unittest.TestCase):
@@ -62,21 +63,23 @@ class FinanceDepartmentAssetsServiceTest(unittest.TestCase):
                 list(DEERFLOW_BASE_TOOL_GROUP_NAMES),
             )
 
-    def test_coordinator_soul_matches_stage1_strategy(self):
-        """验证 coordinator SOUL 与阶段 1 策略一致，不再优先使用 collaborate_with_department_role。
+    def test_coordinator_soul_matches_stage3_strategy(self):
+        """验证 coordinator SOUL 与阶段 3 策略一致。
 
-        阶段 1 策略：
+        阶段 3 策略：
         - 简单单步任务：直接使用财务工具
-        - 复杂多步任务：优先使用 DeerFlow 原生 task(subagent_type="general-purpose")
-        - collaborate_with_department_role：仅 legacy fallback
+        - 复杂多步任务：先调 generate_fiscal_task_prompt 生成 prompt，再传给 DeerFlow task
+        - collaborate_with_department_role：已从工具目录移除，SOUL 不再提及
 
-        该测试确保 SOUL 文本与上述策略对齐，防止旧策略（优先 collaborate_with_department_role）
-        通过 SOUL 残留渗透到运行时提示中。
+        该测试确保 SOUL 文本与阶段 3 策略对齐。
         """
         role = CoordinatorRoleDefinition().build()
         soul = role.soul_markdown
 
-        # 验证阶段 1 核心策略出现在 SOUL 中
+        # 验证 generate_fiscal_task_prompt 工具出现在 SOUL 中
+        self.assertIn("generate_fiscal_task_prompt", soul)
+
+        # 验证 DeerFlow task 仍然被提及
         self.assertIn("task", soul.lower())
         self.assertIn("general-purpose", soul.lower())
 
@@ -84,12 +87,43 @@ class FinanceDepartmentAssetsServiceTest(unittest.TestCase):
         self.assertIn("record_voucher", soul)
         self.assertIn("calculate_tax", soul)
 
-        # 验证 legacy fallback 表述存在
-        self.assertIn("Legacy fallback", soul)
-        self.assertIn("collaborate_with_department_role", soul)
+        # 阶段 3：collaborate_with_department_role 已移除，SOUL 不应再提及它
+        self.assertNotIn("collaborate_with_department_role", soul)
 
-        # 验证 SOUL 中没有"优先使用 collaborate_with_department_role"这类旧口径
-        # 注意：SOUL 中可以出现 collaborate_with_department_role（作为 legacy 说明），
-        # 但不能出现"优先"或类似表示它是默认路径的表述
-        self.assertNotIn("优先使用 collaborate_with_department_role", soul)
-        self.assertNotIn("优先使用collaborate_with_department_role", soul)
+    def test_tool_catalog_includes_generate_fiscal_task_prompt(self):
+        """验证工具目录包含 generate_fiscal_task_prompt。"""
+        catalog = DeerFlowToolCatalog()
+        tool_names = {spec.name for spec in catalog.list_specs()}
+        self.assertIn("generate_fiscal_task_prompt", tool_names)
+
+    def test_tool_catalog_generate_fiscal_task_prompt_in_finance_group(self):
+        """验证 generate_fiscal_task_prompt 属于 finance 工具组。"""
+        from runtime.deerflow.deerflow_tool_spec import FINANCE_TOOL_GROUP_NAME
+
+        catalog = DeerFlowToolCatalog()
+        spec = next(s for s in catalog.list_specs() if s.name == "generate_fiscal_task_prompt")
+        self.assertEqual(spec.group, FINANCE_TOOL_GROUP_NAME)
+
+    def test_generated_config_yaml_contains_generate_fiscal_task_prompt(self):
+        """验证 config.yaml tools 列表包含 generate_fiscal_task_prompt。
+
+        tools 列表由 DeerFlowConfigDocumentFactory._build_tool_documents() 生成，
+        直接来自 DeerFlowToolCatalog.list_specs()。这里通过检查 factory 输出验证。
+        """
+        from runtime.deerflow.deerflow_config_document_factory import (
+            DeerFlowConfigDocumentFactory,
+        )
+        from runtime.deerflow.deerflow_model_document_factory import (
+            DeerFlowModelDocumentFactory,
+        )
+        from runtime.deerflow.deerflow_tool_catalog import DeerFlowToolCatalog
+
+        catalog = DeerFlowToolCatalog()
+        factory = DeerFlowConfigDocumentFactory(
+            DeerFlowModelDocumentFactory(),
+            catalog,
+        )
+        # _build_tool_documents() 是 public 接口，直接测试其输出
+        tool_docs = factory._build_tool_documents()
+        tool_names = {t["name"] for t in tool_docs}
+        self.assertIn("generate_fiscal_task_prompt", tool_names)

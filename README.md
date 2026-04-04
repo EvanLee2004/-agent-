@@ -22,7 +22,7 @@
 - **凭证审核**：支持金额异常、摘要质量、重复入账等规则审核
 - **DeerFlow 原生记忆**：由 DeerFlow runtime 自动抽取事实并注入后续对话
 - **规则问答**：支持基于项目规则和会计约束的说明性问答
-- **角色思考可视化**：展示每个财务角色的协作摘要，而不是暴露原始推理全文
+- **协作摘要**：DeerFlow stream 事件驱动的多步协作摘要（工具调用 → 工具结果 → 最终结论），不暴露原始推理全文
 - **多模型底层配置**：配置结构已经升级为 DeerFlow 风格 `default_model + models[]`
 
 ## 当前阶段
@@ -38,11 +38,11 @@
 - 财务部门六角色目录落地
 - DeerFlow 自定义角色资产自动生成
 - CLI 主链路切换到 DeerFlow 底层
-- 共享工作台与角色协作 trace 落地
+- 协作摘要基于 DeerFlow stream 事件落地（阶段 4）
+- **阶段 3：多 agent 协作全面切换到 DeerFlow 原生 task/subagent 机制**，legacy collaborate_with_department_role 已于阶段 3 移除
 
 当前版本**尚未**完成：
 
-- 完全切到 DeerFlow 原生 subagent 编排
 - 基于真实业务状态的复杂多角色协同策略
 - 正式税务申报
 - API/Web 对外接口
@@ -72,7 +72,7 @@
 | 能力 | 说明 |
 |------|------|
 | `thinking_enabled` | 模型扩展思考能力，已启用 |
-| `subagent_enabled` | DeerFlow 原生 task 工具已启用，可通过 `task` 工具调用 `general-purpose` 子代理执行复杂多步任务；`collaborate_with_department_role` 仍保留作为 legacy fallback |
+| `subagent_enabled` | DeerFlow 原生 task 工具已启用；复杂多步任务通过 `generate_fiscal_task_prompt` + `task(..., subagent_type="general-purpose")` 两步流程完成，`collaborate_with_department_role` 已于阶段 3 从工具目录移除 |
 | `memory` | DeerFlow 原生记忆，每轮对话后自动提取事实并注入下一轮 system prompt |
 | `stream()` | 正确使用 `stream()` 而非 `chat()`，保留完整事件流供未来扩展（tool trace、usage、artifacts），最终 reply 取最后一个非空 AI 文本 |
 | `reset_agent()` | 每次 `reply()` 前调用，确保 memory/skills 上下文刷新 |
@@ -90,9 +90,11 @@ ConversationService
   ↓
 FinanceDepartmentService
   ↓
-共享工作台 + 角色协作服务
+DeerFlowDepartmentRoleRuntimeRepository（收集 execution_events）
   ↓
-DeerFlowDepartmentRoleRuntimeRepository
+CollaborationStepFactory（生成 collaboration_steps）
+  ↓
+DepartmentWorkbenchService（记录协作步骤）
   ↓
 DeerFlowClient（public embedded client）
   ↓
@@ -121,7 +123,7 @@ SQLite 业务仓储 + DeerFlow Native Memory / Checkpointer
 ├── department/                      # 财务部门主域
 │   ├── collaboration/               # 角色协作协议与协作工具
 │   ├── roles/                       # 六个财务角色的独立定义
-│   └── workbench/                   # 共享工作台与角色轨迹
+│   └── workbench/                   # 协作工作台：execution_events → collaboration_steps
 ├── accounting/                      # 记账与凭证查询
 ├── cashier/                         # 出纳事实与资金收付
 ├── audit/                           # 审核规则
@@ -217,7 +219,7 @@ python main.py
 
 当前已接入的财务工具：
 
-- `collaborate_with_department_role`
+- `generate_fiscal_task_prompt`（阶段 2/3：为 DeerFlow task 生成结构化财务专业 prompt，coordinator 复杂任务专用）
 - `record_voucher`
 - `query_vouchers`
 - `record_cash_transaction`
@@ -274,6 +276,7 @@ python main.py
 - 税务测算
 - 凭证审核
 - DeerFlow 原生记忆配置注入
+- DeerFlow stream 事件 → execution_events → collaboration_steps 全链路
 - 会话边界与线程透传
 
 ## 当前里程碑结论

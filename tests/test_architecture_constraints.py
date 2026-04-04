@@ -51,10 +51,11 @@ REMOVED_PATHS = [
     PROJECT_ROOT / "conversation" / "deerflow_runtime_assets.py",
     PROJECT_ROOT / "conversation" / "deerflow_runtime_assets_service.py",
     PROJECT_ROOT / "conversation" / "deerflow_runtime_error.py",
-    PROJECT_ROOT / "department" / "collaborate_with_department_role_router.py",
-    PROJECT_ROOT / "department" / "collaborate_with_department_role_tool.py",
-    PROJECT_ROOT / "department" / "department_collaboration_command.py",
-    PROJECT_ROOT / "department" / "department_collaboration_service.py",
+    # 阶段 3：legacy 自写协作层已移除
+    PROJECT_ROOT / "department" / "collaboration" / "collaborate_with_department_role_router.py",
+    PROJECT_ROOT / "department" / "collaboration" / "collaborate_with_department_role_tool.py",
+    PROJECT_ROOT / "department" / "collaboration" / "department_collaboration_command.py",
+    PROJECT_ROOT / "department" / "collaboration" / "department_collaboration_service.py",
     PROJECT_ROOT / "department" / "department_workbench.py",
     PROJECT_ROOT / "department" / "department_workbench_repository.py",
     PROJECT_ROOT / "department" / "department_workbench_service.py",
@@ -114,3 +115,28 @@ class ArchitectureConstraintsTest(unittest.TestCase):
                 if len(top_level_classes) > 1:
                     violations.append(str(file_path))
         self.assertEqual(violations, [])
+
+    def test_readme_and_agents_no_legacy_fallback_claim(self):
+        """验证文档不再声称 collaborate_with_department_role 仍保留作为 legacy fallback。
+
+        阶段 3：legacy 工具已从 tool catalog 移除，文档应与实际实现一致。
+        本测试防止"collaborate_with_department_role 仍保留"这类旧描述回退到 README/AGENTS。
+        """
+        readme = (PROJECT_ROOT / "README.md").read_text(encoding="utf-8")
+        agents = (PROJECT_ROOT / "AGENTS.md").read_text(encoding="utf-8")
+
+        # README subagent_enabled 行不应声称 legacy fallback 仍保留
+        for line in readme.splitlines():
+            if "subagent_enabled" in line:
+                self.assertNotIn("仍保留", line, "subagent_enabled 行不应声称 legacy fallback 仍保留")
+                self.assertNotIn("legacy fallback", line.lower())
+
+        # README 和 AGENTS 工具列表中均不应声称 collaborate_with_department_role 仍使用
+        for doc_name, doc_content in [("README.md", readme), ("AGENTS.md", agents)]:
+            # 允许出现在"阶段 3 已移除"的描述中，但不允许出现在"仍保留"/"legacy fallback"语境
+            if "collaborate_with_department_role" in doc_content:
+                self.assertNotIn(
+                    "仍保留",
+                    doc_content,
+                    f"{doc_name} 不应声称 collaborate_with_department_role 仍保留",
+                )

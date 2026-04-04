@@ -26,14 +26,14 @@ pip install -r requirements.txt
 
 ## 架构原则
 
-**调用链路**：`CLI → ConversationRouter → ConversationService → FinanceDepartmentService → 共享工作台/角色协作 → DeerFlowDepartmentRoleRuntimeRepository → DeerFlowClient`
+**调用链路**：`CLI → ConversationRouter → ConversationService → FinanceDepartmentService → DeerFlowDepartmentRoleRuntimeRepository → CollaborationStepFactory → DepartmentWorkbenchService → DeerFlowClient`
 
 **分层规则**：`router → service → repository → model`，禁止跨层直接调用。
 
 **关键边界**：
 - `app/` — 启动入口与依赖装配（DI 容器、工厂），具体实现和第三方接入只在此层装配
 - `conversation/` — 会话边界，用户可见响应收口
-- `department/` — 财务部门主域：角色目录（`roles/`）、协作协议（`collaboration/`）、共享工作台（`workbench/`）
+- `department/` — 财务部门主域：角色目录（`roles/`）、协作协议（`collaboration/`）、协作工作台（`workbench/`）
 - `runtime/deerflow/` — DeerFlow 适配层，运行时资产生成到 `.runtime/deerflow/`（gitignored）
 - `accounting/`、`cashier/`、`audit/`、`tax/`、`rules/` — 各业务特性模块，内部遵循 router/service/repository 分层
 - `configuration/` — 配置读取与校验
@@ -101,6 +101,7 @@ pip install -r requirements.txt
 
 ## 当前财务工具
 
-- `collaborate_with_department_role`、`record_voucher`、`query_vouchers`
+- `generate_fiscal_task_prompt`（复杂多步任务专用，通过 FiscalRolePromptBuilder 生成结构化财务专业 prompt）
+- `record_voucher`、`query_vouchers`
 - `record_cash_transaction`、`query_cash_transactions`
 - `calculate_tax`、`audit_voucher`、`reply_with_rules`

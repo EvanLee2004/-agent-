@@ -9,6 +9,8 @@ from department.department_role_request import DepartmentRoleRequest
 from department.department_role_response import DepartmentRoleResponse
 from department.department_role_runtime_repository import DepartmentRoleRuntimeRepository
 from department.department_runtime_context import DepartmentRuntimeContext
+from department.workbench.execution_event import ExecutionEvent
+from department.workbench.execution_event_type import ExecutionEventType
 from runtime.deerflow.deerflow_client_factory import DeerFlowClientFactory
 from runtime.deerflow.deerflow_runtime_assets import DeerFlowRuntimeAssets
 from runtime.deerflow.deerflow_runtime_assets_service import DeerFlowRuntimeAssetsService
@@ -76,7 +78,7 @@ class DeerFlowDepartmentRoleRuntimeRepository(DepartmentRoleRuntimeRepository):
             ):
                 # 使用 stream() 而非 chat()，确保不丢失多段 AI 输出。
                 # 参见类文档"设计决策 2"。
-                reply_text = self._collect_full_reply_text(
+                reply_text, execution_events = self._collect_reply_and_events(
                     client,
                     request.user_input,
                     thread_id=request.thread_id or DEFAULT_THREAD_ID,
@@ -89,56 +91,111 @@ class DeerFlowDepartmentRoleRuntimeRepository(DepartmentRoleRuntimeRepository):
             role_name=request.role_name,
             reply_text=self._reply_text_sanitizer.sanitize(str(reply_text).strip()),
             collaboration_depth=request.collaboration_depth,
+            execution_events=execution_events,
         )
 
-    def _collect_full_reply_text(
+    def _collect_reply_and_events(
         self,
         client: object,
         user_input: str,
         thread_id: str,
-    ) -> str:
-        """从 DeerFlow stream() 中提取最终回复文本。
+    ) -> tuple[str, list[ExecutionEvent]]:
+        """从 DeerFlow stream() 中提取最终回复文本和执行事件。
 
         DeerFlow stream() 在 embedded mode 下产生完整 AIMessage 事件，而非 token delta。
         一个 turn 中可能出现多个 AI 消息（例如：中间回复 -> 工具调用 -> 最终回复）。
         chat() 故意只返回最后一个非空 AI 文本，这是正确的语义：
         用户可见的最终回复不应包含"我先查一下"这类中间话术。
 
-        我们使用 stream() 而非 chat()，是为了保留完整事件供未来扩展
-        （tool trace、usage 统计、artifacts），但最终 reply_text 仍然取
-        最后一个非空 AI 文本，与 chat() 语义对齐。
+        我们使用 stream() 而非 chat()，同时收集对用户有意义的执行事件：
+        - AI 发起工具调用（generate_fiscal_task_prompt、task 等）
+        - 工具执行结果（用于确认动作完成）
+        - 最终 AI 文本回复（always 作为最后一步）
 
-        DeerFlow stream() 产生的事件类型：
-        - messages-tuple (type=ai): AI 消息片段
-        - messages-tuple (type=ai, tool_calls): AI 发起工具调用
-        - messages-tuple (type=tool): 工具执行结果
+        最终 reply_text 取最后一个非空 AI 文本，与 chat() 语义对齐。
+        execution_events 只包含对生成协作摘要有意义的事件，不暴露原始长文本 thinking。
+
+        DeerFlow stream() 产生的事件类型（参见 deerflow/client.py:_serialize_message）：
+        - messages-tuple (type=ai, content=...): AI 消息片段
+        - messages-tuple (type=ai, tool_calls=[{name, args, id}]): AI 发起工具调用
+          注意：tool_calls 项是 {"name": ..., "args": ..., "id": ...}，没有嵌套 "function" 结构
+        - messages-tuple (type=tool, content=..., name=..., tool_call_id=...): 工具执行结果
+          tool_call_id 字段与原始 tool_calls 项的 id 字段对应
         - values: 完整状态快照（含 artifacts）
         - end: 流结束，包含累计 usage
         """
         last_ai_text: str = ""
-        # 预留扩展点：收集 tool_events / cumulative_usage / artifacts
-        # tool_events: list[dict] = []
-        # cumulative_usage: dict[str, int] = {}
-        # artifacts: list[Any] = []
+        execution_events: list[ExecutionEvent] = []
+        # 追踪已记录的 tool_call 的 id，用于将 tool_result 与原始调用关联
+        recorded_tool_call_ids: set[str] = set()
 
         for event in client.stream(user_input, thread_id=thread_id):
             # 收集最后一个非空 AI 文本作为最终回复
-            # 注意：中间 AI 文本（如"我先查一下"）不加入最终回复
             if event.type == "messages-tuple" and event.data.get("type") == "ai":
                 content = event.data.get("content", "")
                 if content:
                     last_ai_text = content
-            # 预留：收集 tool 调用事件供未来 trace 使用
-            # elif event.type == "messages-tuple" and event.data.get("type") == "tool":
-            #     tool_events.append(event.data)
-            # 预留：收集 end 事件中的 usage
-            # elif event.type == "end":
-            #     cumulative_usage = event.data.get("usage", {})
-            # 预留：收集 values 事件中的 artifacts
-            # elif event.type == "values":
-            #     artifacts.extend(event.data.get("artifacts", []))
+                # 收集 AI 发起的工具调用
+                # DeerFlow tool_calls 项结构: {"name": ..., "args": ..., "id": ...}
+                # 不是 {"function": {"name": ..., "args": ...}} 那种 LangChain 旧格式
+                tool_calls = event.data.get("tool_calls", [])
+                for tc in tool_calls:
+                    tool_name = tc.get("name", "")
+                    tc_id = tc.get("id", "")
+                    if tool_name and tc_id and tc_id not in recorded_tool_call_ids:
+                        recorded_tool_call_ids.add(tc_id)
+                        event_type = ExecutionEventType.TASK_CALL if tool_name == "task" else ExecutionEventType.TOOL_CALL
+                        execution_events.append(
+                            ExecutionEvent(
+                                event_type=event_type,
+                                tool_name=tool_name,
+                                summary=f"调用 {tool_name}",
+                            )
+                        )
+            # 收集工具执行结果
+            elif event.type == "messages-tuple" and event.data.get("type") == "tool":
+                tool_call_id = event.data.get("tool_call_id", "")
+                tool_name = event.data.get("name", "")
+                content = event.data.get("content", "")
+                # tool_result 通过 tool_call_id 与原始 tool_call 的 id 字段关联
+                # 生成简洁摘要：若 content 短则直接用，否则截断
+                if tool_call_id in recorded_tool_call_ids:
+                    if content:
+                        # 工具返回内容通常是结构化文本，截断到合理长度
+                        summary = content[:80] + "…" if len(content) > 80 else content
+                    else:
+                        summary = f"{tool_name} 执行完成"
+                    execution_events.append(
+                        ExecutionEvent(
+                            event_type=ExecutionEventType.TOOL_RESULT,
+                            tool_name=tool_name,
+                            summary=summary,
+                        )
+                    )
 
-        return last_ai_text
+        # 策略：始终以 FINAL_REPLY 作为最后一步（即使本轮有工具调用）。
+        # 这是 DeerFlow 多 agent 协作的最终结论，用户需要看到它。
+        # 只有当没有任何其他事件时才用 reply_text 作为单步骤 fallback。
+        if not execution_events and last_ai_text:
+            # 无任何工具调用/结果时，FINAL_REPLY 是唯一的步骤
+            execution_events.append(
+                ExecutionEvent(
+                    event_type=ExecutionEventType.FINAL_REPLY,
+                    tool_name="",
+                    summary=last_ai_text,
+                )
+            )
+        elif execution_events and last_ai_text:
+            # 有工具调用/结果时，在末尾追加 FINAL_REPLY
+            execution_events.append(
+                ExecutionEvent(
+                    event_type=ExecutionEventType.FINAL_REPLY,
+                    tool_name="",
+                    summary=last_ai_text,
+                )
+            )
+
+        return last_ai_text, execution_events
 
     def _get_client(self, role_name: str):
         """按需获取某个角色对应的 DeerFlowClient。

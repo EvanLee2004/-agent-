@@ -40,5 +40,5 @@ class ConversationService:
             raise ConversationError(str(error)) from error
         return ConversationResponse(
             reply_text=self._reply_text_sanitizer.sanitize(department_response.reply_text),
-            role_traces=department_response.role_traces,
+            collaboration_steps=department_response.collaboration_steps,
         )
