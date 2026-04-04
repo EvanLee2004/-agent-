@@ -1,15 +1,21 @@
 """财务部门运行时上下文。"""
 
 from contextlib import contextmanager
-from contextvars import ContextVar, Token
+from contextvars import ContextVar
 from typing import Iterator, Optional
 
 from department.department_error import DepartmentError
 
 
-CURRENT_ROLE_NAME: ContextVar[Optional[str]] = ContextVar("CURRENT_ROLE_NAME", default=None)
-CURRENT_THREAD_ID: ContextVar[Optional[str]] = ContextVar("CURRENT_THREAD_ID", default=None)
-CURRENT_COLLABORATION_DEPTH: ContextVar[int] = ContextVar("CURRENT_COLLABORATION_DEPTH", default=0)
+CURRENT_ROLE_NAME: ContextVar[Optional[str]] = ContextVar(
+    "CURRENT_ROLE_NAME", default=None
+)
+CURRENT_THREAD_ID: ContextVar[Optional[str]] = ContextVar(
+    "CURRENT_THREAD_ID", default=None
+)
+CURRENT_COLLABORATION_DEPTH: ContextVar[int] = ContextVar(
+    "CURRENT_COLLABORATION_DEPTH", default=0
+)
 
 
 class DepartmentRuntimeContext:
@@ -75,4 +81,3 @@ class DepartmentRuntimeContext:
     def get_current_collaboration_depth(self) -> int:
         """获取当前协作深度。"""
         return CURRENT_COLLABORATION_DEPTH.get()
-

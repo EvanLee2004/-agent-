@@ -1,9 +1,13 @@
 """会话入口。"""
 
+import logging
+
 from conversation.conversation_error import ConversationError
 from conversation.conversation_request import ConversationRequest
 from conversation.conversation_response import ConversationResponse
 from conversation.conversation_service import ConversationService
+
+logger = logging.getLogger(__name__)
 
 
 class ConversationRouter:
@@ -24,7 +28,10 @@ class ConversationRouter:
         try:
             return self._conversation_service.reply(request)
         except ConversationError:
-            # 这里不把底层运行时细节直接暴露给最终用户。
-            # 当前系统正在切向 DeerFlow 底层，错误信息往往包含配置或第三方细节，
-            # 直接回显会降低产品稳定感，也会扩大排障信息暴露面。
+            return ConversationResponse(reply_text="服务暂时不可用，请稍后重试。")
+        except Exception:
+            # 捕获所有异常以避免 Python traceback 暴露给用户。
+            # DeerFlow 底层错误信息往往包含配置或第三方细节，直接回显会降低产品稳定感，
+            # 也会扩大排障信息暴露面。将详细错误记录到日志供排查使用。
+            logger.exception("会话处理异常")
             return ConversationResponse(reply_text="服务暂时不可用，请稍后重试。")

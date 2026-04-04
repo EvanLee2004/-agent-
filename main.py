@@ -3,14 +3,14 @@
 import sys
 
 from app.cli_router import CliRouter
-from app.dependency_container import DependencyContainer
+from app.dependency_container import AppServiceFactory
 from configuration.configuration_error import ConfigurationError
 
 
 def main() -> None:
     """启动 CLI。"""
     try:
-        cli_router = CliRouter(DependencyContainer.create_configuration_service())
+        cli_router = CliRouter(AppServiceFactory.create_configuration_service())
         cli_router.run()
     except ConfigurationError as error:
         # CLI 属于用户直接面对的入口，配置错误应当给出明确提示并干净退出，

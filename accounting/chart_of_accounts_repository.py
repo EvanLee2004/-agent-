@@ -9,6 +9,12 @@ from accounting.account_subject import AccountSubject
 class ChartOfAccountsRepository(ABC):
     """科目仓储接口。"""
 
+    @property
+    @abstractmethod
+    def database_path(self) -> str:
+        """返回底层数据库路径。"""
+        raise NotImplementedError
+
     @abstractmethod
     def initialize_storage(self) -> None:
         """初始化存储。"""

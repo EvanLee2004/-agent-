@@ -10,6 +10,11 @@ from cashier.record_cash_transaction_command import RecordCashTransactionCommand
 class CashierRepository(ABC):
     """定义出纳仓储接口。"""
 
+    @property
+    @abstractmethod
+    def database_path(self) -> str:
+        """返回底层数据库路径。"""
+
     @abstractmethod
     def initialize_storage(self) -> None:
         """初始化出纳存储。"""

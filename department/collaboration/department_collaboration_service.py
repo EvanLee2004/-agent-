@@ -2,11 +2,15 @@
 
 from typing import Optional
 
-from department.collaboration.department_collaboration_command import DepartmentCollaborationCommand
+from department.collaboration.department_collaboration_command import (
+    DepartmentCollaborationCommand,
+)
 from department.department_error import DepartmentError
 from department.department_role_request import DepartmentRoleRequest
 from department.department_role_response import DepartmentRoleResponse
-from department.department_role_runtime_repository import DepartmentRoleRuntimeRepository
+from department.department_role_runtime_repository import (
+    DepartmentRoleRuntimeRepository,
+)
 from department.department_runtime_context import DepartmentRuntimeContext
 from department.finance_department_role_catalog import FinanceDepartmentRoleCatalog
 from department.workbench.department_workbench_service import DepartmentWorkbenchService
@@ -60,7 +64,9 @@ class DepartmentCollaborationService:
         self._runtime_context = runtime_context
         self._role_trace_factory = role_trace_factory
 
-    def collaborate(self, command: DepartmentCollaborationCommand) -> DepartmentRoleResponse:
+    def collaborate(
+        self, command: DepartmentCollaborationCommand
+    ) -> DepartmentRoleResponse:
         """执行一次角色协作。
 
         Args:
@@ -75,7 +81,10 @@ class DepartmentCollaborationService:
         self._validate_command(requester_role_name, command, current_depth)
         self._workbench_service.reserve_collaboration(thread_id)
         requester_role = self._role_catalog.get_role(requester_role_name)
-        target_role = self._role_catalog.get_role(command.target_role_name)
+        try:
+            target_role = self._role_catalog.get_role(command.target_role_name)
+        except KeyError:
+            raise DepartmentError(f"未知角色: {command.target_role_name}")
         role_response = self._runtime_repository.reply(
             DepartmentRoleRequest(
                 role_name=target_role.agent_name,
@@ -118,4 +127,7 @@ class DepartmentCollaborationService:
             raise DepartmentError("角色不能向自己发起协作请求")
         if current_depth >= MAX_COLLABORATION_DEPTH:
             raise DepartmentError("当前协作深度过深，请先汇总已有结论")
-        self._role_catalog.get_role(command.target_role_name)
+        try:
+            self._role_catalog.get_role(command.target_role_name)
+        except KeyError:
+            raise DepartmentError(f"未知角色: {command.target_role_name}")

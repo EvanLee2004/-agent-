@@ -68,7 +68,9 @@ class TaxService:
 
     def _calculate_small_scale_vat(self, request: TaxRequest) -> TaxComputationResult:
         """计算小规模纳税人增值税。"""
-        taxable_base, payable_tax, formula = self._resolve_small_scale_vat_values(request)
+        taxable_base, payable_tax, formula = self._resolve_small_scale_vat_values(
+            request
+        )
         return TaxComputationResult(
             tax_type=request.tax_type,
             taxpayer_type=request.taxpayer_type,
@@ -83,7 +85,9 @@ class TaxService:
             ],
         )
 
-    def _resolve_small_scale_vat_values(self, request: TaxRequest) -> tuple[float, float, str]:
+    def _resolve_small_scale_vat_values(
+        self, request: TaxRequest
+    ) -> tuple[float, float, str]:
         """计算小规模纳税人增值税的应税基础与公式。"""
         if request.includes_tax:
             return self._calculate_tax_included_vat(request.amount)
@@ -106,16 +110,21 @@ class TaxService:
         formula = f"不含税销售额 {taxable_base:.2f} x 1% = 应纳增值税 {payable_tax:.2f}"
         return taxable_base, payable_tax, formula
 
-    def _calculate_small_low_profit_cit(self, request: TaxRequest) -> TaxComputationResult:
+    def _calculate_small_low_profit_cit(
+        self, request: TaxRequest
+    ) -> TaxComputationResult:
         """计算小型微利企业企业所得税。"""
         taxable_base = round(request.amount - request.cost, 2)
         payable_tax = round(taxable_base * SMALL_LOW_PROFIT_EFFECTIVE_CIT_RATE, 2)
-        if request.cost > 0:
+        if request.cost > 0 and taxable_base > 0:
             formula = (
                 f"收入 {request.amount:.2f} - 成本费用 {request.cost:.2f} = "
                 f"应纳税所得额 {taxable_base:.2f} x 25% x 20% = 应纳企业所得税 {payable_tax:.2f}"
             )
+        elif taxable_base > 0:
+            formula = f"应纳税所得额 {taxable_base:.2f} x 25% x 20% = 应纳企业所得税 {payable_tax:.2f}"
         else:
+            formula = f"应纳税所得额 {taxable_base:.2f}，无需缴纳企业所得税"
             formula = f"应纳税所得额 {taxable_base:.2f} x 25% x 20% = 应纳企业所得税 {payable_tax:.2f}"
         return TaxComputationResult(
             tax_type=request.tax_type,

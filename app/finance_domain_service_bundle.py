@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 
 from accounting.accounting_service import AccountingService
-from accounting.sqlite_journal_repository import SQLiteJournalRepository
+from accounting.journal_repository import JournalRepository
 from cashier.cashier_service import CashierService
 
 
@@ -21,5 +21,5 @@ class FinanceDomainServiceBundle:
 
     department_display_name: str
     accounting_service: AccountingService
-    journal_repository: SQLiteJournalRepository
+    journal_repository: JournalRepository
     cashier_service: CashierService

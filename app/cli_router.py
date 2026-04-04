@@ -4,7 +4,7 @@ import asyncio
 import uuid
 from typing import Optional
 
-from app.dependency_container import DependencyContainer
+from app.dependency_container import AppServiceFactory
 from configuration.configuration_service import ConfigurationService
 from conversation.conversation_request import ConversationRequest
 from department.workbench.role_trace_formatter import RoleTraceFormatter
@@ -39,9 +39,9 @@ class CliRouter:
     async def _run_async(self) -> None:
         """执行异步 CLI 主流程。"""
         configuration = self._configuration_service.ensure_configuration()
-        dependency_container = DependencyContainer(configuration)
-        dependency_container.build_application_bootstrapper().initialize()
-        conversation_router = dependency_container.build_conversation_router()
+        app_factory = AppServiceFactory(configuration)
+        app_factory.build_application_bootstrapper().initialize()
+        conversation_router = app_factory.build_conversation_router()
         thread_id = self._build_thread_id()
         self._print_banner()
         while True:

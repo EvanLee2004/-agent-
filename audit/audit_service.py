@@ -20,7 +20,9 @@ SEVERITY_ORDER = {
 DUPLICATE_TOLERANCE = 0.01
 
 
-def _build_unbalanced_flag(voucher, total_debit: float, total_credit: float) -> AuditFlag:
+def _build_unbalanced_flag(
+    voucher, total_debit: float, total_credit: float
+) -> AuditFlag:
     """构造借贷不平标记。"""
     return AuditFlag(
         code="UNBALANCED",
@@ -88,7 +90,12 @@ class AuditService:
         if not target_vouchers:
             raise AuditError("未找到可审核的凭证")
 
-        all_vouchers = self._journal_repository.list_vouchers(QueryVouchersQuery(limit=500))
+        if request.target == AuditTarget.ALL:
+            all_vouchers = target_vouchers
+        else:
+            all_vouchers = self._journal_repository.list_vouchers(
+                QueryVouchersQuery(limit=500)
+            )
         flags = self._collect_audit_flags(target_vouchers, all_vouchers)
 
         risk_level = self._resolve_risk_level(flags)
@@ -100,7 +107,9 @@ class AuditService:
             suggestion="建议优先复核高风险标记，再确认摘要和金额是否符合实际业务。",
         )
 
-    def _collect_audit_flags(self, target_vouchers: list, all_vouchers: list) -> list[AuditFlag]:
+    def _collect_audit_flags(
+        self, target_vouchers: list, all_vouchers: list
+    ) -> list[AuditFlag]:
         """汇总多张凭证的审核标记。"""
         flags = []
         for voucher in target_vouchers:
@@ -112,7 +121,9 @@ class AuditService:
         if request.target == AuditTarget.ALL:
             return self._journal_repository.list_vouchers(QueryVouchersQuery(limit=100))
         if request.target == AuditTarget.VOUCHER_ID:
-            voucher = self._journal_repository.get_voucher_by_id(request.voucher_id or 0)
+            voucher = self._journal_repository.get_voucher_by_id(
+                request.voucher_id or 0
+            )
             if voucher is None:
                 return []
             return [voucher]
@@ -186,7 +197,10 @@ class AuditService:
                 continue
             if voucher.summary != current_voucher.summary:
                 continue
-            if abs(voucher.get_total_amount() - current_voucher.get_total_amount()) < DUPLICATE_TOLERANCE:
+            if (
+                abs(voucher.get_total_amount() - current_voucher.get_total_amount())
+                < DUPLICATE_TOLERANCE
+            ):
                 return True
         return False
 
@@ -196,6 +210,8 @@ class AuditService:
 
     def _resolve_risk_level(self, flags: list[AuditFlag]) -> str:
         """推导最终风险等级。"""
+        if not flags:
+            return "none"
         highest_level = 0
         for flag in flags:
             highest_level = max(highest_level, SEVERITY_ORDER.get(flag.severity, 0))

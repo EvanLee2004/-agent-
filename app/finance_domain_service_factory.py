@@ -1,10 +1,13 @@
 """财务领域服务工厂。"""
 
 from accounting.accounting_service import AccountingService
+from accounting.chart_of_accounts_repository import ChartOfAccountsRepository
 from accounting.chart_of_accounts_service import ChartOfAccountsService
+from accounting.journal_repository import JournalRepository
 from accounting.sqlite_chart_of_accounts_repository import SQLiteChartOfAccountsRepository
 from accounting.sqlite_journal_repository import SQLiteJournalRepository
 from app.finance_domain_service_bundle import FinanceDomainServiceBundle
+from cashier.cashier_repository import CashierRepository
 from cashier.cashier_service import CashierService
 from cashier.sqlite_cashier_repository import SQLiteCashierRepository
 
@@ -21,24 +24,34 @@ class FinanceDomainServiceFactory:
     SQLiteMemoryIndexRepository。
     """
 
-    def build(self, department_display_name: str) -> FinanceDomainServiceBundle:
+    def build(
+        self,
+        department_display_name: str,
+        chart_repository: ChartOfAccountsRepository | None = None,
+        journal_repository: JournalRepository | None = None,
+        cashier_repository: CashierRepository | None = None,
+    ) -> FinanceDomainServiceBundle:
         """构造财务领域服务集合。
 
         Args:
             department_display_name: 当前产品对外展示的部门名称。
+            chart_repository: 科目仓储，未提供时使用 SQLite 实现。
+            journal_repository: 凭证仓储，未提供时使用 SQLite 实现。
+            cashier_repository: 出纳仓储，未提供时使用 SQLite 实现。
 
         Returns:
             会话与工具装配需要的财务领域服务 bundle。
         """
-        chart_repository = SQLiteChartOfAccountsRepository()
-        journal_repository = SQLiteJournalRepository()
+        chart_repository = chart_repository or SQLiteChartOfAccountsRepository()
+        journal_repository = journal_repository or SQLiteJournalRepository()
+        cashier_repository = cashier_repository or SQLiteCashierRepository()
         chart_service = ChartOfAccountsService(chart_repository)
         accounting_service = AccountingService(
             journal_repository,
             chart_service,
             department_display_name,
         )
-        cashier_service = CashierService(SQLiteCashierRepository())
+        cashier_service = CashierService(cashier_repository)
         return FinanceDomainServiceBundle(
             department_display_name=department_display_name,
             accounting_service=accounting_service,

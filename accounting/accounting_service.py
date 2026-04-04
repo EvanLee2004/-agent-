@@ -32,11 +32,9 @@ class AccountingService:
         Returns:
             新建凭证主键。
         """
-        normalized_draft = command.voucher_draft.apply_business_rules()
-        normalized_command = RecordVoucherCommand(voucher_draft=normalized_draft)
-        self._chart_of_accounts_service.validate_voucher_subjects(normalized_draft)
+        self._chart_of_accounts_service.validate_voucher_subjects(command.voucher_draft)
         return self._journal_repository.create_voucher(
-            command=normalized_command,
+            command=command,
             recorded_by=self._recorded_by,
         )
 

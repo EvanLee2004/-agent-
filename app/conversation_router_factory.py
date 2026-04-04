@@ -1,5 +1,8 @@
 """会话入口工厂。"""
 
+from accounting.chart_of_accounts_repository import ChartOfAccountsRepository
+from accounting.journal_repository import JournalRepository
+from cashier.cashier_repository import CashierRepository
 from configuration.llm_configuration import LlmConfiguration
 from conversation.conversation_router import ConversationRouter
 from conversation.conversation_service import ConversationService
@@ -18,13 +21,23 @@ class ConversationRouterFactory:
     """负责装配会话主链路。
 
     当前系统的主链路跨越会话边界、财务部门协作、DeerFlow 运行时和财务工具上下文。
-    把这些装配细节从 `DependencyContainer` 中抽出来，是为了让依赖容器回到“入口协调”
+    把这些装配细节从 `AppServiceFactory` 中抽出来，是为了让依赖容器回到"入口协调"
     的角色，而不是继续充当全系统构造脚本。
     """
 
-    def __init__(self, llm_configuration: LlmConfiguration, role_catalog: FinanceDepartmentRoleCatalog):
+    def __init__(
+        self,
+        llm_configuration: LlmConfiguration,
+        role_catalog: FinanceDepartmentRoleCatalog,
+        chart_repository: ChartOfAccountsRepository,
+        journal_repository: JournalRepository,
+        cashier_repository: CashierRepository,
+    ):
         self._llm_configuration = llm_configuration
         self._role_catalog = role_catalog
+        self._chart_repository = chart_repository
+        self._journal_repository = journal_repository
+        self._cashier_repository = cashier_repository
 
     def build(self) -> ConversationRouter:
         """构造会话入口。
@@ -37,7 +50,12 @@ class ConversationRouterFactory:
     def _build_conversation_service(self) -> ConversationService:
         """构造会话服务。"""
         department_display_name = self._role_catalog.get_department_display_name()
-        domain_services = FinanceDomainServiceFactory().build(department_display_name)
+        domain_services = FinanceDomainServiceFactory().build(
+            department_display_name,
+            chart_repository=self._chart_repository,
+            journal_repository=self._journal_repository,
+            cashier_repository=self._cashier_repository,
+        )
         orchestration_bundle = DepartmentOrchestrationFactory(
             role_catalog=self._role_catalog,
             configuration=self._llm_configuration,

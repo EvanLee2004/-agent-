@@ -4,6 +4,7 @@ import sqlite3
 from pathlib import Path
 
 from cashier.cash_transaction import CashTransaction
+from cashier.cashier_error import CashierError
 from cashier.cashier_repository import CashierRepository
 from cashier.query_cash_transactions_query import QueryCashTransactionsQuery
 from cashier.record_cash_transaction_command import RecordCashTransactionCommand
@@ -28,7 +29,7 @@ CREATE TABLE IF NOT EXISTS cash_transaction (
 
 def _ensure_database_directory(database_path: str) -> None:
     """确保数据库目录存在。"""
-    Path(database_path).parent.mkdir(exist_ok=True)
+    Path(database_path).parent.mkdir(parents=True, exist_ok=True)
 
 
 def _build_cash_transaction(row: sqlite3.Row) -> CashTransaction:
@@ -52,6 +53,11 @@ class SQLiteCashierRepository(CashierRepository):
 
     def __init__(self, database_path: str = DEFAULT_CASHIER_DB):
         self._database_path = database_path
+
+    @property
+    def database_path(self) -> str:
+        """返回底层数据库路径。"""
+        return self._database_path
 
     def initialize_storage(self) -> None:
         """初始化出纳存储。"""
@@ -83,9 +89,13 @@ class SQLiteCashierRepository(CashierRepository):
                 ),
             )
             connection.commit()
-            return int(cursor.lastrowid or 0)
+            if not cursor.lastrowid:
+                raise CashierError("资金收付记录写入失败")
+            return int(cursor.lastrowid)
 
-    def list_transactions(self, query: QueryCashTransactionsQuery) -> list[CashTransaction]:
+    def list_transactions(
+        self, query: QueryCashTransactionsQuery
+    ) -> list[CashTransaction]:
         """查询资金收付记录。"""
         clauses = []
         params: list[object] = []
@@ -119,4 +129,3 @@ class SQLiteCashierRepository(CashierRepository):
                 [*params, query.limit],
             ).fetchall()
         return [_build_cash_transaction(row) for row in rows]
-

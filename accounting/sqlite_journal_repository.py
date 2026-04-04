@@ -4,6 +4,7 @@ import sqlite3
 from pathlib import Path
 from typing import Optional
 
+from accounting.accounting_error import AccountingError
 from accounting.journal_line import JournalLine
 from accounting.journal_repository import JournalRepository
 from accounting.journal_voucher import JournalVoucher
@@ -87,7 +88,7 @@ ORDER BY line_no ASC
 
 def _ensure_database_directory(database_path: str) -> None:
     """确保数据库目录存在。"""
-    Path(database_path).parent.mkdir(exist_ok=True)
+    Path(database_path).parent.mkdir(parents=True, exist_ok=True)
 
 
 def _create_tables(connection: sqlite3.Connection) -> None:
@@ -133,7 +134,9 @@ def _build_line_models(line_rows: list[sqlite3.Row]) -> list[JournalLine]:
     ]
 
 
-def _build_journal_voucher(voucher_row: sqlite3.Row, lines: list[JournalLine]) -> JournalVoucher:
+def _build_journal_voucher(
+    voucher_row: sqlite3.Row, lines: list[JournalLine]
+) -> JournalVoucher:
     """把数据库行转换为凭证模型。"""
     return JournalVoucher(
         voucher_id=voucher_row["id"],
@@ -151,7 +154,9 @@ def _build_journal_voucher(voucher_row: sqlite3.Row, lines: list[JournalLine]) -
     )
 
 
-def _load_voucher_lines(connection: sqlite3.Connection, voucher_id: int) -> list[JournalLine]:
+def _load_voucher_lines(
+    connection: sqlite3.Connection, voucher_id: int
+) -> list[JournalLine]:
     """读取某张凭证的全部分录。"""
     line_rows = connection.execute(SELECT_LINE_ROWS_SQL, (voucher_id,)).fetchall()
     return _build_line_models(line_rows)
@@ -162,6 +167,11 @@ class SQLiteJournalRepository(JournalRepository):
 
     def __init__(self, database_path: str = DEFAULT_ACCOUNTING_DB):
         self._database_path = database_path
+
+    @property
+    def database_path(self) -> str:
+        """返回底层数据库路径。"""
+        return self._database_path
 
     def initialize_storage(self) -> None:
         """初始化凭证存储。"""
@@ -189,12 +199,16 @@ class SQLiteJournalRepository(JournalRepository):
                     voucher.anomaly_reason,
                 ),
             )
-            voucher_id = int(cursor.lastrowid or 0)
+            if not cursor.lastrowid:
+                raise AccountingError("凭证写入失败")
+            voucher_id = int(cursor.lastrowid)
             connection.execute(
                 UPDATE_VOUCHER_NUMBER_SQL,
                 (_build_voucher_number(voucher.voucher_date, voucher_id), voucher_id),
             )
-            connection.executemany(INSERT_LINE_SQL, _build_line_rows(voucher_id, command))
+            connection.executemany(
+                INSERT_LINE_SQL, _build_line_rows(voucher_id, command)
+            )
             connection.commit()
         return voucher_id
 
@@ -235,7 +249,7 @@ class SQLiteJournalRepository(JournalRepository):
     ) -> None:
         """更新凭证状态。"""
         with sqlite3.connect(self._database_path) as connection:
-            connection.execute(
+            cursor = connection.execute(
                 """
                 UPDATE journal_voucher
                 SET status = ?, reviewed_by = ?
@@ -243,6 +257,8 @@ class SQLiteJournalRepository(JournalRepository):
                 """,
                 (status, reviewed_by, voucher_id),
             )
+            if cursor.rowcount == 0:
+                raise AccountingError(f"凭证 {voucher_id} 不存在或已删除")
             connection.commit()
 
     def _fetch_vouchers(
@@ -258,7 +274,10 @@ class SQLiteJournalRepository(JournalRepository):
                 f"{SELECT_VOUCHER_COLUMNS_SQL} {where_sql} ORDER BY v.id DESC LIMIT ?",
                 [*params, limit],
             ).fetchall()
-            return [self._build_journal_voucher(connection, voucher_row) for voucher_row in voucher_rows]
+            return [
+                self._build_journal_voucher(connection, voucher_row)
+                for voucher_row in voucher_rows
+            ]
 
     def _build_journal_voucher(
         self,

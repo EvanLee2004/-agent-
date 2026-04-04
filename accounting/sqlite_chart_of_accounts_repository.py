@@ -8,6 +8,16 @@ from accounting.account_subject import AccountSubject
 from accounting.chart_of_accounts_repository import ChartOfAccountsRepository
 from configuration.defaults import DEFAULT_ACCOUNTING_DB
 
+CREATE_ACCOUNT_SUBJECT_TABLE_SQL = """
+CREATE TABLE IF NOT EXISTS account_subject (
+    code TEXT PRIMARY KEY,
+    name TEXT NOT NULL UNIQUE,
+    category TEXT NOT NULL,
+    normal_balance TEXT NOT NULL,
+    description TEXT DEFAULT ''
+)
+"""
+
 
 def _build_subject_row(subject: AccountSubject) -> tuple[str, str, str, str, str]:
     """构造单条科目写入行。"""
@@ -26,21 +36,16 @@ class SQLiteChartOfAccountsRepository(ChartOfAccountsRepository):
     def __init__(self, database_path: str = DEFAULT_ACCOUNTING_DB):
         self._database_path = database_path
 
+    @property
+    def database_path(self) -> str:
+        """返回底层数据库路径。"""
+        return self._database_path
+
     def initialize_storage(self) -> None:
         """初始化科目表。"""
-        Path(self._database_path).parent.mkdir(exist_ok=True)
+        Path(self._database_path).parent.mkdir(parents=True, exist_ok=True)
         with sqlite3.connect(self._database_path) as connection:
-            connection.execute(
-                """
-                CREATE TABLE IF NOT EXISTS account_subject (
-                    code TEXT PRIMARY KEY,
-                    name TEXT NOT NULL UNIQUE,
-                    category TEXT NOT NULL,
-                    normal_balance TEXT NOT NULL,
-                    description TEXT DEFAULT ''
-                )
-                """
-            )
+            connection.execute(CREATE_ACCOUNT_SUBJECT_TABLE_SQL)
 
     def save_subjects(self, subjects: list[AccountSubject]) -> None:
         """写入科目数据。"""

@@ -15,6 +15,7 @@ from audit.audit_voucher_command import AuditVoucherCommand
 @dataclass
 class FakeVoucherLine:
     """伪造凭证分录。"""
+
     account_code: str
     account_name: str
     debit_amount: float
@@ -25,6 +26,7 @@ class FakeVoucherLine:
 @dataclass
 class FakeVoucher:
     """伪造凭证对象。"""
+
     voucher_id: int
     voucher_number: str
     voucher_date: str
@@ -42,11 +44,16 @@ class FakeJournalRepository(JournalRepository):
     def __init__(self, vouchers: list[FakeVoucher] = None):
         self._vouchers = vouchers or []
 
+    @property
+    def database_path(self) -> str:
+        """返回底层数据库路径。"""
+        return ":memory:"
+
     def initialize_storage(self) -> None:
         """初始化存储。"""
         pass
 
-    def create_voucher(self, command, recorded_by: str) -> FakeVoucher:
+    def create_voucher(self, command, recorded_by: str) -> int:
         raise NotImplementedError
 
     def list_vouchers(self, query) -> list[FakeVoucher]:
@@ -61,9 +68,6 @@ class FakeJournalRepository(JournalRepository):
     def get_latest_voucher(self) -> Optional[FakeVoucher]:
         return self._vouchers[-1] if self._vouchers else None
 
-    def update_voucher(self, voucher_id: int, command) -> None:
-        raise NotImplementedError
-
     def update_status(
         self,
         voucher_id: int,
@@ -77,8 +81,14 @@ class FakeJournalRepository(JournalRepository):
 class TestAuditServiceDuplicateDetection(unittest.TestCase):
     """审核服务重复检测测试。"""
 
-    def _make_voucher(self, voucher_id: int, voucher_date: str, summary: str,
-                      debit: float, credit: float) -> FakeVoucher:
+    def _make_voucher(
+        self,
+        voucher_id: int,
+        voucher_date: str,
+        summary: str,
+        debit: float,
+        credit: float,
+    ) -> FakeVoucher:
         """创建测试用凭证。"""
         return FakeVoucher(
             voucher_id=voucher_id,
@@ -196,7 +206,9 @@ class TestAuditServiceDuplicateDetection(unittest.TestCase):
         vouchers = [
             self._make_voucher(1, "2024-01-01", "收到货款", 1000.0, 1000.0),
             self._make_voucher(2, "2024-01-02", "支付费用", 500.0, 500.0),
-            self._make_voucher(3, "2024-01-01", "收到货款", 1000.0, 1000.0),  # 与凭证1重复
+            self._make_voucher(
+                3, "2024-01-01", "收到货款", 1000.0, 1000.0
+            ),  # 与凭证1重复
         ]
 
         repo = FakeJournalRepository(vouchers)
@@ -214,7 +226,9 @@ class TestAuditServiceDuplicateDetection(unittest.TestCase):
 class TestAuditServiceAmountThreshold(unittest.TestCase):
     """审核服务金额阈值测试。"""
 
-    def _make_voucher(self, voucher_id: int, debit: float, credit: float) -> FakeVoucher:
+    def _make_voucher(
+        self, voucher_id: int, debit: float, credit: float
+    ) -> FakeVoucher:
         """创建测试用凭证。"""
         return FakeVoucher(
             voucher_id=voucher_id,

@@ -11,6 +11,12 @@ from accounting.query_vouchers_query import QueryVouchersQuery
 class JournalRepository(ABC):
     """凭证仓储接口。"""
 
+    @property
+    @abstractmethod
+    def database_path(self) -> str:
+        """返回底层数据库路径。"""
+        raise NotImplementedError
+
     @abstractmethod
     def initialize_storage(self) -> None:
         """初始化存储。
