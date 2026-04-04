@@ -17,20 +17,32 @@ class DeerFlowClientFactory:
     是为了把第三方运行时的构造细节隔离出去。这样未来切换
     DeerFlow 参数、client 类型或初始化策略时，不会影响会话仓储的职责。
 
-    并发安全说明：
-    os.environ 是进程级全局状态。本工厂在 create_client() 中向其中写入
-    DEER_FLOW_CONFIG_PATH / DEER_FLOW_EXTENSIONS_CONFIG_PATH / DEER_FLOW_HOME
-    以及模型 API keys。这些写入发生在 client 实例创建时，而非每次 reply() 时。
+    并发安全说明（重要概念区分）：
+
+    1. **文件路径隔离**：通过独立的 runtime_root，每个请求可以拥有自己的
+       config.yaml / extensions_config.json / checkpoints.sqlite / home/ 目录。
+       这是由 DeerFlowRuntimeAssets.runtime_root 决定的，已经可以在创建
+       DepartmentOrchestrationFactory 时传入独立目录实现。
+
+    2. **进程级环境变量隔离**：os.environ 是进程级全局状态。本工厂在
+       create_client() 中向其中写入 DEER_FLOW_CONFIG_PATH /
+       DEER_FLOW_EXTENSIONS_CONFIG_PATH / DEER_FLOW_HOME 以及模型 API keys。
+       这些写入发生在 client 实例创建时，而非每次 reply() 时。
+
+       两者不是一回事：即使 runtime_root 不同，写入同一进程的 os.environ
+       仍然会互相覆盖。如果先创建 client_A（设置 DEER_FLOW_HOME=/tmp/a），
+       再创建 client_B（设置 DEER_FLOW_HOME=/tmp/b），那么之后 client_A
+       再次使用时读到的 DEER_FLOW_HOME 已经是 /tmp/b 了。
 
     在单线程 CLI 场景下：所有 client 创建都是串行的，不存在并发问题。
-    在多线程 API 场景下：不同线程同时调用 create_client() 会互相覆盖对方的
-    环境变量，可能导致某线程的 client 用错了另一线程的配置。
+    在多线程 API 场景下：必须同时解决文件路径隔离和进程级环境变量隔离。
+    当前最小落地方案是文件路径隔离；进程级环境变量污染需要：
+    - 要么每个请求在独立的子进程中运行 DeerFlowClient
+    - 要么在 DeerFlow 底层支持通过参数传入而非读 os.environ
 
-    当前最小修复方案：
-    - 在注释中记录此风险，不做大规模重构
-    - 未来 API 化时，应让每个请求/线程拥有独立的 runtime_root（通过参数传入），
-      而不是在工厂里用全局 .runtime/deerflow/
-    - 环境变量污染风险在 API 并发场景下会被放大，需要在 API 入口层做隔离
+    API 化之前的最小可行方案：确保每请求创建独立的 factory 实例和
+    runtime_root，文件路径隔离可满足基本需求；os.environ 污染需在
+    DeerFlow 底层修复或 API 入口层处理。
     """
 
     def create_client(

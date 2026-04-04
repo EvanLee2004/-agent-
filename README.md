@@ -66,7 +66,7 @@
 | `MCP extensions` | 未配置 | `extensions_config.json` 中 `mcpServers` 为空。如需接入外部 MCP 服务（如飞书、云文档），需要在此配置。 |
 | `stream artifacts` | 尚未收集 | `stream()` 返回的 `values` 事件中包含 `artifacts` 字段，当前代码仅保留注释扩展位，尚未实现收集。 |
 | `uploads` | 未使用 | `DeerFlowClient.upload_files()` 等接口未接入，如需支持文件上传场景（如上传发票图片），需要单独实现路由。 |
-| `checkpointer` 多实例隔离 | 已支持隔离 | 通过 `DepartmentOrchestrationFactory(runtime_root=...)` 可为每个请求创建独立的运行时目录，checkpoint 随之隔离。API 并发场景需要自行确保每个请求使用独立 runtime_root。 |
+| `checkpointer` 多实例隔离 | 仅底层支持 | `DepartmentOrchestrationFactory` 接受可选 `runtime_root` 参数，但默认主链路（`ConversationRouterFactory`）未暴露此参数。API 并发场景需自行确保每请求使用独立 factory 实例。**注意**：`os.environ` 写入（DEER_FLOW_CONFIG_PATH / DEER_FLOW_HOME / API keys）仍为进程级，文件路径隔离和进程级环境变量隔离不是一回事，并发场景需同时解决。 |
 
 ### 已正常接入的能力
 

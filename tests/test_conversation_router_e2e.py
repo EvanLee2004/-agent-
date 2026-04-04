@@ -103,13 +103,18 @@ class FakeDeerFlowClient:
     def stream(self, message: str, *, thread_id: str | None = None):
         """模拟 DeerFlow embedded mode stream() 的完整 turn 流程。
 
-        模拟一个典型场景：
-        1. AI 先发中间回复（如"好的，我帮你查一下"）
-        2. AI 发起工具调用
-        3. 工具执行（DeerFlow 不直接发 tool 事件，由 agent 处理）
+        模拟真实 DeerFlow embedded mode 的完整事件序列：
+        1. AI 先发中间回复（如"好的，我帮你处理"）
+        2. AI 发起工具调用（type=ai, tool_calls）
+        3. 工具执行结果事件（type=tool）- 这是 DeerFlow 真实会发的 tool 事件
         4. AI 发最终回复（这是唯一应该进入 reply_text 的内容）
 
-        注意：最终 reply 应该只取最后一个非空 AI 文本。
+        关于 tool 事件的说明：
+        DeerFlow embedded mode 的 stream() 确实会发 type="tool" 的 messages-tuple 事件。
+        参见 deerflow/client.py:408-418：ToolMessage 会被序列化为 type="tool" 的事件。
+        之前的注释说"DeerFlow 不直接发 tool 事件"是错误的，已修正。
+
+        注意：最终 reply 应该只取最后一个非空 AI 文本，不受中间 tool 事件影响。
         """
         from dataclasses import dataclass
 
@@ -126,7 +131,7 @@ class FakeDeerFlowClient:
             data={"type": "ai", "content": "好的，我帮你处理。", "id": "msg-1"},
         )
 
-        # 第二个 AI 事件：发起工具调用
+        # 第二个 AI 事件：发起工具调用（type=ai with tool_calls）
         yield FakeStreamEvent(
             type="messages-tuple",
             data={
@@ -134,6 +139,19 @@ class FakeDeerFlowClient:
                 "content": "",
                 "id": "msg-2",
                 "tool_calls": [{"name": "record_voucher", "args": {}, "id": "call-1"}],
+            },
+        )
+
+        # 第三个事件：工具执行结果（type=tool）
+        # 这是 DeerFlow 真实会发的 tool 事件，仓储代码会忽略它（只取 AI 文本）
+        yield FakeStreamEvent(
+            type="messages-tuple",
+            data={
+                "type": "tool",
+                "content": '{"success": true, "voucher_id": 1}',
+                "name": "record_voucher",
+                "tool_call_id": "call-1",
+                "id": "tool-1",
             },
         )
 
@@ -336,6 +354,69 @@ class ConversationRouterEndToEndTest(unittest.TestCase):
             )
             self.assertTrue(coordinator_config.exists())
             self.assertTrue(cashier_config.exists())
+
+    def test_deerflow_runtime_assets_isolated_by_different_runtime_root(self):
+        """验证不同 runtime_root 产生完全隔离的文件路径。
+
+        这证明文件级隔离是有效的：即使在同一次测试中，
+        两个不同的 runtime_root 也会产生完全独立的 config/checkpoint/home 路径。
+        这对于 API 并发场景下的请求级隔离至关重要。
+
+        注意：这只是文件路径隔离。进程级 os.environ 隔离仍需单独处理。
+        """
+        with tempfile.TemporaryDirectory() as temp_dir:
+            base = Path(temp_dir)
+            runtime_root_a = base / "runtime_a"
+            runtime_root_b = base / "runtime_b"
+            skills_root = base / "skills"
+            skills_root.mkdir(parents=True, exist_ok=True)
+
+            config = LlmConfiguration(
+                models=(
+                    LlmModelProfile(
+                        name="minimax-main",
+                        provider_name="minimax",
+                        model_name="MiniMax-M2.7",
+                        base_url="https://api.minimaxi.com/v1",
+                        api_key_env="MINIMAX_API_KEY",
+                        api_key="key-a",
+                    ),
+                ),
+                default_model_name="minimax-main",
+            )
+
+            assets_a = DeerFlowRuntimeAssetsService(
+                FinanceDepartmentAgentAssetsService(FinanceDepartmentRoleCatalog()),
+                runtime_root=runtime_root_a,
+                skills_root=skills_root,
+            ).prepare_assets(config)
+
+            assets_b = DeerFlowRuntimeAssetsService(
+                FinanceDepartmentAgentAssetsService(FinanceDepartmentRoleCatalog()),
+                runtime_root=runtime_root_b,
+                skills_root=skills_root,
+            ).prepare_assets(config)
+
+            # 验证 runtime_root 本身被正确存储在 assets 中
+            self.assertEqual(assets_a.runtime_root, runtime_root_a.resolve())
+            self.assertEqual(assets_b.runtime_root, runtime_root_b.resolve())
+
+            # 验证所有子路径都完全隔离
+            self.assertNotEqual(assets_a.config_path, assets_b.config_path)
+            self.assertNotEqual(assets_a.extensions_config_path, assets_b.extensions_config_path)
+            self.assertNotEqual(assets_a.runtime_home, assets_b.runtime_home)
+
+            # 验证实际文件存在于各自的目录中
+            self.assertTrue(assets_a.config_path.exists())
+            self.assertTrue(assets_b.config_path.exists())
+            self.assertTrue(assets_a.runtime_home.exists())
+            self.assertTrue(assets_b.runtime_home.exists())
+
+            # 验证文件内容不同（因为 runtime_root 不同，checkpoint 路径也不同）
+            self.assertNotEqual(
+                assets_a.config_path.read_text(encoding="utf-8"),
+                assets_b.config_path.read_text(encoding="utf-8"),
+            )
 
     def test_deerflow_client_factory_uses_runtime_configuration(self):
         """验证 DeerFlowClient 工厂会透传运行时开关与环境变量。"""
