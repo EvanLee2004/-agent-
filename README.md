@@ -55,15 +55,14 @@
 
 | 能力 | 配置路径 | 当前值 | 原因 |
 |------|----------|--------|------|
-| `subagent_enabled` | `deerflow_runtime.client.subagent_enabled` | `false` | DeerFlow 原生 subagent 委派需要更复杂的多角色协同策略。当前财务部门协作协议由本项目自己维护（`department/collaboration/`），在业务策略成熟前不开启。 |
 | `plan_mode` | `deerflow_runtime.client.plan_mode` | `false` | Plan mode 会强制启用 TodoList 中间件，适用于结构化规划场景。当前财务对话以记账/审核/税务为主，无需此能力。 |
 | `tool_search` | `deerflow_runtime.tool_search.enabled` | `false` | 工具搜索允许模型自动从配置中发现和调用工具。当前财务工具集已由本项目明确注册，无需动态搜索。开启会增加延迟和不确定性。 |
+| `MCP extensions` | `extensions_config.json` | 未配置 | `mcpServers` 为空。如需接入外部 MCP 服务（如飞书、云文档），需要在此配置。 |
 
 ### 尚未接入（代码层面未连接）
 
 | 能力 | 状态 | 说明 |
 |------|------|------|
-| `MCP extensions` | 未配置 | `extensions_config.json` 中 `mcpServers` 为空。如需接入外部 MCP 服务（如飞书、云文档），需要在此配置。 |
 | `stream artifacts` | 尚未收集 | `stream()` 返回的 `values` 事件中包含 `artifacts` 字段，当前代码仅保留注释扩展位，尚未实现收集。 |
 | `uploads` | 未使用 | `DeerFlowClient.upload_files()` 等接口未接入，如需支持文件上传场景（如上传发票图片），需要单独实现路由。 |
 | `checkpointer` 多实例隔离 | 仅底层支持 | `DepartmentOrchestrationFactory` 接受可选 `runtime_root` 参数，但默认主链路（`ConversationRouterFactory`）未暴露此参数。API 并发场景需自行确保每请求使用独立 factory 实例。**注意**：`os.environ` 写入（DEER_FLOW_CONFIG_PATH / DEER_FLOW_HOME / API keys）仍为进程级，文件路径隔离和进程级环境变量隔离不是一回事，并发场景需同时解决。 |
@@ -73,6 +72,7 @@
 | 能力 | 说明 |
 |------|------|
 | `thinking_enabled` | 模型扩展思考能力，已启用 |
+| `subagent_enabled` | DeerFlow 原生 task 工具已启用，可通过 `task` 工具调用 `general-purpose` 子代理执行复杂多步任务；`collaborate_with_department_role` 仍保留作为 legacy fallback |
 | `memory` | DeerFlow 原生记忆，每轮对话后自动提取事实并注入下一轮 system prompt |
 | `stream()` | 正确使用 `stream()` 而非 `chat()`，保留完整事件流供未来扩展（tool trace、usage、artifacts），最终 reply 取最后一个非空 AI 文本 |
 | `reset_agent()` | 每次 `reply()` 前调用，确保 memory/skills 上下文刷新 |
@@ -181,7 +181,7 @@ MINIMAX_API_KEY=your_key_here
   "deerflow_runtime": {
     "client": {
       "thinking_enabled": true,
-      "subagent_enabled": false,
+      "subagent_enabled": true,
       "plan_mode": false
     },
     "tool_search": {

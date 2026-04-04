@@ -20,7 +20,7 @@
   "deerflow_runtime": {
     "client": {
       "thinking_enabled": true,
-      "subagent_enabled": false,
+      "subagent_enabled": true,
       "plan_mode": false
     },
     "tool_search": {

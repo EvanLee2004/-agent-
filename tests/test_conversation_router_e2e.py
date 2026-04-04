@@ -545,6 +545,57 @@ class ConversationRouterEndToEndTest(unittest.TestCase):
                 tool_names = {tool.name for tool in mock_tools}
                 self.assertTrue(expected_tool_names.issubset(tool_names))
 
+    def test_deerflow_subagent_enabled_includes_task_tool(self):
+        """验证 subagent_enabled=True 时，task 工具被加入可用工具集。
+
+        当 subagent_enabled=True 时，DeerFlow 的内置 task_tool 会被注册为可用工具。
+        该工具允许 coordinator 将复杂多步任务委托给 DeerFlow 原生的 general-purpose 子代理。
+
+        注意：subagent_enabled=True 只会让 task 工具可用，task 具体调用哪个 subagent
+        类型（如 general-purpose / bash）由 task 工具的 subagent_type 参数决定。
+        当前配置的 DeerFlow 默认只启用 general-purpose，bash 需要 sandbox allow_host_bash。
+        """
+        with tempfile.TemporaryDirectory() as temp_dir:
+            self._register_finance_tool_context(Path(temp_dir))
+            # 显式构造 subagent_enabled=True 的配置
+            runtime_configuration = DeerFlowRuntimeConfiguration(
+                thinking_enabled=True,
+                subagent_enabled=True,
+                plan_mode=False,
+            )
+            configuration = self._build_single_model_configuration(
+                runtime_configuration=runtime_configuration,
+            )
+            assets = DeerFlowRuntimeAssetsService(
+                FinanceDepartmentAgentAssetsService(FinanceDepartmentRoleCatalog())
+            ).prepare_assets(configuration)
+
+            # 模拟 get_available_tools 返回的工具集合
+            all_tool_names = [
+                "web_search", "web_fetch", "image_search", "ls", "read_file",
+                "write_file", "str_replace", "collaborate_with_department_role",
+                "record_voucher", "query_vouchers", "record_cash_transaction",
+                "query_cash_transactions", "calculate_tax", "audit_voucher",
+                "reply_with_rules", "task",  # task 工具在 subagent_enabled=True 时出现
+            ]
+
+            class MockTool:
+                def __init__(self, name):
+                    self.name = name
+
+            mock_tools = [MockTool(name) for name in all_tool_names]
+
+            with patch("deerflow.tools.get_available_tools", return_value=mock_tools) as mock_get_tools:
+                # 验证 DeerFlowClient 被调用时传入了 subagent_enabled=True
+                with patch("deerflow.client.DeerFlowClient") as mock_client_class:
+                    DeerFlowClientFactory().create_client(assets, "finance-coordinator")
+                    # 验证 client 被调用
+                    mock_client_class.assert_called_once()
+                    _, kwargs = mock_client_class.call_args
+                    self.assertEqual(kwargs["subagent_enabled"], True)
+                    self.assertEqual(kwargs["thinking_enabled"], True)
+                    self.assertEqual(kwargs["plan_mode"], False)
+
     def test_record_voucher_and_query_tools_complete_bookkeeping_flow(self):
         """验证记账和查账工具可完成主业务闭环。"""
         with tempfile.TemporaryDirectory() as temp_dir:
