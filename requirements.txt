@@ -1,4 +1,4 @@
-deerflow-harness @ git+https://github.com/bytedance/deer-flow.git@76fad8b08de23c41ab1799e54b26bc59273d5ab9#subdirectory=backend/packages/harness
+deerflow-harness @ git+https://github.com/bytedance/deer-flow.git@1c0051c1db23d9075cadc7ed47f678fd52bf847b#subdirectory=backend/packages/harness
 langchain==1.2.10
 pydantic==2.12.5
 python-dotenv==1.2.2

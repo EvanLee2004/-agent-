@@ -23,6 +23,8 @@
 - 扩展 DeerFlow E2E 测试，覆盖多模型顺序、环境变量注入和 runtime 开关透传
 - 更新 `README.md`、`AGENTS.md`，删除已失效的 `store_memory` / `search_memory` 说明
 - 明确当前运行时记忆由 DeerFlow native memory 负责，而不是项目自维护记忆工具
+- 删除未被项目运行路径使用的 `opencode.json`
+- `requirements.txt` 更新为 DeerFlow harness 最新 commit，并保持 `langchain` 在当前可解兼容版本 `1.2.10`
 
 ## 2026-04-03
 
