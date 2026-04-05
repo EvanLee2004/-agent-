@@ -345,11 +345,11 @@ class DeerFlowDepartmentRoleRuntimeRepositoryCollaborationTest(unittest.TestCase
         )
         from department.workbench.execution_event import ExecutionEvent
         from department.workbench.execution_event_type import ExecutionEventType
-        from department.workbench.role_trace_summary_builder import (
-            RoleTraceSummaryBuilder,
+        from department.workbench.final_reply_summary_builder import (
+            FinalReplySummaryBuilder,
         )
 
-        factory = CollaborationStepFactory(RoleTraceSummaryBuilder())
+        factory = CollaborationStepFactory(FinalReplySummaryBuilder())
 
         # 模拟仓储层返回的原始 raw content
         raw_events = [
@@ -523,8 +523,10 @@ class DeerFlowDepartmentRoleRuntimeRepositoryTwoPathScopeTest(unittest.TestCase)
         runtime_context = MagicMock()
 
         class FakeScope:
-            def __enter__(self):
+            def __enter__(self, *args):
                 # 验证 open_scope 传入的参数正确
+                # 注意：with 语句在异常退出时会向 __enter__ 传递 exc_type/exc_val/exc_tb，
+                # 因此接受 *args 使签名兼容
                 scopeentered_role_names.append(runtime_context.open_scope.call_args)
                 return self
 

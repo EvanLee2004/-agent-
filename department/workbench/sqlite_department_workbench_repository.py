@@ -358,8 +358,9 @@ class SQLiteDepartmentWorkbenchRepository(DepartmentWorkbenchRepository):
             conn.execute("DELETE FROM turns WHERE thread_id = ?", (thread_id,))
             conn.commit()
 
-    # 以下为 DepartmentWorkbenchRepository 接口兼容方法
-    # save()/get() 只操作 _pending_workbench（内存暂存），不由 finalize_turn 调用 save_turn
+    # 以下为“当前回合暂存”接口实现。
+    # save()/get() 只操作 _pending_workbench（内存暂存），不直接产生 DB 记录；
+    # 真正的历史持久化仍由 save_turn() 负责。
 
     def save(self, workbench: DepartmentWorkbench) -> None:
         """保存工作台（内存暂存，不产生 DB 记录）。

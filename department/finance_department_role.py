@@ -2,35 +2,27 @@
 
 from dataclasses import dataclass
 
-from department.finance_department_constants import DEERFLOW_BASE_TOOL_GROUP_NAMES
-
-# 财务角色统一运行在同一套 DeerFlow 基础 tool groups 之上；角色差异主要通过
-# SOUL、skills 和实际是否主动调用某些工具体现，而不是底层执行面先天不一致。
-DEFAULT_TOOL_GROUPS = DEERFLOW_BASE_TOOL_GROUP_NAMES
-
 
 @dataclass(frozen=True)
 class FinanceDepartmentRole:
     """描述一个财务部门角色。
 
     该模型是财务部门角色目录的单一事实来源。之所以把角色定义抽成独立模型，
-    是为了避免角色名称、技能包名称、SOUL 说明和工具组在多个配置文件中重复维护，
+    是为了避免角色名称、入口属性和 skill 名称在多个模块中重复维护，
     从而降低后续扩角色或调职责时的回归风险。
 
     Attributes:
         agent_name: DeerFlow 侧使用的 agent 名称，必须满足上游命名规则。
-        display_name: 面向产品和文档展示的中文角色名。
-        description: 角色职责摘要，会写入 DeerFlow agent 配置。
         skill_names: 该角色可加载的专属 skill 名称集合。
-        soul_markdown: 角色的行为准则，会写入 SOUL.md。
-        tool_groups: 该角色允许使用的工具组。
         is_entry_role: 是否为当前部门的默认对外入口角色。
+
+    设计边界：
+    - agent 的 description、tool_groups、SOUL.md 已迁移到
+      .agent_assets/deerflow_config/home/agents/<agent_name>/ 下的静态文件，
+      Python 侧不再重复维护这些字段，避免出现“两份角色事实来源”。
+    - 因此本模型只保留部门编排层真正需要的最小角色元数据。
     """
 
     agent_name: str
-    display_name: str
-    description: str
     skill_names: tuple[str, ...]
-    soul_markdown: str
-    tool_groups: tuple[str, ...] = DEFAULT_TOOL_GROUPS
     is_entry_role: bool = False

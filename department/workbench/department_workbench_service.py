@@ -1,8 +1,12 @@
 """财务部门共享工作台服务。
 
-支持两种持久化策略：
-- CLI 轻量路径：InMemoryDepartmentWorkbenchRepository（每次 start_turn 创建新实例）
-- API 多回合路径：SQLiteDepartmentWorkbenchRepository（每次 finalize_turn 保存到 DB）
+当前生产主路径统一通过仓储接口管理“本回合暂存 + 回合落库”两段生命周期：
+- start_turn / record_collaboration_step 阶段：先写入仓储的当前回合暂存区
+- finalize_turn 阶段：由支持多回合历史的仓储一次性落库
+
+当前真正的生产实现是 SQLiteDepartmentWorkbenchRepository。
+仓储接口仍保留默认 fallback 语义，主要是为了让测试替身和最小接线场景
+不必额外实现整套多回合历史能力。
 """
 
 from department.department_error import DepartmentError
@@ -67,7 +71,9 @@ class DepartmentWorkbenchService:
                 不暴露给用户，但会持久化用于审计查询）。
         """
         workbench = self._require_workbench(thread_id)
-        # execution_events 为 None 时使用空列表（CLI 轻量路径）
+        # execution_events 为 None 时使用空列表。
+        # 这里保留 None 兼容，是为了让测试替身仓储或最小接线场景不必伪造
+        # DeerFlow stream 事件；生产主路径仍会显式传入真实 execution_events。
         evts = execution_events if execution_events is not None else []
         self._repository.save_turn(
             thread_id=thread_id,

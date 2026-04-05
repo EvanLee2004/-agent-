@@ -1,22 +1,39 @@
-"""财务部门角色目录与 DeerFlow 资产测试。"""
+"""财务部门角色目录与静态 DeerFlow 资产测试。"""
 
-import tempfile
 import unittest
 from pathlib import Path
 
 import yaml
 
-from department.finance_department_constants import DEERFLOW_BASE_TOOL_GROUP_NAMES
-from department.finance_department_agent_assets_service import FinanceDepartmentAgentAssetsService
 from department.finance_department_role_catalog import FinanceDepartmentRoleCatalog
-from department.roles.coordinator_role_definition import CoordinatorRoleDefinition
-from runtime.deerflow.deerflow_tool_catalog import DeerFlowToolCatalog
+
+STATIC_CONFIG_ROOT = Path(".agent_assets/deerflow_config")
+STATIC_AGENTS_DIR = STATIC_CONFIG_ROOT / "home" / "agents"
+EXPECTED_BASE_TOOL_GROUP_NAMES = ["web", "file:read", "file:write", "bash", "finance"]
+EXPECTED_TOOL_NAMES = {
+    "web_search",
+    "web_fetch",
+    "image_search",
+    "ls",
+    "read_file",
+    "write_file",
+    "str_replace",
+    "bash",
+    "record_voucher",
+    "query_vouchers",
+    "record_cash_transaction",
+    "query_cash_transactions",
+    "calculate_tax",
+    "audit_voucher",
+    "reply_with_rules",
+    "generate_fiscal_task_prompt",
+}
 
 
-class FinanceDepartmentAssetsServiceTest(unittest.TestCase):
-    """验证财务部门角色目录和 DeerFlow 角色资产。"""
+class FinanceDepartmentRoleCatalogTest(unittest.TestCase):
+    """验证财务部门角色目录。"""
 
-    def test_role_catalog_exposes_entry_role_and_all_skills(self):
+    def test_exposes_entry_role_and_all_skills(self):
         """验证角色目录能提供入口角色和完整 skill 集合。"""
         role_catalog = FinanceDepartmentRoleCatalog()
 
@@ -35,95 +52,125 @@ class FinanceDepartmentAssetsServiceTest(unittest.TestCase):
             },
         )
 
-    def test_agent_assets_service_writes_all_role_configs(self):
-        """验证角色资产服务会为六个角色生成配置和 SOUL。"""
-        role_catalog = FinanceDepartmentRoleCatalog()
-        assets_service = FinanceDepartmentAgentAssetsService(role_catalog)
 
-        with tempfile.TemporaryDirectory() as temp_dir:
-            runtime_home = Path(temp_dir) / "home"
-            assets_service.prepare_agent_assets(runtime_home)
+class StaticAgentAssetsTest(unittest.TestCase):
+    """验证 .agent_assets/deerflow_config/ 中的静态 agent 资产完整性。
 
-            coordinator_directory = runtime_home / "agents" / "finance-coordinator"
-            cashier_directory = runtime_home / "agents" / "finance-cashier"
-            bookkeeping_directory = runtime_home / "agents" / "finance-bookkeeping"
-            audit_directory = runtime_home / "agents" / "finance-audit"
+    这些文件是 DeerFlow agent 的唯一配置事实来源，不再通过 Python 服务在运行时生成。
+    """
 
-            self.assertTrue((coordinator_directory / "config.yaml").exists())
-            self.assertTrue((cashier_directory / "config.yaml").exists())
-            self.assertTrue((bookkeeping_directory / "config.yaml").exists())
-            self.assertTrue((audit_directory / "SOUL.md").exists())
+    def test_all_six_agent_directories_exist(self):
+        """验证六个角色各自拥有独立的资产目录。"""
+        expected_agents = {
+            "finance-coordinator",
+            "finance-bookkeeping",
+            "finance-cashier",
+            "finance-audit",
+            "finance-tax",
+            "finance-policy-research",
+        }
+        actual_agents = {d.name for d in STATIC_AGENTS_DIR.iterdir() if d.is_dir()}
+        self.assertEqual(actual_agents, expected_agents)
 
-            coordinator_config = yaml.safe_load(
-                (coordinator_directory / "config.yaml").read_text(encoding="utf-8")
+    def test_each_agent_has_config_and_soul_files(self):
+        """验证每个角色目录包含 config.yaml 和 SOUL.md。"""
+        for agent_dir in STATIC_AGENTS_DIR.iterdir():
+            if not agent_dir.is_dir():
+                continue
+            with self.subTest(agent=agent_dir.name):
+                self.assertTrue(
+                    (agent_dir / "config.yaml").exists(),
+                    f"{agent_dir.name} 缺少 config.yaml",
+                )
+                self.assertTrue(
+                    (agent_dir / "SOUL.md").exists(),
+                    f"{agent_dir.name} 缺少 SOUL.md",
+                )
+
+    def test_coordinator_config_has_correct_tool_groups_and_skills(self):
+        """验证 coordinator config.yaml 工具组与技能列表正确。"""
+        coordinator_config = yaml.safe_load(
+            (STATIC_AGENTS_DIR / "finance-coordinator" / "config.yaml").read_text(
+                encoding="utf-8"
             )
-            self.assertEqual(coordinator_config["skills"], ["finance-core", "coordinator"])
-            self.assertEqual(
-                coordinator_config["tool_groups"],
-                list(DEERFLOW_BASE_TOOL_GROUP_NAMES),
-            )
+        )
+        self.assertEqual(
+            coordinator_config["tool_groups"],
+            EXPECTED_BASE_TOOL_GROUP_NAMES,
+        )
+        self.assertEqual(coordinator_config["skills"], ["finance-core", "coordinator"])
 
-    def test_coordinator_soul_matches_stage3_strategy(self):
-        """验证 coordinator SOUL 与阶段 3 策略一致。
+    def test_coordinator_soul_matches_collaboration_strategy(self):
+        """验证 coordinator SOUL.md 内容与当前协作策略一致。
 
-        阶段 3 策略：
+        当前协作策略（长期有效）：
         - 简单单步任务：直接使用财务工具
-        - 复杂多步任务：先调 generate_fiscal_task_prompt 生成 prompt，再传给 DeerFlow task
-        - collaborate_with_department_role：已从工具目录移除，SOUL 不再提及
-
-        该测试确保 SOUL 文本与阶段 3 策略对齐。
+        - 复杂多步任务：先调 generate_fiscal_task_prompt，再传给 DeerFlow task
+        - collaborate_with_department_role：已移除，SOUL 不应提及
         """
-        role = CoordinatorRoleDefinition().build()
-        soul = role.soul_markdown
-
-        # 验证 generate_fiscal_task_prompt 工具出现在 SOUL 中
+        soul = (STATIC_AGENTS_DIR / "finance-coordinator" / "SOUL.md").read_text(
+            encoding="utf-8"
+        )
         self.assertIn("generate_fiscal_task_prompt", soul)
-
-        # 验证 DeerFlow task 仍然被提及
         self.assertIn("task", soul.lower())
         self.assertIn("general-purpose", soul.lower())
-
-        # 验证简单单步直接用工具的策略出现
         self.assertIn("record_voucher", soul)
         self.assertIn("calculate_tax", soul)
-
-        # 阶段 3：collaborate_with_department_role 已移除，SOUL 不应再提及它
         self.assertNotIn("collaborate_with_department_role", soul)
 
-    def test_tool_catalog_includes_generate_fiscal_task_prompt(self):
-        """验证工具目录包含 generate_fiscal_task_prompt。"""
-        catalog = DeerFlowToolCatalog()
-        tool_names = {spec.name for spec in catalog.list_specs()}
-        self.assertIn("generate_fiscal_task_prompt", tool_names)
+    def test_static_config_yaml_has_env_var_skills_path(self):
+        """验证 config.yaml 的 skills.path 使用 $DEER_FLOW_SKILLS_PATH 占位符。
 
-    def test_tool_catalog_generate_fiscal_task_prompt_in_finance_group(self):
-        """验证 generate_fiscal_task_prompt 属于 finance 工具组。"""
-        from runtime.deerflow.deerflow_tool_spec import FINANCE_TOOL_GROUP_NAME
-
-        catalog = DeerFlowToolCatalog()
-        spec = next(s for s in catalog.list_specs() if s.name == "generate_fiscal_task_prompt")
-        self.assertEqual(spec.group, FINANCE_TOOL_GROUP_NAME)
-
-    def test_generated_config_yaml_contains_generate_fiscal_task_prompt(self):
-        """验证 config.yaml tools 列表包含 generate_fiscal_task_prompt。
-
-        tools 列表由 DeerFlowConfigDocumentFactory._build_tool_documents() 生成，
-        直接来自 DeerFlowToolCatalog.list_specs()。这里通过检查 factory 输出验证。
+        绝对路径不能写入 git 跟踪的静态文件，必须通过环境变量占位符注入。
         """
-        from runtime.deerflow.deerflow_config_document_factory import (
-            DeerFlowConfigDocumentFactory,
+        config = yaml.safe_load(
+            (STATIC_CONFIG_ROOT / "config.yaml").read_text(encoding="utf-8")
         )
-        from runtime.deerflow.deerflow_model_document_factory import (
-            DeerFlowModelDocumentFactory,
-        )
-        from runtime.deerflow.deerflow_tool_catalog import DeerFlowToolCatalog
+        self.assertEqual(config["skills"]["path"], "$DEER_FLOW_SKILLS_PATH")
 
-        catalog = DeerFlowToolCatalog()
-        factory = DeerFlowConfigDocumentFactory(
-            DeerFlowModelDocumentFactory(),
-            catalog,
+    def test_static_config_yaml_has_no_checkpointer_section(self):
+        """验证 config.yaml 不含 checkpointer 段（由工厂程序化注入）。"""
+        config = yaml.safe_load(
+            (STATIC_CONFIG_ROOT / "config.yaml").read_text(encoding="utf-8")
         )
-        # _build_tool_documents() 是 public 接口，直接测试其输出
-        tool_docs = factory._build_tool_documents()
-        tool_names = {t["name"] for t in tool_docs}
+        self.assertNotIn("checkpointer", config)
+
+
+class StaticToolConfigTest(unittest.TestCase):
+    """验证静态 DeerFlow 工具配置完整性。
+
+    当前工具定义的唯一事实来源是 .agent_assets/deerflow_config/config.yaml，
+    不再保留 Python 侧的 DeerFlowToolCatalog 双写副本。
+    """
+
+    def test_config_yaml_includes_generate_fiscal_task_prompt(self):
+        """验证静态 config.yaml 包含 generate_fiscal_task_prompt。"""
+        config = yaml.safe_load(
+            (STATIC_CONFIG_ROOT / "config.yaml").read_text(encoding="utf-8")
+        )
+        tool_names = {tool["name"] for tool in config.get("tools", [])}
         self.assertIn("generate_fiscal_task_prompt", tool_names)
+
+    def test_generate_fiscal_task_prompt_in_finance_group(self):
+        """验证 generate_fiscal_task_prompt 属于 finance 工具组。"""
+        config = yaml.safe_load(
+            (STATIC_CONFIG_ROOT / "config.yaml").read_text(encoding="utf-8")
+        )
+        target_tool = next(
+            tool for tool in config.get("tools", []) if tool["name"] == "generate_fiscal_task_prompt"
+        )
+        self.assertEqual(target_tool["group"], "finance")
+
+    def test_static_config_yaml_contains_all_expected_tools(self):
+        """验证静态 config.yaml 覆盖当前全部预期工具名。"""
+
+        config = yaml.safe_load(
+            (STATIC_CONFIG_ROOT / "config.yaml").read_text(encoding="utf-8")
+        )
+        static_tool_names = {t["name"] for t in config.get("tools", [])}
+
+        self.assertEqual(
+            static_tool_names,
+            EXPECTED_TOOL_NAMES,
+            "静态 config.yaml tools 段与当前预期工具集不一致，请同步更新",
+        )

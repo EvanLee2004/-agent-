@@ -1,0 +1,11 @@
+name: finance-bookkeeping
+description: 负责凭证生成、分录落账、账目查询和会计口径收口。
+tool_groups:
+- web
+- file:read
+- file:write
+- bash
+- finance
+skills:
+- finance-core
+- bookkeeping

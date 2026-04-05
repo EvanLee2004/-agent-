@@ -45,18 +45,11 @@ from department.department_role_runtime_repository import (
     DepartmentRoleRuntimeRepository,
 )
 from department.department_runtime_context import DepartmentRuntimeContext
-from department.finance_department_agent_assets_service import (
-    FinanceDepartmentAgentAssetsService,
-)
 from department.finance_department_request import FinanceDepartmentRequest
 from department.finance_department_role_catalog import FinanceDepartmentRoleCatalog
 from department.finance_department_service import FinanceDepartmentService
-from department.workbench.department_workbench_service import DepartmentWorkbenchService
-from department.workbench.in_memory_department_workbench_repository import (
-    InMemoryDepartmentWorkbenchRepository,
-)
 from department.workbench.collaboration_step_factory import CollaborationStepFactory
-from department.workbench.role_trace_summary_builder import RoleTraceSummaryBuilder
+from department.workbench.final_reply_summary_builder import FinalReplySummaryBuilder
 from rules.file_rules_repository import FileRulesRepository
 from rules.reply_with_rules_router import ReplyWithRulesRouter
 from rules.reply_with_rules_tool import reply_with_rules_tool
@@ -267,7 +260,16 @@ class ConversationRouterEndToEndTest(unittest.TestCase):
         )
 
     def test_runtime_assets_service_writes_minimal_deerflow_files(self):
-        """验证 DeerFlow 运行时资产文件可生成且结构正确。"""
+        """验证 DeerFlow 运行时资产准备后结构正确。
+
+        静态化改造后，config.yaml / extensions_config.json 不再随配置动态生成，
+        而是直接指向 .agent_assets/deerflow_config/ 中的静态文件。
+        因此本测试只验证：
+        1. agent 文件已同步到 runtime home（runtime_root 内）
+        2. config_path / extensions_config_path 指向静态文件（存在且内容合法）
+        3. environment_variables 包含 API Key 和 DEER_FLOW_SKILLS_PATH
+        4. runtime_home 路径正确
+        """
         with tempfile.TemporaryDirectory() as temp_dir:
             runtime_root = Path(temp_dir) / "runtime"
             skills_root = Path(temp_dir) / "skills"
@@ -298,21 +300,22 @@ class ConversationRouterEndToEndTest(unittest.TestCase):
                 ),
             )
             assets = DeerFlowRuntimeAssetsService(
-                FinanceDepartmentAgentAssetsService(FinanceDepartmentRoleCatalog()),
+                FinanceDepartmentRoleCatalog(),
                 runtime_root=runtime_root,
                 skills_root=skills_root,
             ).prepare_assets(configuration)
 
+            # config_path 和 extensions_config_path 指向静态文件，与 runtime_root 无关
+            self.assertTrue(assets.config_path.exists(), "静态 config.yaml 应存在")
+            self.assertTrue(
+                assets.extensions_config_path.exists(), "静态 extensions_config.json 应存在"
+            )
+
+            # 验证静态文件内容合法（工具组、工具名、扩展配置）
             config_data = yaml.safe_load(assets.config_path.read_text(encoding="utf-8"))
             extensions_data = json.loads(
                 assets.extensions_config_path.read_text(encoding="utf-8")
             )
-
-            self.assertEqual(config_data["models"][0]["name"], "deepseek-research")
-            self.assertEqual(config_data["models"][1]["name"], "minimax-main")
-            self.assertEqual(config_data["skills"]["path"], str(skills_root.resolve()))
-            self.assertEqual(config_data["tool_search"]["enabled"], True)
-            self.assertEqual(config_data["sandbox"]["allow_host_bash"], True)
             self.assertTrue(
                 {
                     "web",
@@ -335,16 +338,25 @@ class ConversationRouterEndToEndTest(unittest.TestCase):
                     "generate_fiscal_task_prompt",
                 }.issubset({item["name"] for item in config_data["tools"]})
             )
+            # skills.path 使用占位符，由运行时通过 DEER_FLOW_SKILLS_PATH 注入
+            self.assertEqual(config_data["skills"]["path"], "$DEER_FLOW_SKILLS_PATH")
             self.assertEqual(extensions_data["skills"]["finance-core"]["enabled"], True)
             self.assertEqual(extensions_data["skills"]["cashier"]["enabled"], True)
+
+            # runtime_home 路径在 runtime_root 内
             self.assertEqual(assets.runtime_home, (runtime_root / "home").resolve())
+
+            # environment_variables 包含所有 API Key 以及 DEER_FLOW_SKILLS_PATH
             self.assertEqual(
                 assets.environment_variables,
                 {
                     "MINIMAX_API_KEY": "minimax-key",
                     "DEEPSEEK_API_KEY": "deepseek-key",
+                    "DEER_FLOW_SKILLS_PATH": str(skills_root.resolve()),
                 },
             )
+
+            # agent 配置文件已同步到 runtime home（而非仍在静态目录）
             coordinator_config = (
                 runtime_root / "home" / "agents" / "finance-coordinator" / "config.yaml"
             )
@@ -355,13 +367,14 @@ class ConversationRouterEndToEndTest(unittest.TestCase):
             self.assertTrue(cashier_config.exists())
 
     def test_deerflow_runtime_assets_isolated_by_different_runtime_root(self):
-        """验证不同 runtime_root 产生完全隔离的文件路径。
+        """验证不同 runtime_root 产生隔离的运行时 home，但共享同一套静态配置文件。
 
-        这证明文件级隔离是有效的：即使在同一次测试中，
-        两个不同的 runtime_root 也会产生完全独立的 config/checkpoint/home 路径。
-        这对于 API 并发场景下的请求级隔离至关重要。
+        静态化改造后：
+        - config_path / extensions_config_path 始终指向同一静态文件（与 runtime_root 无关）
+        - runtime_home / runtime_root 仍按 runtime_root 独立隔离
 
-        注意：这只是文件路径隔离。进程级 os.environ 隔离仍需单独处理。
+        这对于 API 并发场景下的请求级隔离至关重要：每个请求有独立的 home 目录
+        用于 DeerFlow 写入 memory.json 等可变状态，但读取同一份静态配置。
         """
         with tempfile.TemporaryDirectory() as temp_dir:
             base = Path(temp_dir)
@@ -385,13 +398,13 @@ class ConversationRouterEndToEndTest(unittest.TestCase):
             )
 
             assets_a = DeerFlowRuntimeAssetsService(
-                FinanceDepartmentAgentAssetsService(FinanceDepartmentRoleCatalog()),
+                FinanceDepartmentRoleCatalog(),
                 runtime_root=runtime_root_a,
                 skills_root=skills_root,
             ).prepare_assets(config)
 
             assets_b = DeerFlowRuntimeAssetsService(
-                FinanceDepartmentAgentAssetsService(FinanceDepartmentRoleCatalog()),
+                FinanceDepartmentRoleCatalog(),
                 runtime_root=runtime_root_b,
                 skills_root=skills_root,
             ).prepare_assets(config)
@@ -400,24 +413,17 @@ class ConversationRouterEndToEndTest(unittest.TestCase):
             self.assertEqual(assets_a.runtime_root, runtime_root_a.resolve())
             self.assertEqual(assets_b.runtime_root, runtime_root_b.resolve())
 
-            # 验证所有子路径都完全隔离
-            self.assertNotEqual(assets_a.config_path, assets_b.config_path)
-            self.assertNotEqual(
-                assets_a.extensions_config_path, assets_b.extensions_config_path
-            )
+            # runtime_home 仍按 runtime_root 独立隔离
             self.assertNotEqual(assets_a.runtime_home, assets_b.runtime_home)
-
-            # 验证实际文件存在于各自的目录中
-            self.assertTrue(assets_a.config_path.exists())
-            self.assertTrue(assets_b.config_path.exists())
             self.assertTrue(assets_a.runtime_home.exists())
             self.assertTrue(assets_b.runtime_home.exists())
 
-            # 验证文件内容不同（因为 runtime_root 不同，checkpoint 路径也不同）
-            self.assertNotEqual(
-                assets_a.config_path.read_text(encoding="utf-8"),
-                assets_b.config_path.read_text(encoding="utf-8"),
+            # config_path / extensions_config_path 指向同一静态文件（不再随 runtime_root 变化）
+            self.assertEqual(assets_a.config_path, assets_b.config_path)
+            self.assertEqual(
+                assets_a.extensions_config_path, assets_b.extensions_config_path
             )
+            self.assertTrue(assets_a.config_path.exists())
 
     def test_deerflow_client_factory_uses_runtime_configuration(self):
         """验证 DeerFlowClient 工厂会透传运行时开关与环境变量。"""
@@ -431,7 +437,7 @@ class ConversationRouterEndToEndTest(unittest.TestCase):
                 plan_mode=True,
             )
             assets = DeerFlowRuntimeAssetsService(
-                FinanceDepartmentAgentAssetsService(FinanceDepartmentRoleCatalog()),
+                FinanceDepartmentRoleCatalog(),
                 runtime_root=runtime_root,
                 skills_root=skills_root,
             ).prepare_assets(
@@ -470,7 +476,7 @@ class ConversationRouterEndToEndTest(unittest.TestCase):
             skills_root.mkdir(parents=True, exist_ok=True)
             configuration = self._build_single_model_configuration()
             assets = DeerFlowRuntimeAssetsService(
-                FinanceDepartmentAgentAssetsService(FinanceDepartmentRoleCatalog()),
+                FinanceDepartmentRoleCatalog(),
                 runtime_root=runtime_root,
                 skills_root=skills_root,
             ).prepare_assets(configuration)
@@ -488,7 +494,7 @@ class ConversationRouterEndToEndTest(unittest.TestCase):
         """验证公开 DeerFlowClient 能读取当前部门全部 skill。"""
         configuration = self._build_single_model_configuration()
         assets = DeerFlowRuntimeAssetsService(
-            FinanceDepartmentAgentAssetsService(FinanceDepartmentRoleCatalog())
+            FinanceDepartmentRoleCatalog()
         ).prepare_assets(configuration)
 
         client = DeerFlowClientFactory().create_client(assets, "finance-coordinator")
@@ -511,20 +517,20 @@ class ConversationRouterEndToEndTest(unittest.TestCase):
     def test_deerflow_tool_registry_loads_custom_finance_tools(self):
         """验证 DeerFlow 能从配置中加载全部财务工具（不含 legacy 协作工具）。
 
-        阶段 3 完整财务工具集（10 个 finance 组工具）：
+        当前完整财务工具集：
         - 直接工具：record_voucher / query_vouchers / record_cash_transaction /
           query_cash_transactions / calculate_tax / audit_voucher / reply_with_rules
-        - 协作工具：generate_fiscal_task_prompt（阶段 2/3）
+        - 协作工具：generate_fiscal_task_prompt
         - 基础工具：web_search / web_fetch / image_search / ls / read_file / write_file / str_replace
 
-        collaborate_with_department_role 已于阶段 3 从工具目录移除。
-        基础工具来自 DeerFlow 内置，finance 组工具由 DeerFlowToolCatalog 统一维护。
+        collaborate_with_department_role 已从工具目录移除。
+        基础工具来自 DeerFlow 内置，finance 组工具由静态 config.yaml 统一维护。
         """
         with tempfile.TemporaryDirectory() as temp_dir:
             self._register_finance_tool_context(Path(temp_dir))
             configuration = self._build_single_model_configuration()
             assets = DeerFlowRuntimeAssetsService(
-                FinanceDepartmentAgentAssetsService(FinanceDepartmentRoleCatalog())
+                FinanceDepartmentRoleCatalog()
             ).prepare_assets(configuration)
 
             expected_tool_names = {
@@ -555,7 +561,7 @@ class ConversationRouterEndToEndTest(unittest.TestCase):
                 DeerFlowClientFactory().create_client(assets, "finance-coordinator")
                 tool_names = {tool.name for tool in mock_tools}
                 self.assertTrue(expected_tool_names.issubset(tool_names))
-                # 阶段 3：明确验证 legacy 协作工具不在 catalog 中
+                # 明确验证 legacy 协作工具不在 catalog 中
                 self.assertNotIn("collaborate_with_department_role", tool_names)
 
     def test_deerflow_subagent_enabled_parameter_passthrough(self):
@@ -588,7 +594,7 @@ class ConversationRouterEndToEndTest(unittest.TestCase):
                 runtime_configuration=runtime_configuration,
             )
             assets = DeerFlowRuntimeAssetsService(
-                FinanceDepartmentAgentAssetsService(FinanceDepartmentRoleCatalog())
+                FinanceDepartmentRoleCatalog()
             ).prepare_assets(configuration)
 
             with patch("deerflow.client.DeerFlowClient") as mock_client_class:
@@ -756,9 +762,7 @@ class ConversationRouterEndToEndTest(unittest.TestCase):
                 runtime_assets_service=DeerFlowRuntimeAssetsService(
                     runtime_root=runtime_root,
                     skills_root=skills_root,
-                    department_agent_assets_service=FinanceDepartmentAgentAssetsService(
-                        FinanceDepartmentRoleCatalog()
-                    ),
+                    role_catalog=FinanceDepartmentRoleCatalog(),
                 ),
                 runtime_context=DepartmentRuntimeContext(),
                 reply_text_sanitizer=ReplyTextSanitizer(),
@@ -833,7 +837,7 @@ class ConversationRouterEndToEndTest(unittest.TestCase):
         self.assertEqual(len(response.collaboration_steps), 1)
 
     def _register_finance_tool_context(self, temp_path: Path) -> None:
-        """构造并注册财务工具上下文（阶段 3：不含 legacy 协作层）。"""
+        """构造并注册财务工具上下文（DeerFlow-native 协作层）。"""
         database_path = str(temp_path / "ledger.db")
         journal_repository = SQLiteJournalRepository(database_path)
         chart_repository = SQLiteChartOfAccountsRepository(database_path)
@@ -848,10 +852,6 @@ class ConversationRouterEndToEndTest(unittest.TestCase):
         accounting_service = AccountingService(journal_repository, chart_service)
         cashier_service = CashierService(cashier_repository)
         rules_service = RulesService(FileRulesRepository())
-        workbench_service = DepartmentWorkbenchService(
-            InMemoryDepartmentWorkbenchRepository()
-        )
-        workbench_service.start_turn("test-thread", "测试用户请求")
         FinanceDepartmentToolContextRegistry.register(
             FinanceDepartmentToolContext(
                 record_voucher_router=RecordVoucherRouter(accounting_service),

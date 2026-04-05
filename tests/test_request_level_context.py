@@ -1,11 +1,14 @@
 """请求级上下文隔离与运行时资产隔离测试。
 
-验证 Phase 1 引入的两个核心隔离机制：
+验证三个核心隔离机制：
 1. FinanceDepartmentToolContextRegistry.open_context_scope() 实现请求级上下文生命周期
 2. 独立 runtime_root 导致 DeerFlow 运行时资产隔离
+3. DeerFlowInvocationRunner 的全局锁确保同进程内调用严格串行
 """
 
 import tempfile
+import threading
+import time
 import unittest
 from pathlib import Path
 from unittest.mock import MagicMock
@@ -21,9 +24,6 @@ from runtime.deerflow.finance_department_tool_context_registry import (
     FinanceDepartmentToolContextRegistry,
 )
 from department.finance_department_role_catalog import FinanceDepartmentRoleCatalog
-from department.finance_department_agent_assets_service import (
-    FinanceDepartmentAgentAssetsService,
-)
 from configuration.llm_model_profile import LlmModelProfile
 
 
@@ -93,14 +93,13 @@ class TestRuntimeRootIsolation(unittest.TestCase):
             root_a = Path(tmp_a) / "deerflow_a"
             root_b = Path(tmp_b) / "deerflow_b"
             catalog = FinanceDepartmentRoleCatalog()
-            agent_assets = FinanceDepartmentAgentAssetsService(catalog)
 
             service_a = DeerFlowRuntimeAssetsService(
-                department_agent_assets_service=agent_assets,
+                role_catalog=catalog,
                 runtime_root=root_a,
             )
             service_b = DeerFlowRuntimeAssetsService(
-                department_agent_assets_service=agent_assets,
+                role_catalog=catalog,
                 runtime_root=root_b,
             )
 
@@ -132,13 +131,15 @@ class TestRuntimeRootIsolation(unittest.TestCase):
             assets_a = service_a.prepare_assets(config)
             assets_b = service_b.prepare_assets(config)
 
-            # 验证两个 runtime_root 的资产路径完全不同
+            # 验证 runtime_root 和 runtime_home 按 runtime_root 独立隔离
             self.assertNotEqual(assets_a.runtime_root, assets_b.runtime_root)
-            self.assertNotEqual(assets_a.config_path, assets_b.config_path)
             self.assertNotEqual(assets_a.runtime_home, assets_b.runtime_home)
             # 验证各自落在对应的 runtime_root 下（resolve 为绝对路径比较）
             self.assertEqual(assets_a.runtime_root, root_a.resolve())
             self.assertEqual(assets_b.runtime_root, root_b.resolve())
+            # config_path / extensions_config_path 指向同一静态文件（静态化后不再随 runtime_root 变化）
+            self.assertEqual(assets_a.config_path, assets_b.config_path)
+            self.assertNotEqual(assets_a.config_path, assets_b.runtime_home)
 
 
 class TestInvocationRunnerIsolation(unittest.TestCase):
@@ -170,14 +171,8 @@ class TestInvocationRunnerIsolation(unittest.TestCase):
         os.environ.pop("DEER_FLOW_CONFIG_PATH", None)
 
         # 构造真实的 DeerFlowInvocationRunner（只需 mock client_factory）
-        mock_client_factory = MagicMock()
-        mock_assets_service = MagicMock()
-        mock_config = MagicMock()
-
         runner = DeerFlowInvocationRunner(
-            client_factory=mock_client_factory,
-            runtime_assets_service=mock_assets_service,
-            configuration=mock_config,
+            client_factory=MagicMock(),
         )
 
         # 构造 fake assets
@@ -248,6 +243,134 @@ class TestInvocationRunnerIsolation(unittest.TestCase):
             # 确保恢复到原始状态
             os.environ.clear()
             os.environ.update(original_env)
+
+
+class TestGlobalInvocationLockSerialization(unittest.TestCase):
+    """验证全局锁确保同进程内两个线程的 DeerFlow 调用严格串行。
+
+    这是"进程内串行保护"，不是多进程完全并发安全：
+    - 同进程多线程：全局锁确保严格串行，os.environ 不会被并发破坏
+    - 跨进程：需子进程隔离才能彻底避免冲突（当前未实现）
+    - asyncio 协程：单线程内协程切换时 contextvars 传播由调用方保证
+    """
+
+    def test_concurrent_calls_are_serialized_by_global_lock(self):
+        """验证两个并发调用不会同时进入临界区。
+
+        场景：
+        1. 线程 1 先获取锁，进入临界区，使用 Event 等待
+        2. 线程 2 尝试获取锁，被阻塞
+        3. 线程 1 完成，释放锁
+        4. 线程 2 获取锁，进入临界区
+
+        验证：线程 2 的进入临界区时间点 > 线程 1 的完成时间点，
+        证明全局锁产生了实际的串行化效果。
+        """
+        runner = DeerFlowInvocationRunner(
+            client_factory=MagicMock(),
+        )
+        fake_assets = MagicMock()
+        fake_assets.environment_variables = {}
+        fake_assets.config_path = Path("/fake/config.yaml")
+        fake_assets.extensions_config_path = Path("/fake/ext.json")
+        fake_assets.runtime_home = Path("/fake/home")
+
+        fake_client = MagicMock()
+        call_sequence = []
+        lock = threading.Lock()
+
+        # 事件用于线程间同步
+        thread_1_in_critical = threading.Event()
+        thread_2_can_proceed = threading.Event()
+        thread_1_done = threading.Event()
+
+        def slow_invocation(client):
+            """模拟慢速调用，主动阻塞以放大竞态窗口。"""
+            with lock:
+                call_sequence.append("thread_1_enter")
+            # 通知主线程：线程 1 已进入临界区
+            thread_1_in_critical.set()
+            # 等待主线程允许线程 1 继续（模拟慢速调用）
+            thread_2_can_proceed.wait(timeout=2)
+            with lock:
+                call_sequence.append("thread_1_exit")
+            thread_1_done.set()
+
+        def waiting_invocation(client):
+            """线程 2 的调用：应该被全局锁阻塞，直到线程 1 完成。"""
+            call_sequence.append("thread_2_enter")
+            return "thread_2_done"
+
+        # 启动线程 1（先持有锁一段时间）
+        t1 = threading.Thread(
+            target=lambda: runner.run_with_isolation(
+                fake_assets, fake_client, slow_invocation
+            )
+        )
+        t1.start()
+
+        # 等待线程 1 进入临界区
+        thread_1_in_critical.wait(timeout=2)
+        self.assertIn(
+            "thread_1_enter",
+            call_sequence,
+            "线程 1 应该已进入临界区",
+        )
+
+        # 启动线程 2（应该被阻塞在锁上）
+        t2 = threading.Thread(
+            target=lambda: runner.run_with_isolation(
+                fake_assets, fake_client, waiting_invocation
+            )
+        )
+        t2.start()
+
+        # 给一点时间让线程 2 尝试获取锁（但应被阻塞）
+        time.sleep(0.1)
+
+        # 验证线程 2 尚未进入临界区（因为线程 1 还持有锁）
+        self.assertNotIn(
+            "thread_2_enter",
+            call_sequence,
+            "线程 2 在线程 1 持有锁期间不应进入临界区",
+        )
+
+        # 允许线程 1 继续并完成
+        thread_2_can_proceed.set()
+        thread_1_done.wait(timeout=2)
+        t1.join(timeout=2)
+
+        # 验证线程 1 已完成
+        self.assertIn(
+            "thread_1_exit",
+            call_sequence,
+            "线程 1 应该已完成",
+        )
+
+        # 线程 2 现在应该能获取锁并完成
+        t2.join(timeout=2)
+
+        # 验证线程 2 进入了临界区
+        self.assertIn(
+            "thread_2_enter",
+            call_sequence,
+            "线程 2 应该已进入临界区",
+        )
+
+        # 验证串行顺序：线程 1 完全完成后线程 2 才进入
+        idx_1_exit = call_sequence.index("thread_1_exit")
+        idx_2_enter = call_sequence.index("thread_2_enter")
+        self.assertLess(
+            idx_1_exit,
+            idx_2_enter,
+            f"线程 1 退出（索引 {idx_1_exit}）应先于线程 2 进入（索引 {idx_2_enter}）",
+        )
+
+        # 验证最终顺序
+        self.assertEqual(
+            call_sequence,
+            ["thread_1_enter", "thread_1_exit", "thread_2_enter"],
+        )
 
 
 if __name__ == "__main__":
