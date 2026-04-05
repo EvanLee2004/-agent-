@@ -1,4 +1,4 @@
-"""角色摘要构造器测试。"""
+"""最终回复摘要构造器测试。"""
 
 import unittest
 
@@ -6,10 +6,10 @@ from department.workbench.role_trace_summary_builder import RoleTraceSummaryBuil
 
 
 class RoleTraceSummaryBuilderTest(unittest.TestCase):
-    """验证角色摘要构造逻辑。"""
+    """验证 DeerFlow 最终回复摘要构造逻辑。"""
 
     def test_build_prefers_first_sentence_for_long_reply(self):
-        """验证长回复优先提取首句，避免把完整答复塞进轨迹。"""
+        """验证长回复优先提取首句，避免把完整答复塞进摘要。"""
         builder = RoleTraceSummaryBuilder()
 
         summary = builder.build(

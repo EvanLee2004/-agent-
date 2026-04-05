@@ -5,7 +5,13 @@ from typing import Optional
 from langchain.tools import BaseTool
 from pydantic import BaseModel, Field
 
+from department.department_runtime_context import CURRENT_THREAD_ID
 from runtime.deerflow.finance_department_tool_context_registry import FinanceDepartmentToolContextRegistry
+from runtime.deerflow.idempotency_tracker import (
+    check_idempotency,
+    compute_idempotency_key,
+    record_idempotency,
+)
 
 
 class RecordCashTransactionTool(BaseTool):
@@ -30,8 +36,18 @@ class RecordCashTransactionTool(BaseTool):
     def _run(self, **kwargs) -> str:
         """执行记录资金收付工具。"""
         payload = self.InputSchema.model_validate(kwargs)
+        tool_args = payload.model_dump()
+
+        # 幂等保护
+        thread_id = CURRENT_THREAD_ID.get() or "default"
+        idempotency_key = compute_idempotency_key(thread_id, "record_cash_transaction", tool_args)
+        cached = check_idempotency(idempotency_key)
+        if cached is not None:
+            return cached.to_tool_message_content()
+
         router = FinanceDepartmentToolContextRegistry.get_context().record_cash_transaction_router
-        response = router.route(payload.model_dump())
+        response = router.route(tool_args)
+        record_idempotency(idempotency_key, response)
         return response.to_tool_message_content()
 
 

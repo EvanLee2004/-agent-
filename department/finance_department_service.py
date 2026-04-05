@@ -12,7 +12,7 @@ from department.workbench.department_workbench_service import DepartmentWorkbenc
 class FinanceDepartmentService:
     """协调财务部门入口回合。
 
-    阶段 4 重定义：该服务的职责改为"开启一回合 DeerFlow 原生协作"：
+    职责为"开启一回合 DeerFlow 原生协作"：
     初始化工作台、拉起 DeerFlow coordinator 角色、收集协作步骤并汇总为统一响应。
 
     角色如何沟通由 DeerFlow task/subagent 机制决定（不在本服务层感知），
@@ -43,9 +43,9 @@ class FinanceDepartmentService:
                 collaboration_depth=0,
             )
         )
-        # 阶段 4：协作步骤来自 DeerFlow stream 事件，而非 reply_text 的二次压缩。
-        # 每个 ExecutionEvent 对应一个可识别的执行动作（工具调用、任务委托等），
-        # 由 CollaborationStepFactory 转换为对用户友好的协作步骤。
+        # 协作步骤来自 DeerFlow stream 事件：每个 ExecutionEvent 对应一个可识别的
+        # 执行动作（工具调用、任务委托等），由 CollaborationStepFactory 转换为对用户
+        # 友好的协作步骤。
         collaboration_steps = self._collaboration_step_factory.build_from_events(
             goal=request.user_input,
             execution_events=role_response.execution_events,
@@ -53,6 +53,13 @@ class FinanceDepartmentService:
         )
         for step in collaboration_steps:
             self._workbench_service.record_collaboration_step(request.thread_id, step)
+        # 持久化最终回复、token 使用量和内部执行事件（内部遥测，不暴露给用户）
+        self._workbench_service.finalize_turn(
+            request.thread_id,
+            role_response.reply_text,
+            role_response.usage,
+            execution_events=role_response.execution_events,
+        )
         return FinanceDepartmentResponse(
             reply_text=role_response.reply_text,
             collaboration_steps=self._workbench_service.list_collaboration_steps(request.thread_id),

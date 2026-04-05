@@ -3,7 +3,13 @@
 from langchain.tools import BaseTool
 from pydantic import BaseModel, Field
 
+from department.department_runtime_context import CURRENT_THREAD_ID
 from runtime.deerflow.finance_department_tool_context_registry import FinanceDepartmentToolContextRegistry
+from runtime.deerflow.idempotency_tracker import (
+    check_idempotency,
+    compute_idempotency_key,
+    record_idempotency,
+)
 
 
 class RecordVoucherTool(BaseTool):
@@ -34,15 +40,26 @@ class RecordVoucherTool(BaseTool):
             统一格式的工具响应 JSON 字符串。
         """
         payload = self.InputSchema.model_validate(kwargs)
+        tool_args = {
+            "voucher_date": payload.voucher_date,
+            "summary": payload.summary,
+            "source_text": payload.source_text,
+            "lines": payload.lines,
+        }
+
+        # 幂等保护：从当前运行时上下文获取 thread_id
+        thread_id = CURRENT_THREAD_ID.get() or "default"
+        idempotency_key = compute_idempotency_key(thread_id, "record_voucher", tool_args)
+
+        # 检查是否已处理过相同请求
+        cached = check_idempotency(idempotency_key)
+        if cached is not None:
+            return cached.to_tool_message_content()
+
+        # 未缓存，执行路由
         router = FinanceDepartmentToolContextRegistry.get_context().record_voucher_router
-        response = router.route(
-            {
-                "voucher_date": payload.voucher_date,
-                "summary": payload.summary,
-                "source_text": payload.source_text,
-                "lines": payload.lines,
-            }
-        )
+        response = router.route(tool_args)
+        record_idempotency(idempotency_key, response)
         return response.to_tool_message_content()
 
 

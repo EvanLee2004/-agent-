@@ -4,8 +4,8 @@
   <img src="assets/readme-hero.svg" alt="智能财务部门项目封面图" width="100%" />
 </p>
 
-面向小企业财务场景的智能财务多 Agent 部门产品。当前阶段已经把底层会话运行时切到 **DeerFlow public client**，并把财务部门角色目录、共享工作台、DeerFlow 角色资产和财务工具边界收口到正式工程结构中。  
-这一版的目标不是继续堆单点技巧，而是把 **DeerFlow 底座 + 财务部门业务壳 + 角色协作协议** 接稳，再逐步打开真实多角色协作，并让底层配置结构尽量和 DeerFlow 官方 `config.yaml` 同构。
+面向小企业财务场景的智能财务多 Agent 部门产品。当前版本以 **DeerFlow public client** 作为底层 agent runtime，并在本项目内保留财务业务规则、财务工具、协作摘要持久化以及 CLI / API 入口。  
+系统的核心边界是：**DeerFlow 负责通用 runtime / task / memory / stream，本项目负责记账、审核、税务、出纳、规则问答和历史审计**。
 
 ## 开发与架构来源
 
@@ -25,7 +25,7 @@
 - **协作摘要**：DeerFlow stream 事件驱动的多步协作摘要（工具调用 → 工具结果 → 最终结论），不暴露原始推理全文
 - **多模型底层配置**：配置结构已经升级为 DeerFlow 风格 `default_model + models[]`
 
-## 当前阶段
+## 交付状态
 
 当前版本已经完成：
 
@@ -37,15 +37,14 @@
 - DeerFlow skill 资产落地
 - 财务部门六角色目录落地
 - DeerFlow 自定义角色资产自动生成
-- CLI 主链路切换到 DeerFlow 底层
-- 协作摘要基于 DeerFlow stream 事件落地（阶段 4）
-- **阶段 3：多 agent 协作全面切换到 DeerFlow 原生 task/subagent 机制**，legacy collaborate_with_department_role 已于阶段 3 移除
+- 协作主路径切换到 DeerFlow 原生 `task` / `subagent`
+- 协作摘要基于 DeerFlow stream 事件落地
+- FastAPI 多回合持久化与历史查询
 
 当前版本**尚未**完成：
 
 - 基于真实业务状态的复杂多角色协同策略
 - 正式税务申报
-- API/Web 对外接口
 
 ## DeerFlow 能力状态
 
@@ -65,16 +64,16 @@
 |------|------|------|
 | `stream artifacts` | 尚未收集 | `stream()` 返回的 `values` 事件中包含 `artifacts` 字段，当前代码仅保留注释扩展位，尚未实现收集。 |
 | `uploads` | 未使用 | `DeerFlowClient.upload_files()` 等接口未接入，如需支持文件上传场景（如上传发票图片），需要单独实现路由。 |
-| `checkpointer` 多实例隔离 | 仅底层支持 | `DepartmentOrchestrationFactory` 接受可选 `runtime_root` 参数，但默认主链路（`ConversationRouterFactory`）未暴露此参数。API 并发场景需自行确保每请求使用独立 factory 实例。**注意**：`os.environ` 写入（DEER_FLOW_CONFIG_PATH / DEER_FLOW_HOME / API keys）仍为进程级，文件路径隔离和进程级环境变量隔离不是一回事，并发场景需同时解决。 |
+| `checkpointer` 多实例隔离 | 进程内共享，session 间隔离 | API 层在同一进程内创建单一 factory 实例，runtime_root 固定为 `.runtime/api`。不同 thread_id 共享同一 config.yaml 和 workbench.db，但各自 checkpoint 目录隔离（由 DeerFlow runtime 实现）。**注意**：当前 API 是进程级单例，os.environ 快照恢复只缩小污染窗口，不保证多线程并发安全。推荐使用 `uvicorn --workers 1` 部署。 |
 
 ### 已正常接入的能力
 
 | 能力 | 说明 |
 |------|------|
 | `thinking_enabled` | 模型扩展思考能力，已启用 |
-| `subagent_enabled` | DeerFlow 原生 task 工具已启用；复杂多步任务通过 `generate_fiscal_task_prompt` + `task(..., subagent_type="general-purpose")` 两步流程完成，`collaborate_with_department_role` 已于阶段 3 从工具目录移除 |
+| `subagent_enabled` | DeerFlow 原生 task 工具已启用；复杂多步任务通过 `generate_fiscal_task_prompt` + `task(..., subagent_type="general-purpose")` 两步流程完成 |
 | `memory` | DeerFlow 原生记忆，每轮对话后自动提取事实并注入下一轮 system prompt |
-| `stream()` | 正确使用 `stream()` 而非 `chat()`，保留完整事件流供未来扩展（tool trace、usage、artifacts），最终 reply 取最后一个非空 AI 文本 |
+| `stream()` | 正确使用 `stream()` 而非 `chat()`，保留完整事件流以支持 tool trace、usage、artifacts 等扩展，最终 reply 取最后一个非空 AI 文本 |
 | `reset_agent()` | 每次 `reply()` 前调用，确保 memory/skills 上下文刷新 |
 
 ## 当前架构
@@ -82,23 +81,17 @@
 ```text
 用户
   ↓
-CLI / 未来 API
+CLI / API（FastAPI）
   ↓
-ConversationRouter
+AppConversationHandler / CliConversationHandler（app 层：open_context_scope + 错误翻译）
   ↓
-ConversationService
+ConversationRouter（conversation 层：纯净，不含 runtime/deerflow 依赖）
+  ↓
+ConversationService（conversation 层：业务编排 + 响应清洗）
   ↓
 FinanceDepartmentService
-  ↓
-DeerFlowDepartmentRoleRuntimeRepository（收集 execution_events）
-  ↓
-CollaborationStepFactory（生成 collaboration_steps）
-  ↓
-DepartmentWorkbenchService（记录协作步骤）
-  ↓
-DeerFlowClient（public embedded client）
-  ↓
-财务部门角色资产 + DeerFlow skills + DeerFlow 基础工具 + 财务工具 / 协作工具
+  ├─ DeerFlowDepartmentRoleRuntimeRepository → DeerFlowClient（reply_text / execution_events / usage）
+  └─ CollaborationStepFactory + DepartmentWorkbenchService → SQLite 工作台（collaboration_steps / 历史回合）
   ↓
 Feature Routers
   ↓
@@ -106,6 +99,13 @@ Feature Services
   ↓
 SQLite 业务仓储 + DeerFlow Native Memory / Checkpointer
 ```
+
+关键设计决策：
+
+- **请求级工具上下文**：通过 `FinanceDepartmentToolContextRegistry.open_context_scope()` 在 `AppConversationHandler.handle()`（API）或 `CliConversationHandler.handle()`（CLI）中实现，作用域结束时自动释放，避免跨请求泄露
+- **错误边界分层**：`ConversationRouter.handle()` 是纯净的，不捕获异常；`AppConversationHandler.handle()` 将异常翻译为 HTTP 400/500；`CliConversationHandler.handle()` 将异常翻译为用户友好中文文本
+- **runtime_root 隔离级别**：API 进程内共享 `.runtime/api`，os.environ 快照恢复只缩小污染窗口，不保证多线程并发安全
+- **两条 client 路径统一**：首次创建和缓存复用都必须在同一 `runtime_context.open_scope()` 中执行，确保 CURRENT_THREAD_ID 等上下文行为一致
 
 关键原则：
 
@@ -118,7 +118,11 @@ SQLite 业务仓储 + DeerFlow Native Memory / Checkpointer
 ```text
 ├── main.py
 ├── app/                             # 启动入口与依赖装配
-├── conversation/                    # 会话边界与用户可见响应收口
+│   ├── conversation_request_handler.py  # API 请求处理器（open_context_scope + HTTP 错误翻译）
+│   ├── cli_conversation_handler.py       # CLI 请求处理器（open_context_scope + 友好文本翻译）
+│   ├── conversation_router_factory.py    # 会话主链路工厂
+│   └── dependency_container.py          # 应用服务工厂
+├── conversation/                    # 会话边界与用户可见响应收口（纯净层）
 ├── runtime/                         # 第三方运行时适配层（当前为 DeerFlow）
 ├── department/                      # 财务部门主域
 │   ├── collaboration/               # 角色协作协议与协作工具
@@ -131,7 +135,7 @@ SQLite 业务仓储 + DeerFlow Native Memory / Checkpointer
 ├── rules/                           # 规则问答
 ├── configuration/                   # 配置读取与校验
 ├── .agent_assets/
-│   ├── deerflow_skills/             # DeerFlow 当前阶段使用的 skill 资产
+│   ├── deerflow_skills/             # DeerFlow 运行期使用的 skill 资产
 │   └── skills/                      # 本项目长期维护的领域 prompt 资产
 ├── MEMORY.md                        # 长期记忆
 ├── tests/
@@ -209,6 +213,30 @@ python main.py
 
 运行时会自动在 `.runtime/deerflow/` 下生成 DeerFlow 配置与状态目录；该目录为本地运行资产，已被忽略，不应提交到远端。
 
+### 4. 启动 API 服务
+
+```bash
+uvicorn api.deerflow_app:app --host 0.0.0.0 --port 8000 --workers 1
+```
+
+推荐 `--workers 1`：当前 API 为进程级单例，os.environ 快照恢复只缩小污染窗口，不保证多 worker 并发安全。
+
+**API 端点：**
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/api/conversations/{thread_id}/reply` | 处理用户输入，返回协作响应 |
+| GET | `/api/conversations/{thread_id}/turns` | 获取线程全部历史回合（含每轮协作步骤） |
+| GET | `/api/conversations/{thread_id}/collaboration-steps` | 获取全部回合的协作步骤（扁平列表） |
+| GET | `/api/conversations/{thread_id}/events` | 获取内部执行事件（含 turn_index/event_sequence） |
+| GET | `/health` | 健康检查 |
+
+**并发安全说明：**
+- API 是进程级单例，runtime_root 固定为 `.runtime/api`
+- 不同 thread_id 共享同一 config.yaml 和 workbench.db
+- DeerFlow checkpoint 目录通过 thread_id 在运行时自动隔离
+- os.environ 快照恢复只保证"缩小污染窗口"，不保证多线程并发安全
+
 ## DeerFlow 接入方式
 
 本项目当前通过 `DeerFlowClient` 接入 DeerFlow：
@@ -219,7 +247,7 @@ python main.py
 
 当前已接入的财务工具：
 
-- `generate_fiscal_task_prompt`（阶段 2/3：为 DeerFlow task 生成结构化财务专业 prompt，coordinator 复杂任务专用）
+- `generate_fiscal_task_prompt`（为 DeerFlow task 生成结构化财务专业 prompt，coordinator 复杂任务专用）
 - `record_voucher`
 - `query_vouchers`
 - `record_cash_transaction`
@@ -270,7 +298,7 @@ python main.py
 - DeerFlow public client 读取 skill
 - DeerFlow 工具注册
 - DeerFlow client 运行时开关透传
-- 角色协作服务与共享工作台
+- 工作台持久化与协作摘要
 - 记账与查账
 - 资金收付记录与查询
 - 税务测算
@@ -278,14 +306,18 @@ python main.py
 - DeerFlow 原生记忆配置注入
 - DeerFlow stream 事件 → execution_events → collaboration_steps 全链路
 - 会话边界与线程透传
+- 多回合 SQLite 持久化（turns / collaboration_steps / execution_events）
+- 幂等跟踪器会话级保护
+- API 端点 HTTP 契约（reply/turns/collaboration-steps/events/health）
+- `run_with_isolation` 环境变量快照恢复
+- 两条 client 路径（首次创建 vs 缓存复用）runtime_context scope 统一
 
-## 当前里程碑结论
+## 当前版本结论
 
 - 已完成 DeerFlow 底层接入与多模型配置收口
-- 已完成财务 tools 对接
-- 已完成财务部门角色注册、角色资产生成与共享工作台
-- 已保留会计业务核心在本项目内
-- 下一步是继续细化真实财务协同策略，并评估何时把角色协作进一步切向 DeerFlow 原生 subagent
+- 已完成财务 tools 对接和 DeerFlow 原生 task 协作主路径
+- 已完成财务部门角色注册、角色资产生成与工作台持久化
+- 已保留会计业务核心在本项目内，由业务工具和业务仓储承担最终规则约束
 
 ## License
 

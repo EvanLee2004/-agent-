@@ -22,12 +22,16 @@ from department.department_runtime_context import DepartmentRuntimeContext
 from runtime.deerflow.deerflow_department_role_runtime_repository import (
     DeerFlowDepartmentRoleRuntimeRepository,
 )
-from runtime.deerflow.deerflow_runtime_assets_service import DeerFlowRuntimeAssetsService
+from runtime.deerflow.deerflow_invocation_runner import DeerFlowInvocationRunner
+from runtime.deerflow.deerflow_runtime_assets_service import (
+    DeerFlowRuntimeAssetsService,
+)
 
 
 @dataclass
 class FakeStreamEvent:
     """模拟 DeerFlow stream() 返回的单个事件。"""
+
     type: str
     data: dict
 
@@ -69,7 +73,11 @@ class FakeDeerFlowClientForCollaborationEvents:
                 "content": "",
                 "id": "msg-2",
                 "tool_calls": [
-                    {"name": "generate_fiscal_task_prompt", "args": {"mode": "bookkeeping"}, "id": "call-1"}
+                    {
+                        "name": "generate_fiscal_task_prompt",
+                        "args": {"mode": "bookkeeping"},
+                        "id": "call-1",
+                    }
                 ],
             },
         )
@@ -120,7 +128,9 @@ class FakeDeerFlowClientForCollaborationEvents:
         # 结束事件
         yield FakeStreamEvent(
             type="end",
-            data={"usage": {"input_tokens": 100, "output_tokens": 50, "total_tokens": 150}},
+            data={
+                "usage": {"input_tokens": 100, "output_tokens": 50, "total_tokens": 150}
+            },
         )
 
 
@@ -141,7 +151,9 @@ class FakeDeerFlowClientWithNoToolCalls:
         )
         yield FakeStreamEvent(
             type="end",
-            data={"usage": {"input_tokens": 10, "output_tokens": 20, "total_tokens": 30}},
+            data={
+                "usage": {"input_tokens": 10, "output_tokens": 20, "total_tokens": 30}
+            },
         )
 
 
@@ -150,11 +162,15 @@ class DeerFlowDepartmentRoleRuntimeRepositoryCollaborationTest(unittest.TestCase
 
     def _build_repository(self, client):
         """构造只依赖假 client 的仓储。"""
-        # 使用 patch 跳过 LlmConfiguration 的完整构造
         runtime_context = DepartmentRuntimeContext()
         runtime_assets_service = MagicMock(spec=DeerFlowRuntimeAssetsService)
-        client_factory = MagicMock()
-        client_factory.create_client.return_value = client
+        mock_invocation_runner = MagicMock(spec=DeerFlowInvocationRunner)
+        mock_invocation_runner.run_with_isolation.side_effect = lambda assets, c, fn: (
+            fn(c)
+        )
+        mock_invocation_runner.create_and_run_client.side_effect = (
+            lambda assets, name, fn: fn(client)
+        )
         with patch.object(
             DeerFlowDepartmentRoleRuntimeRepository,
             "_get_assets",
@@ -163,11 +179,10 @@ class DeerFlowDepartmentRoleRuntimeRepositoryCollaborationTest(unittest.TestCase
             repo = DeerFlowDepartmentRoleRuntimeRepository(
                 configuration=MagicMock(),
                 runtime_assets_service=runtime_assets_service,
-                client_factory=client_factory,
                 runtime_context=runtime_context,
                 reply_text_sanitizer=ReplyTextSanitizer(),
+                invocation_runner=mock_invocation_runner,
             )
-        # 直接注入假 client 缓存
         repo._clients["coordinator"] = client
         return repo
 
@@ -202,12 +217,16 @@ class DeerFlowDepartmentRoleRuntimeRepositoryCollaborationTest(unittest.TestCase
 
         # 事件 1: generate_fiscal_task_prompt 调用
         self.assertEqual(response.execution_events[0].event_type.value, "tool_call")
-        self.assertEqual(response.execution_events[0].tool_name, "generate_fiscal_task_prompt")
+        self.assertEqual(
+            response.execution_events[0].tool_name, "generate_fiscal_task_prompt"
+        )
         self.assertIn("调用", response.execution_events[0].summary)
 
         # 事件 2: generate_fiscal_task_prompt 结果
         self.assertEqual(response.execution_events[1].event_type.value, "tool_result")
-        self.assertEqual(response.execution_events[1].tool_name, "generate_fiscal_task_prompt")
+        self.assertEqual(
+            response.execution_events[1].tool_name, "generate_fiscal_task_prompt"
+        )
         # 仓储层保留原始 content 截断（用于未来扩展），不暴露给用户
         self.assertIn("prompt", response.execution_events[1].summary)
 
@@ -321,10 +340,14 @@ class DeerFlowDepartmentRoleRuntimeRepositoryCollaborationTest(unittest.TestCase
         仓储层保留原始 content（用于未来扩展），factory 层将其转换为
         标准化中文结论。确保最终 collaboration_steps 不暴露原始 JSON。
         """
-        from department.workbench.collaboration_step_factory import CollaborationStepFactory
+        from department.workbench.collaboration_step_factory import (
+            CollaborationStepFactory,
+        )
         from department.workbench.execution_event import ExecutionEvent
         from department.workbench.execution_event_type import ExecutionEventType
-        from department.workbench.role_trace_summary_builder import RoleTraceSummaryBuilder
+        from department.workbench.role_trace_summary_builder import (
+            RoleTraceSummaryBuilder,
+        )
 
         factory = CollaborationStepFactory(RoleTraceSummaryBuilder())
 
@@ -378,3 +401,190 @@ class DeerFlowDepartmentRoleRuntimeRepositoryCollaborationTest(unittest.TestCase
         ]
         self.assertIn("财务任务 prompt 已生成", tool_result_summaries)
         self.assertIn("子代理任务已返回结果", tool_result_summaries)
+
+
+class DeerFlowDepartmentRoleRuntimeRepositoryTwoPathScopeTest(unittest.TestCase):
+    """验证 DeerFlow 仓储两条 client 路径（首次创建 vs 缓存复用）的 runtime_context scope 统一。
+
+    修复前问题：
+    - 缓存 client 路径有 runtime_context.open_scope()
+    - 首次创建 client 路径没有 open_scope()
+    - 这导致首轮与后续轮次的上下文行为分叉
+
+    修复后验证：
+    - 无论 client 首次创建还是缓存复用，runtime_context.open_scope() 都必须被调用
+    - scope 在 invocation_runner 调用前后正确开启/关闭
+    """
+
+    def test_both_paths_call_runtime_context_scope(self):
+        """验证首次创建和缓存复用两条路径都调用 runtime_context.open_scope()。"""
+        # 构造假 client（返回可产生非空 reply 的 stream）
+        fake_client = MagicMock()
+        fake_client.stream.return_value = iter(
+            [
+                FakeStreamEvent(
+                    type="messages-tuple",
+                    data={"type": "ai", "content": "非空回复", "id": "msg-1"},
+                ),
+                FakeStreamEvent(
+                    type="end",
+                    data={
+                        "usage": {
+                            "input_tokens": 10,
+                            "output_tokens": 5,
+                            "total_tokens": 15,
+                        }
+                    },
+                ),
+            ]
+        )
+
+        runtime_context = MagicMock()
+        runtime_context.open_scope.return_value.__enter__ = MagicMock(return_value=None)
+        runtime_context.open_scope.return_value.__exit__ = MagicMock(return_value=None)
+
+        runtime_assets_service = MagicMock(spec=DeerFlowRuntimeAssetsService)
+
+        mock_invocation_runner = MagicMock(spec=DeerFlowInvocationRunner)
+        mock_invocation_runner.run_with_isolation.return_value = ("reply", [], None)
+        mock_invocation_runner.create_and_run_client.side_effect = (
+            lambda assets, name, fn: fn(fake_client)
+        )
+
+        with patch.object(
+            DeerFlowDepartmentRoleRuntimeRepository,
+            "_get_assets",
+            return_value=MagicMock(),
+        ):
+            repo = DeerFlowDepartmentRoleRuntimeRepository(
+                configuration=MagicMock(),
+                runtime_assets_service=runtime_assets_service,
+                runtime_context=runtime_context,
+                reply_text_sanitizer=ReplyTextSanitizer(),
+                invocation_runner=mock_invocation_runner,
+            )
+
+        # 路径1：首次创建 client（缓存为空）
+        runtime_context.open_scope.reset_mock()
+        repo.reply(
+            DepartmentRoleRequest(
+                role_name="new-role",
+                user_input="第一次输入",
+                thread_id="thread-1",
+                collaboration_depth=0,
+            )
+        )
+        # 首次创建路径必须打开 scope
+        self.assertTrue(
+            runtime_context.open_scope.called, "首次创建路径必须调用 open_scope()"
+        )
+
+        # 路径2：缓存复用 client
+        repo._clients["cached-role"] = fake_client
+        runtime_context.open_scope.reset_mock()
+        repo.reply(
+            DepartmentRoleRequest(
+                role_name="cached-role",
+                user_input="第二次输入",
+                thread_id="thread-1",
+                collaboration_depth=0,
+            )
+        )
+        # 缓存复用路径也必须打开 scope
+        self.assertTrue(
+            runtime_context.open_scope.called, "缓存复用路径必须调用 open_scope()"
+        )
+
+    def test_both_paths_scope_behavior_consistent(self):
+        """验证两条路径的 scope 行为一致：scope 在 runner 调用期间生效。"""
+        fake_client = MagicMock()
+        fake_client.stream.return_value = iter(
+            [
+                FakeStreamEvent(
+                    type="messages-tuple",
+                    data={"type": "ai", "content": "回复文本", "id": "msg-1"},
+                ),
+                FakeStreamEvent(
+                    type="end",
+                    data={
+                        "usage": {
+                            "input_tokens": 10,
+                            "output_tokens": 5,
+                            "total_tokens": 15,
+                        }
+                    },
+                ),
+            ]
+        )
+
+        scopeentered_role_names = []
+        scopeexited_role_names = []
+
+        runtime_context = MagicMock()
+
+        class FakeScope:
+            def __enter__(self):
+                # 验证 open_scope 传入的参数正确
+                scopeentered_role_names.append(runtime_context.open_scope.call_args)
+                return self
+
+            def __exit__(self, *args):
+                scopeexited_role_names.append(True)
+
+        runtime_context.open_scope.return_value = FakeScope()
+
+        mock_invocation_runner = MagicMock(spec=DeerFlowInvocationRunner)
+        mock_invocation_runner.run_with_isolation.return_value = ("reply", [], None)
+        mock_invocation_runner.create_and_run_client.side_effect = (
+            lambda assets, name, fn: fn(fake_client)
+        )
+
+        with patch.object(
+            DeerFlowDepartmentRoleRuntimeRepository,
+            "_get_assets",
+            return_value=MagicMock(),
+        ):
+            repo = DeerFlowDepartmentRoleRuntimeRepository(
+                configuration=MagicMock(),
+                runtime_assets_service=MagicMock(),
+                runtime_context=runtime_context,
+                reply_text_sanitizer=ReplyTextSanitizer(),
+                invocation_runner=mock_invocation_runner,
+            )
+
+        # 路径1：首次创建
+        repo.reply(
+            DepartmentRoleRequest(
+                role_name="role-a",
+                user_input="in",
+                thread_id="t1",
+                collaboration_depth=0,
+            )
+        )
+        # 路径2：缓存复用
+        repo._clients["role-b"] = fake_client
+        repo.reply(
+            DepartmentRoleRequest(
+                role_name="role-b",
+                user_input="in",
+                thread_id="t1",
+                collaboration_depth=0,
+            )
+        )
+
+        # 两条路径都必须各有一次 enter 和一次 exit
+        self.assertEqual(len(scopeentered_role_names), 2, "两条路径共应打开2次 scope")
+        self.assertEqual(len(scopeexited_role_names), 2, "两条路径共应关闭2次 scope")
+
+        # 验证 open_scope 调用参数包含正确的 role_name
+        call_args_list = runtime_context.open_scope.call_args_list
+        self.assertEqual(
+            call_args_list[0].kwargs.get("role_name")
+            or call_args_list[0][1].get("role_name"),
+            "role-a",
+        )
+        self.assertEqual(
+            call_args_list[1].kwargs.get("role_name")
+            or call_args_list[1][1].get("role_name"),
+            "role-b",
+        )

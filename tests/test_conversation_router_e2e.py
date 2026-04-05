@@ -65,6 +65,7 @@ from runtime.deerflow.deerflow_client_factory import DeerFlowClientFactory
 from runtime.deerflow.deerflow_department_role_runtime_repository import (
     DeerFlowDepartmentRoleRuntimeRepository,
 )
+from runtime.deerflow.deerflow_invocation_runner import DeerFlowInvocationRunner
 from runtime.deerflow.deerflow_runtime_assets import DeerFlowRuntimeAssets
 from runtime.deerflow.deerflow_runtime_assets_service import (
     DeerFlowRuntimeAssetsService,
@@ -161,7 +162,9 @@ class FakeDeerFlowClient:
         # 结束事件
         yield FakeStreamEvent(
             type="end",
-            data={"usage": {"input_tokens": 10, "output_tokens": 20, "total_tokens": 30}},
+            data={
+                "usage": {"input_tokens": 10, "output_tokens": 20, "total_tokens": 30}
+            },
         )
 
     def chat(self, message: str, *, thread_id: str | None = None) -> str:
@@ -399,7 +402,9 @@ class ConversationRouterEndToEndTest(unittest.TestCase):
 
             # 验证所有子路径都完全隔离
             self.assertNotEqual(assets_a.config_path, assets_b.config_path)
-            self.assertNotEqual(assets_a.extensions_config_path, assets_b.extensions_config_path)
+            self.assertNotEqual(
+                assets_a.extensions_config_path, assets_b.extensions_config_path
+            )
             self.assertNotEqual(assets_a.runtime_home, assets_b.runtime_home)
 
             # 验证实际文件存在于各自的目录中
@@ -733,6 +738,19 @@ class ConversationRouterEndToEndTest(unittest.TestCase):
             runtime_root = Path(temp_dir) / "runtime"
             skills_root = Path(temp_dir) / "skills"
             skills_root.mkdir(parents=True, exist_ok=True)
+            # 构造 mock invocation_runner：create_and_run_client 调用 fake_factory 并透传结果
+            _created_client = None
+
+            def _create_and_run(assets, role_name, fn):
+                nonlocal _created_client
+                _created_client = fake_factory.create_client(assets, role_name)
+                return fn(_created_client)
+
+            mock_invocation_runner = MagicMock(spec=DeerFlowInvocationRunner)
+            mock_invocation_runner.create_and_run_client.side_effect = _create_and_run
+            mock_invocation_runner.run_with_isolation.side_effect = (
+                lambda assets, c, fn: fn(c)
+            )
             repository = DeerFlowDepartmentRoleRuntimeRepository(
                 configuration=self._build_single_model_configuration(),
                 runtime_assets_service=DeerFlowRuntimeAssetsService(
@@ -742,9 +760,9 @@ class ConversationRouterEndToEndTest(unittest.TestCase):
                         FinanceDepartmentRoleCatalog()
                     ),
                 ),
-                client_factory=fake_factory,
                 runtime_context=DepartmentRuntimeContext(),
                 reply_text_sanitizer=ReplyTextSanitizer(),
+                invocation_runner=mock_invocation_runner,
             )
             response = repository.reply(
                 DepartmentRoleRequest(
@@ -769,7 +787,7 @@ class ConversationRouterEndToEndTest(unittest.TestCase):
             ConversationService(
                 StubFinanceDepartmentService(),
                 ReplyTextSanitizer(),
-            )
+            ),
         )
         response = router.handle(
             ConversationRequest(user_input="你好", thread_id="cli-1")

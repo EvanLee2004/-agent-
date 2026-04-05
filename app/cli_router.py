@@ -5,6 +5,7 @@ import uuid
 from typing import Optional
 
 from app.dependency_container import AppServiceFactory
+from app.cli_conversation_handler import CliConversationHandler
 from configuration.configuration_service import ConfigurationService
 from conversation.conversation_request import ConversationRequest
 from department.workbench.collaboration_step_formatter import CollaborationStepFormatter
@@ -41,7 +42,7 @@ class CliRouter:
         configuration = self._configuration_service.ensure_configuration()
         app_factory = AppServiceFactory(configuration)
         app_factory.build_application_bootstrapper().initialize()
-        conversation_router = app_factory.build_conversation_router()
+        handler: CliConversationHandler = app_factory.build_cli_handler()
         thread_id = self._build_thread_id()
         self._print_banner()
         while True:
@@ -50,7 +51,7 @@ class CliRouter:
                 break
             if not user_input:
                 continue
-            response = conversation_router.handle(
+            response = handler.handle(
                 ConversationRequest(
                     user_input=user_input,
                     thread_id=thread_id,

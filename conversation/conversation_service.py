@@ -1,4 +1,8 @@
-"""会话服务。"""
+"""会话服务。
+
+纯业务编排层，不包含任何运行时实现细节。
+只负责：请求转发 → 业务编排 → 响应清洗。
+"""
 
 from conversation.conversation_error import ConversationError
 from conversation.conversation_request import ConversationRequest
@@ -10,13 +14,27 @@ from department.finance_department_service import FinanceDepartmentService
 
 
 class ConversationService:
-    """会话服务。"""
+    """会话服务（纯业务编排层）。
+
+    负责：
+    - 业务编排层转发
+    - 响应清洗
+
+    注意：本服务不依赖 runtime/deerflow/* 模块，保持业务编排层纯净。
+    请求级工具上下文作用域和错误翻译由调用方的 app 层组件负责。
+    """
 
     def __init__(
         self,
         finance_department_service: FinanceDepartmentService,
         reply_text_sanitizer: ReplyTextSanitizer,
     ):
+        """构造会话服务。
+
+        Args:
+            finance_department_service: 财务部门主服务。
+            reply_text_sanitizer: 回复文本清洗器。
+        """
         self._finance_department_service = finance_department_service
         self._reply_text_sanitizer = reply_text_sanitizer
 

@@ -35,9 +35,6 @@ class CollaborationStepFormatter:
     def format(self, steps: list[CollaborationStep]) -> str:
         """格式化协作步骤。
 
-        阶段 4 重定义：不再展示"角色调用角色"的递归结构，而是展示 DeerFlow
-        stream 事件驱动的真实执行过程（工具调用、任务委托、最终结论）。
-
         Args:
             steps: 当前回合协作步骤列表。
 

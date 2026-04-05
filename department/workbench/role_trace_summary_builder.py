@@ -1,4 +1,4 @@
-"""角色协作摘要构造器。"""
+"""最终回复摘要构造器。"""
 
 from typing import Optional
 
@@ -9,21 +9,21 @@ SENTENCE_ENDINGS = ("。", "！", "？", "!", "?", "\n")
 
 
 class RoleTraceSummaryBuilder:
-    """把角色自然语言回复压缩为可展示的协作摘要。
+    """把 DeerFlow 最终回复文本压缩为可展示的协作摘要。
 
-    角色对外回复面向最终用户，长度和语气都可能更完整；而协作轨迹需要的是“这一轮
-    角色做了什么判断”的摘要。把摘要收敛为独立构造器，可以避免在会话层、协作层和
-    展示层各自重复裁剪逻辑，保证 API、CLI 和未来前端看到的是同一份角色摘要。
+    DeerFlow 对外回复面向最终用户，长度和语气都可能更完整；而协作摘要需要的是
+    "本轮系统得出什么结论"的简短文本。把摘要收敛为独立构造器，可以避免在
+    CollaborationStepFactory 和展示层各自重复裁剪逻辑。
     """
 
     def build(self, reply_text: str) -> str:
-        """根据角色回复生成摘要文本。
+        """根据 DeerFlow 回复生成摘要文本。
 
         Args:
-            reply_text: 角色原始自然语言回复。
+            reply_text: DeerFlow 原始最终回复文本。
 
         Returns:
-            适合作为角色协作轨迹展示的单段摘要文本。
+            适合作为协作摘要的单段文本。
         """
         normalized_text = self._normalize_whitespace(reply_text)
         first_sentence = self._extract_first_sentence(normalized_text)
@@ -34,7 +34,7 @@ class RoleTraceSummaryBuilder:
     def _normalize_whitespace(self, reply_text: str) -> str:
         """归一化空白字符。
 
-        角色回复里常包含 Markdown 换行、列表或空行。轨迹摘要不需要保留这些排版；
+        回复里常包含 Markdown 换行、列表或空行。摘要不需要保留这些排版；
         统一压成单段文本后，能避免工作台里混入终端展示细节，保持摘要语义稳定。
         """
         return " ".join(reply_text.split()).strip()
@@ -49,7 +49,7 @@ class RoleTraceSummaryBuilder:
         return normalized_text
 
     def _is_preferred_summary(self, first_sentence: str) -> bool:
-        """判断首句是否足以表达本轮角色结论。"""
+        """判断首句是否足以表达本轮结论。"""
         return len(first_sentence) >= MIN_SENTENCE_SUMMARY_CHARS
 
     def _truncate(self, text: str) -> str:

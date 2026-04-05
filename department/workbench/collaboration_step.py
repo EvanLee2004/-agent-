@@ -9,9 +9,6 @@ from department.workbench.collaboration_step_type import CollaborationStepType
 class CollaborationStep:
     """描述用户会话中一个逻辑协作步骤。
 
-    阶段 4 重定义：协作步骤来自 DeerFlow stream 事件，而非最终 reply_text 的二次压缩。
-    每个步骤对应一个可识别的执行动作（工具调用、任务委托、最终结论）。
-
     Attributes:
         goal: 本步骤对应的原始用户目标或子目标。
         step_type: 步骤类型，区分工具调用、任务委托、最终结论。

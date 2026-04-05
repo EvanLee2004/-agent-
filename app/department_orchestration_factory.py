@@ -6,17 +6,29 @@ from typing import Optional
 from configuration.llm_configuration import LlmConfiguration
 from conversation.reply_text_sanitizer import ReplyTextSanitizer
 from department.department_runtime_context import DepartmentRuntimeContext
-from department.finance_department_agent_assets_service import FinanceDepartmentAgentAssetsService
+from department.finance_department_agent_assets_service import (
+    FinanceDepartmentAgentAssetsService,
+)
 from department.finance_department_role_catalog import FinanceDepartmentRoleCatalog
 from department.finance_department_service import FinanceDepartmentService
 from department.workbench.department_workbench_service import DepartmentWorkbenchService
-from department.workbench.in_memory_department_workbench_repository import InMemoryDepartmentWorkbenchRepository
+from department.workbench.in_memory_department_workbench_repository import (
+    InMemoryDepartmentWorkbenchRepository,
+)
+from department.workbench.sqlite_department_workbench_repository import (
+    SQLiteDepartmentWorkbenchRepository,
+)
 from department.workbench.collaboration_step_factory import CollaborationStepFactory
 from department.workbench.role_trace_summary_builder import RoleTraceSummaryBuilder
 from runtime.deerflow.deerflow_client_factory import DeerFlowClientFactory
-from runtime.deerflow.deerflow_department_role_runtime_repository import DeerFlowDepartmentRoleRuntimeRepository
+from runtime.deerflow.deerflow_department_role_runtime_repository import (
+    DeerFlowDepartmentRoleRuntimeRepository,
+)
+from runtime.deerflow.deerflow_invocation_runner import DeerFlowInvocationRunner
 from runtime.deerflow.deerflow_runtime_assets_service import DEERFLOW_RUNTIME_ROOT
-from runtime.deerflow.deerflow_runtime_assets_service import DeerFlowRuntimeAssetsService
+from runtime.deerflow.deerflow_runtime_assets_service import (
+    DeerFlowRuntimeAssetsService,
+)
 
 from app.department_orchestration_bundle import DepartmentOrchestrationBundle
 
@@ -26,10 +38,6 @@ class DepartmentOrchestrationFactory:
 
     角色目录、共享工作台、DeerFlow 角色运行时都属于"部门编排"问题域。
     把这些对象集中在一个工厂中，是为了让会话入口不再理解部门内部的中间部件。
-
-    阶段 3 说明：多 agent 协作已迁移至 DeerFlow 原生 task/subagent 机制，
-    DepartmentCollaborationService 不再作为装配对象。协作路由（如 generate_fiscal_task_prompt）
-    为自包含组件，不依赖外部协作服务。
 
     并发安全说明：
     每个 build() 调用会产生独立的运行时资产集合（通过独立的 runtime_root）。
@@ -54,7 +62,9 @@ class DepartmentOrchestrationFactory:
         """
         self._role_catalog = role_catalog
         self._configuration = configuration
-        self._runtime_root = runtime_root if runtime_root is not None else DEERFLOW_RUNTIME_ROOT
+        self._runtime_root = (
+            runtime_root if runtime_root is not None else DEERFLOW_RUNTIME_ROOT
+        )
 
     def build(self) -> DepartmentOrchestrationBundle:
         """构造部门协作层对象集合。
@@ -62,20 +72,27 @@ class DepartmentOrchestrationFactory:
         Returns:
             对外暴露的部门入口服务（通过 DeerFlow 原生 task 实现多 agent 协作）。
         """
+        runtime_assets_service = DeerFlowRuntimeAssetsService(
+            FinanceDepartmentAgentAssetsService(self._role_catalog),
+            runtime_root=self._runtime_root,
+        )
+        invocation_runner = DeerFlowInvocationRunner(
+            client_factory=DeerFlowClientFactory(),
+            runtime_assets_service=runtime_assets_service,
+            configuration=self._configuration,
+        )
         runtime_context = DepartmentRuntimeContext()
         collaboration_step_factory = CollaborationStepFactory(RoleTraceSummaryBuilder())
         role_runtime_repository = DeerFlowDepartmentRoleRuntimeRepository(
             configuration=self._configuration,
-            runtime_assets_service=DeerFlowRuntimeAssetsService(
-                FinanceDepartmentAgentAssetsService(self._role_catalog),
-                runtime_root=self._runtime_root,
-            ),
-            client_factory=DeerFlowClientFactory(),
+            runtime_assets_service=runtime_assets_service,
             runtime_context=runtime_context,
             reply_text_sanitizer=ReplyTextSanitizer(),
+            invocation_runner=invocation_runner,
         )
+        workbench_db_path = self._runtime_root / "workbench.db"
         workbench_service = DepartmentWorkbenchService(
-            InMemoryDepartmentWorkbenchRepository()
+            SQLiteDepartmentWorkbenchRepository(workbench_db_path)
         )
         finance_department_service = FinanceDepartmentService(
             role_catalog=self._role_catalog,
@@ -85,4 +102,5 @@ class DepartmentOrchestrationFactory:
         )
         return DepartmentOrchestrationBundle(
             finance_department_service=finance_department_service,
+            workbench_service=workbench_service,
         )

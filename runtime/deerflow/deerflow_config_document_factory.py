@@ -4,11 +4,15 @@ from pathlib import Path
 from typing import Any
 
 from configuration.llm_configuration import LlmConfiguration
-from runtime.deerflow.deerflow_model_document_factory import DeerFlowModelDocumentFactory
+from runtime.deerflow.deerflow_model_document_factory import (
+    DeerFlowModelDocumentFactory,
+)
 from runtime.deerflow.deerflow_tool_catalog import DeerFlowToolCatalog
 
 
-def _build_tool_group_documents(tool_catalog: DeerFlowToolCatalog) -> list[dict[str, str]]:
+def _build_tool_group_documents(
+    tool_catalog: DeerFlowToolCatalog,
+) -> list[dict[str, str]]:
     """根据工具目录生成 tool group 文档。
 
     DeerFlow 会先按 `tool_groups` 过滤 agent 可见的配置工具，再解析实际工具对象。
@@ -73,15 +77,14 @@ class DeerFlowConfigDocumentFactory:
                 "path": str(skills_root.resolve()),
                 "container_path": "/mnt/skills",
             },
-            "title": {"enabled": False, "max_words": 6, "max_chars": 60, "model_name": None},
+            "title": {
+                "enabled": False,
+                "max_words": 6,
+                "max_chars": 60,
+                "model_name": None,
+            },
             "summarization": {"enabled": False},
             "memory": {
-                # 启用 DeerFlow 原生记忆机制。
-                # DeerFlow 会在每轮对话结束后用 LLM 自动提取对话事实，写入
-                # `.runtime/deerflow/home/agents/{agent_name}/memory.json`，
-                # 并在下一轮对话开始时自动注入 system prompt。
-                # 不再需要 store_memory / search_memory 工具，也不再需要
-                # 项目自维护的 Markdown + SQLite 记忆模块。
                 "enabled": True,
                 "debounce_seconds": 30,
                 "max_facts": 100,

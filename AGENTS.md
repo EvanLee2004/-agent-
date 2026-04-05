@@ -26,19 +26,25 @@ pip install -r requirements.txt
 
 ## 架构原则
 
-**调用链路**：`CLI → ConversationRouter → ConversationService → FinanceDepartmentService → DeerFlowDepartmentRoleRuntimeRepository → CollaborationStepFactory → DepartmentWorkbenchService → DeerFlowClient`
+**调用链路**：`CLI / API → CliConversationHandler / AppConversationHandler → ConversationRouter → ConversationService → FinanceDepartmentService → DeerFlowDepartmentRoleRuntimeRepository → DeerFlowClient`  
+`FinanceDepartmentService` 在调用 DeerFlow 后，会继续通过 `CollaborationStepFactory + DepartmentWorkbenchService` 完成协作摘要投影与历史持久化。
 
 **分层规则**：`router → service → repository → model`，禁止跨层直接调用。
 
 **关键边界**：
 - `app/` — 启动入口与依赖装配（DI 容器、工厂），具体实现和第三方接入只在此层装配
 - `conversation/` — 会话边界，用户可见响应收口
-- `department/` — 财务部门主域：角色目录（`roles/`）、协作协议（`collaboration/`）、协作工作台（`workbench/`）
+- `department/` — 财务部门主域：角色目录（`roles/`）、协作协议（`collaboration/`）、协作工作台（`workbench/`，负责 execution_events / collaboration_steps 持久化与查询）
 - `runtime/deerflow/` — DeerFlow 适配层，运行时资产生成到 `.runtime/deerflow/`（gitignored）
 - `accounting/`、`cashier/`、`audit/`、`tax/`、`rules/` — 各业务特性模块，内部遵循 router/service/repository 分层
 - `configuration/` — 配置读取与校验
 
 **DeerFlow 约束**：只依赖 `deerflow.client.DeerFlowClient`；禁止 deep import DeerFlow 内部模块；不要造自研 runtime/ToolLoopService/llm 目录
+
+**运行时说明**：
+- API 默认共享 `.runtime/api` 作为进程级 runtime_root，不同 `thread_id` 依赖 DeerFlow checkpoint 自动隔离
+- `os.environ` 快照恢复只缩小污染窗口，不保证多线程并发安全
+- 当前部署建议：`uvicorn --workers 1`
 
 ## 代码风格
 

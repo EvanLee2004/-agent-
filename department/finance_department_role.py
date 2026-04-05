@@ -4,9 +4,8 @@ from dataclasses import dataclass
 
 from department.finance_department_constants import DEERFLOW_BASE_TOOL_GROUP_NAMES
 
-# 当前阶段的目标是“财务角色 = DeerFlow custom agent + 财务领域资产”。
-# 因此每个角色默认都应拥有同一套 DeerFlow 基础 tool groups，角色差异主要通过
-# SOUL、skills 和实际是否主动调用某些工具来体现，而不是底层执行面先天不一致。
+# 财务角色统一运行在同一套 DeerFlow 基础 tool groups 之上；角色差异主要通过
+# SOUL、skills 和实际是否主动调用某些工具体现，而不是底层执行面先天不一致。
 DEFAULT_TOOL_GROUPS = DEERFLOW_BASE_TOOL_GROUP_NAMES
 
 

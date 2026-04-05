@@ -26,12 +26,9 @@ class FinanceToolContextFactory:
     """负责构造 DeerFlow 可见的财务工具上下文。
 
     DeerFlow 的工具通过静态模块路径解析，无法像普通应用层那样按请求动态注入。
-    这个工厂把所有工具路由装配集中起来，是为了把第三方运行时的特殊约束隔离到
-    一个地方，避免依赖容器继续膨胀成系统耦合中心。
-
-    阶段 3 说明：多 agent 协作已迁移至 DeerFlow 原生 task/subagent 机制，
-    collaborate_with_department_role 工具和 DepartmentCollaborationService 已移除。
-    generate_fiscal_task_prompt_router 为自包含组件，直接持有 FiscalRolePromptBuilder。
+    本工厂把所有工具路由装配集中起来，把第三方运行时的特殊约束隔离到一处，
+    避免依赖容器继续膨胀。generate_fiscal_task_prompt_router 为自包含组件，
+    直接持有 FiscalRolePromptBuilder。
     """
 
     def build(

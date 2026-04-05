@@ -39,8 +39,6 @@ _TOOL_RESULT_SUMMARY_MAP = {
 class CollaborationStepFactory:
     """从执行事件构造可展示的协作步骤。
 
-    阶段 4 重定义：不再从 reply_text 提炼摘要，改为从 DeerFlow stream 事件
-    生成的 ExecutionEvent 列表构建多个 CollaborationStep。
     factory 负责将事件转换为对用户友好的协作步骤，核心原则是：
     - 不暴露原始 tool result JSON / prompt 正文
     - TOOL_CALL/TASK_CALL 展示"正在做什么"（动作描述）

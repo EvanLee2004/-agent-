@@ -2,6 +2,29 @@
 
 长期稳定的用户偏好、事实和决策。
 
+## 2026-04-05 产品化收口
+
+### 当前主链路
+
+1. **入口边界**
+   - API 使用 `AppConversationHandler`，CLI 使用 `CliConversationHandler`
+   - 请求级 `open_context_scope()` 放在 app 层，不再放在 `conversation/`
+   - `conversation/` 只保留会话路由、响应清洗和错误抽象
+
+2. **DeerFlow-first 架构**
+   - DeerFlow 负责 runtime / task / memory / stream
+   - 本项目负责财务工具、业务规则、工作台持久化、API/CLI 入口和审计查询
+   - 多步协作主路径为 `generate_fiscal_task_prompt` + `task(..., subagent_type="general-purpose")`
+
+3. **工作台与历史**
+   - `DepartmentWorkbenchService` 负责当前回合初始化、协作步骤记录和最终落库
+   - SQLite 工作台已支持多回合 `turns / collaboration_steps / execution_events` 查询
+   - `execution_events` 是内部遥测，`collaboration_steps` 是用户可见投影
+
+4. **历史说明**
+   - 早期 `department/collaboration/department_collaboration_service.py` 等旧协作层已经移除
+   - 2026-04-04 中关于旧协作层的记录仅保留为历史，不代表当前主链路
+
 ## 2026-04-04 Bug 修复
 
 ### 代码审查发现的问题
@@ -59,10 +82,10 @@
    - 添加详细注释解释 `==` 跳过自身逻辑的正确性
    - 新增 11 个审核服务单元测试
 
-3. **全局可变状态移除** (`runtime/deerflow/`)
+3. **工具上下文作用域收口** (`runtime/deerflow/`)
    - 使用 `contextvars.ContextVar` 替代类级别可变状态
    - 添加 `open_context_scope()` 上下文管理器
-   - 保持线程/协程安全
+   - 该结论仅适用于工具上下文作用域；`os.environ` 相关隔离不代表多线程并发安全
 
 4. **共享常量提取** (`configuration/`)
    - 新增 `configuration/defaults.py` 统一管理：

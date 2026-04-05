@@ -7,13 +7,18 @@ from conversation.reply_text_sanitizer import ReplyTextSanitizer
 from department.department_error import DepartmentError
 from department.department_role_request import DepartmentRoleRequest
 from department.department_role_response import DepartmentRoleResponse
-from department.department_role_runtime_repository import DepartmentRoleRuntimeRepository
+from department.department_role_runtime_repository import (
+    DepartmentRoleRuntimeRepository,
+)
 from department.department_runtime_context import DepartmentRuntimeContext
+from department.llm_usage import LlmUsage
 from department.workbench.execution_event import ExecutionEvent
 from department.workbench.execution_event_type import ExecutionEventType
-from runtime.deerflow.deerflow_client_factory import DeerFlowClientFactory
+from runtime.deerflow.deerflow_invocation_runner import DeerFlowInvocationRunner
 from runtime.deerflow.deerflow_runtime_assets import DeerFlowRuntimeAssets
-from runtime.deerflow.deerflow_runtime_assets_service import DeerFlowRuntimeAssetsService
+from runtime.deerflow.deerflow_runtime_assets_service import (
+    DeerFlowRuntimeAssetsService,
+)
 
 
 DEFAULT_THREAD_ID = "finance-cli-session"
@@ -26,64 +31,91 @@ class DeerFlowDepartmentRoleRuntimeRepository(DepartmentRoleRuntimeRepository):
     执行一次对话，然后把结果包装为部门层可消费的角色响应。它不参与角色之间
     的协作决策，因此部门编排逻辑仍然收敛在 `department/`。
 
-    重要设计决策：
-    1. **每次 reply() 前 reset_agent()** - DeerFlow 的 system prompt（包括 date、
-       memory、skills 上下文）在 agent 首次创建时生成并缓存。只有当配置 key
-       （model_name/thinking_enabled/is_plan_mode/subagent_enabled/agent_name/
-       available_skills）变化时才会自动重建。这意味着即使用户更新了 memory，
-       同一 client 实例在下一轮对话中仍然会读到旧的 system prompt。
+    设计决策：
+    1. 每次 reply() 前调用 reset_agent()：确保下一轮对话能看到最新的
+       memory/skills/date 上下文，同时保持 thread_id/checkpointer 语义不变。
+       DeerFlow 的 system prompt 在 agent 首次创建时生成并缓存，只有当
+       配置 key 变化时才会自动重建。
 
-       根据 DeerFlow client.py 的文档：
-       "The system prompt (including date, memory, and skills context) is
-       generated when the internal agent is first created and cached until the
-       configuration key changes. Call reset_agent() to force a refresh."
-
-       因此我们在每次 reply() 前主动调用 reset_agent()，确保下一轮对话能看到
-       最新的 memory/skills/date 上下文，同时保持 thread_id/checkpointer 语义不变。
-
-    2. **使用 stream() 而非 chat()** - chat() 只是 stream() 的包装，只返回最后
-       一段 AI 文本（intermediate segments are discarded）。DeerFlow 在一个
-       turn 中可能输出多段 AI 文本（如思考过程、tool 结果后的再回复），
-       直接用 chat() 会丢失中间内容。改用 stream() 并拼接所有 AI 文本段，
-       为后续接入 tool trace / usage / artifacts 预留扩展点。
+    2. 使用 stream() 而非 chat()：DeerFlow 在一个 turn 中可能输出多段 AI 文本
+       （如思考过程、tool 结果后的再回复），chat() 只返回最后一段，会丢失中间内容。
+       stream() 为后续接入 tool trace / usage / artifacts 预留扩展点。
     """
 
     def __init__(
         self,
         configuration: LlmConfiguration,
         runtime_assets_service: DeerFlowRuntimeAssetsService,
-        client_factory: DeerFlowClientFactory,
         runtime_context: DepartmentRuntimeContext,
         reply_text_sanitizer: ReplyTextSanitizer,
+        invocation_runner: DeerFlowInvocationRunner,
     ):
         self._configuration = configuration
         self._runtime_assets_service = runtime_assets_service
-        self._client_factory = client_factory
         self._runtime_context = runtime_context
         self._reply_text_sanitizer = reply_text_sanitizer
+        self._invocation_runner = invocation_runner
         self._assets: Optional[DeerFlowRuntimeAssets] = None
         self._clients: dict[str, object] = {}
 
     def reply(self, request: DepartmentRoleRequest) -> DepartmentRoleResponse:
         """调用目标角色并返回其回复。"""
-        try:
-            client = self._get_client(request.role_name)
-            # 重置 agent 以确保 memory/skills/date 上下文刷新。
-            # 参见类文档"设计决策 1"。
+        assets = self._get_assets()
+        thread_id = request.thread_id or DEFAULT_THREAD_ID
+
+        def run_and_collect(
+            client: object,
+        ) -> tuple[str, list[ExecutionEvent], LlmUsage | None]:
+            """在 runner 的 os.environ 隔离作用域内执行 DeerFlow 调用。
+
+            重置 agent 以确保 memory/skills/date 上下文刷新，
+            然后收集 stream() 事件生成 reply + execution_events + usage。
+            """
             client.reset_agent()
+            return self._collect_reply_and_events(
+                client,
+                request.user_input,
+                thread_id=thread_id,
+            )
+
+        try:
             with self._runtime_context.open_scope(
                 role_name=request.role_name,
-                thread_id=request.thread_id or DEFAULT_THREAD_ID,
+                thread_id=thread_id,
                 collaboration_depth=request.collaboration_depth,
             ):
-                # 使用 stream() 而非 chat()，确保不丢失多段 AI 输出。
-                # 参见类文档"设计决策 2"。
-                reply_text, execution_events = self._collect_reply_and_events(
-                    client,
-                    request.user_input,
-                    thread_id=request.thread_id or DEFAULT_THREAD_ID,
-                )
-        except (ConnectionError, FileNotFoundError, OSError, RuntimeError, TimeoutError, ValueError) as error:
+                if request.role_name in self._clients:
+                    client = self._clients[request.role_name]
+                    reply_text, execution_events, usage = (
+                        self._invocation_runner.run_with_isolation(
+                            assets,
+                            client,
+                            run_and_collect,
+                        )
+                    )
+                else:
+                    _captured: dict = {}
+
+                    def capture_and_reply(client: object):
+                        _captured["client"] = client
+                        return run_and_collect(client)
+
+                    reply_text, execution_events, usage = (
+                        self._invocation_runner.create_and_run_client(
+                            assets,
+                            request.role_name,
+                            capture_and_reply,
+                        )
+                    )
+                    self._clients[request.role_name] = _captured["client"]
+        except (
+            ConnectionError,
+            FileNotFoundError,
+            OSError,
+            RuntimeError,
+            TimeoutError,
+            ValueError,
+        ) as error:
             raise DepartmentError(f"角色运行失败: {str(error)}") from error
         if not reply_text or not str(reply_text).strip():
             raise DepartmentError(f"角色 {request.role_name} 未返回有效回复")
@@ -92,6 +124,7 @@ class DeerFlowDepartmentRoleRuntimeRepository(DepartmentRoleRuntimeRepository):
             reply_text=self._reply_text_sanitizer.sanitize(str(reply_text).strip()),
             collaboration_depth=request.collaboration_depth,
             execution_events=execution_events,
+            usage=usage,
         )
 
     def _collect_reply_and_events(
@@ -99,21 +132,18 @@ class DeerFlowDepartmentRoleRuntimeRepository(DepartmentRoleRuntimeRepository):
         client: object,
         user_input: str,
         thread_id: str,
-    ) -> tuple[str, list[ExecutionEvent]]:
-        """从 DeerFlow stream() 中提取最终回复文本和执行事件。
+    ) -> tuple[str, list[ExecutionEvent], LlmUsage | None]:
+        """从 DeerFlow stream() 中提取最终回复文本、执行事件和 token 使用量。
 
         DeerFlow stream() 在 embedded mode 下产生完整 AIMessage 事件，而非 token delta。
         一个 turn 中可能出现多个 AI 消息（例如：中间回复 -> 工具调用 -> 最终回复）。
         chat() 故意只返回最后一个非空 AI 文本，这是正确的语义：
         用户可见的最终回复不应包含"我先查一下"这类中间话术。
 
-        我们使用 stream() 而非 chat()，同时收集对用户有意义的执行事件：
-        - AI 发起工具调用（generate_fiscal_task_prompt、task 等）
-        - 工具执行结果（用于确认动作完成）
-        - 最终 AI 文本回复（always 作为最后一步）
-
-        最终 reply_text 取最后一个非空 AI 文本，与 chat() 语义对齐。
-        execution_events 只包含对生成协作摘要有意义的事件，不暴露原始长文本 thinking。
+        我们使用 stream() 而非 chat()，同时收集：
+        - 对用户有意义的执行事件（TOOL_CALL / TASK_CALL / TOOL_RESULT / FINAL_REPLY）
+        - 最终 AI 文本回复（最后一个非空 AI 文本）
+        - LLM token 使用量（来自 end 事件，内部遥测，不暴露给用户）
 
         DeerFlow stream() 产生的事件类型（参见 deerflow/client.py:_serialize_message）：
         - messages-tuple (type=ai, content=...): AI 消息片段
@@ -121,13 +151,17 @@ class DeerFlowDepartmentRoleRuntimeRepository(DepartmentRoleRuntimeRepository):
           注意：tool_calls 项是 {"name": ..., "args": ..., "id": ...}，没有嵌套 "function" 结构
         - messages-tuple (type=tool, content=..., name=..., tool_call_id=...): 工具执行结果
           tool_call_id 字段与原始 tool_calls 项的 id 字段对应
-        - values: 完整状态快照（含 artifacts）
+        - values: 完整状态快照（含 artifacts），暂存用于未来扩展
         - end: 流结束，包含累计 usage
+
+        Returns:
+            三元组：(最终回复文本, 执行事件列表, LLM使用量或None)
         """
         last_ai_text: str = ""
         execution_events: list[ExecutionEvent] = []
         # 追踪已记录的 tool_call 的 id，用于将 tool_result 与原始调用关联
         recorded_tool_call_ids: set[str] = set()
+        usage: LlmUsage | None = None
 
         for event in client.stream(user_input, thread_id=thread_id):
             # 收集最后一个非空 AI 文本作为最终回复
@@ -144,7 +178,11 @@ class DeerFlowDepartmentRoleRuntimeRepository(DepartmentRoleRuntimeRepository):
                     tc_id = tc.get("id", "")
                     if tool_name and tc_id and tc_id not in recorded_tool_call_ids:
                         recorded_tool_call_ids.add(tc_id)
-                        event_type = ExecutionEventType.TASK_CALL if tool_name == "task" else ExecutionEventType.TOOL_CALL
+                        event_type = (
+                            ExecutionEventType.TASK_CALL
+                            if tool_name == "task"
+                            else ExecutionEventType.TOOL_CALL
+                        )
                         execution_events.append(
                             ExecutionEvent(
                                 event_type=event_type,
@@ -172,6 +210,16 @@ class DeerFlowDepartmentRoleRuntimeRepository(DepartmentRoleRuntimeRepository):
                             summary=summary,
                         )
                     )
+            # 收集 end 事件中的 token 使用量（内部遥测）
+            elif event.type == "end":
+                usage_data = event.data.get("usage", {})
+                if usage_data:
+                    usage = LlmUsage(
+                        input_tokens=usage_data.get("input_tokens", 0),
+                        output_tokens=usage_data.get("output_tokens", 0),
+                        total_tokens=usage_data.get("total_tokens", 0),
+                    )
+            # values 事件：完整状态快照（含 artifacts），未来扩展位，暂不处理
 
         # 策略：始终以 FINAL_REPLY 作为最后一步（即使本轮有工具调用）。
         # 这是 DeerFlow 多 agent 协作的最终结论，用户需要看到它。
@@ -195,23 +243,12 @@ class DeerFlowDepartmentRoleRuntimeRepository(DepartmentRoleRuntimeRepository):
                 )
             )
 
-        return last_ai_text, execution_events
-
-    def _get_client(self, role_name: str):
-        """按需获取某个角色对应的 DeerFlowClient。
-
-        注意：client 实例被缓存以便复用，但每次 reply() 前都会调用
-        reset_agent() 来刷新 system prompt，因此缓存的是 client 实例
-        本身而非过时的 agent 状态。
-        """
-        if role_name in self._clients:
-            return self._clients[role_name]
-        assets = self._get_assets()
-        self._clients[role_name] = self._client_factory.create_client(assets, role_name)
-        return self._clients[role_name]
+        return last_ai_text, execution_events, usage
 
     def _get_assets(self) -> DeerFlowRuntimeAssets:
         """按需准备 DeerFlow 运行时资产。"""
         if self._assets is None:
-            self._assets = self._runtime_assets_service.prepare_assets(self._configuration)
+            self._assets = self._runtime_assets_service.prepare_assets(
+                self._configuration
+            )
         return self._assets

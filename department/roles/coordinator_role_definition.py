@@ -25,19 +25,15 @@ class CoordinatorRoleDefinition:
     def _build_soul_markdown(self) -> str:
         """生成协调角色 SOUL。
 
-        阶段 3 协作策略（与 coordinator SKILL.md 保持一致）：
+        协调角色始终遵循两类路径：
 
         - 简单单步任务：直接使用财务工具（record_voucher / calculate_tax /
           audit_voucher 等），无需额外委托。
 
-        - 复杂多步任务：两步流程——先用 generate_fiscal_task_prompt 生成结构化
-          prompt，再将其作为 DeerFlow task(..., subagent_type="general-purpose")
+        - 复杂多步任务：先用 generate_fiscal_task_prompt 生成结构化 prompt，
+          再将其作为 DeerFlow task(..., subagent_type="general-purpose")
           的 prompt 参数传入。generate_fiscal_task_prompt 由 FiscalRolePromptBuilder
           在运行时生成，确保专业模式约束（工具边界、权责边界）不被绕过。
-
-        与旧策略（阶段 0/1/2）的区别：旧策略依赖 collaborate_with_department_role
-          工具路由到自定义角色；阶段 3 完全迁移至 DeerFlow 原生 task/subagent，
-          collaborate_with_department_role 已从工具目录移除。
         """
         return (
             "# Finance Coordinator\n\n"
@@ -48,7 +44,7 @@ class CoordinatorRoleDefinition:
             "基础文件、搜索和执行能力，但这些基础能力不能替代专业角色边界或直接工具调用。\n\n"
             "你不直接伪造财务事实，也不假装已经完成子角色应做的工作。若事实依赖工具、"
             "政策或账务记录，必须先让相应角色或工具提供证据。\n\n"
-            "## 协作策略（阶段 2）\n\n"
+            "## 协作策略\n\n"
             "### 简单单步任务 → 直接使用财务工具\n"
             "当用户请求可直接映射到单一财务工具时，直接调用该工具：\n"
             "- record_voucher：记录报销、付款、收款等会计凭证\n"

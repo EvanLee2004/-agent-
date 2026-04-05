@@ -6,10 +6,18 @@ from pathlib import Path
 import yaml
 
 from configuration.llm_configuration import LlmConfiguration
-from department.finance_department_agent_assets_service import FinanceDepartmentAgentAssetsService
-from runtime.deerflow.deerflow_config_document_factory import DeerFlowConfigDocumentFactory
-from runtime.deerflow.deerflow_extensions_document_factory import DeerFlowExtensionsDocumentFactory
-from runtime.deerflow.deerflow_model_document_factory import DeerFlowModelDocumentFactory
+from department.finance_department_agent_assets_service import (
+    FinanceDepartmentAgentAssetsService,
+)
+from runtime.deerflow.deerflow_config_document_factory import (
+    DeerFlowConfigDocumentFactory,
+)
+from runtime.deerflow.deerflow_extensions_document_factory import (
+    DeerFlowExtensionsDocumentFactory,
+)
+from runtime.deerflow.deerflow_model_document_factory import (
+    DeerFlowModelDocumentFactory,
+)
 from runtime.deerflow.deerflow_runtime_assets import DeerFlowRuntimeAssets
 from runtime.deerflow.deerflow_tool_catalog import DeerFlowToolCatalog
 
@@ -40,7 +48,9 @@ class DeerFlowRuntimeAssetsService:
         self._department_agent_assets_service = department_agent_assets_service
         self._runtime_root = runtime_root
         self._skills_root = skills_root
-        self._available_skills = self._department_agent_assets_service.list_available_skill_names()
+        self._available_skills = (
+            self._department_agent_assets_service.list_available_skill_names()
+        )
         self._config_document_factory = DeerFlowConfigDocumentFactory(
             DeerFlowModelDocumentFactory(),
             DeerFlowToolCatalog(),
@@ -90,7 +100,9 @@ class DeerFlowRuntimeAssetsService:
             runtime_home=runtime_home.resolve(),
             skills_path=self._skills_root.resolve(),
             available_skills=set(self._available_skills),
-            environment_variables=self._build_runtime_environment_variables(configuration),
+            environment_variables=self._build_runtime_environment_variables(
+                configuration
+            ),
             runtime_configuration=configuration.runtime_configuration,
         )
 
@@ -100,8 +112,7 @@ class DeerFlowRuntimeAssetsService:
     ) -> dict[str, str]:
         """构造 DeerFlow 运行时所需的环境变量映射。
 
-        现在配置层已经支持多模型，因此运行时不能再只注入单个 `LLM_API_KEY`。
-        DeerFlow 会在解析每个模型条目时按 `api_key: $ENV_NAME` 读取环境变量，
+        DeerFlow 在解析每个模型条目时按 `api_key: $ENV_NAME` 读取环境变量，
         所以这里必须把所有已启用模型对应的密钥都注入进去，才能保证任一模型被选中时
         都能正常启动。
         """
