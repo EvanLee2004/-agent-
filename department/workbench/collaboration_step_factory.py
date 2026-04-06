@@ -4,7 +4,7 @@ from department.workbench.collaboration_step import CollaborationStep
 from department.workbench.collaboration_step_type import CollaborationStepType
 from department.workbench.execution_event import ExecutionEvent
 from department.workbench.execution_event_type import ExecutionEventType
-from department.workbench.role_trace_summary_builder import RoleTraceSummaryBuilder
+from department.workbench.final_reply_summary_builder import FinalReplySummaryBuilder
 
 
 # 工具名称到中文动作描述的映射（用于 TOOL_CALL / TASK_CALL 步骤）
@@ -45,7 +45,7 @@ class CollaborationStepFactory:
     - TOOL_RESULT 展示"做了什么结论"（已完成状态），不展示原始返回内容
     """
 
-    def __init__(self, summary_builder: RoleTraceSummaryBuilder):
+    def __init__(self, summary_builder: FinalReplySummaryBuilder):
         self._summary_builder = summary_builder
 
     def build_from_events(
@@ -96,7 +96,7 @@ class CollaborationStepFactory:
                     event.tool_name, f"{event.tool_name} 已执行"
                 )
             else:
-                # FINAL_REPLY：用 RoleTraceSummaryBuilder 压缩后的最终回复文本
+                # FINAL_REPLY：用 FinalReplySummaryBuilder 压缩后的最终回复文本
                 summary = self._summary_builder.build(event.summary)
 
             steps.append(

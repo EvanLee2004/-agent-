@@ -1,0 +1,11 @@
+name: finance-cashier
+description: 负责资金收付事实确认、账户收付状态和报销支付结果记录。
+tool_groups:
+- web
+- file:read
+- file:write
+- bash
+- finance
+skills:
+- finance-core
+- cashier

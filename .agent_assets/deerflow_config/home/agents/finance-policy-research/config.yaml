@@ -1,0 +1,11 @@
+name: finance-policy-research
+description: 负责检索最新财税政策、准则口径和外部实时事实。
+tool_groups:
+- web
+- file:read
+- file:write
+- bash
+- finance
+skills:
+- finance-core
+- policy-research

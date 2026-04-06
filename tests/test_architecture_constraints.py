@@ -51,7 +51,9 @@ REMOVED_PATHS = [
     PROJECT_ROOT / "conversation" / "deerflow_runtime_assets.py",
     PROJECT_ROOT / "conversation" / "deerflow_runtime_assets_service.py",
     PROJECT_ROOT / "conversation" / "deerflow_runtime_error.py",
-    # 阶段 3：legacy 自写协作层已移除
+    PROJECT_ROOT / "runtime" / "deerflow" / "deerflow_tool_catalog.py",
+    PROJECT_ROOT / "runtime" / "deerflow" / "deerflow_tool_spec.py",
+    # legacy 自写协作层已移除
     PROJECT_ROOT / "department" / "collaboration" / "collaborate_with_department_role_router.py",
     PROJECT_ROOT / "department" / "collaboration" / "collaborate_with_department_role_tool.py",
     PROJECT_ROOT / "department" / "collaboration" / "department_collaboration_command.py",
@@ -63,6 +65,13 @@ REMOVED_PATHS = [
     PROJECT_ROOT / "department" / "role_trace.py",
     PROJECT_ROOT / "department" / "role_trace_formatter.py",
     PROJECT_ROOT / "department" / "role_trace_summary_builder.py",
+    PROJECT_ROOT / "department" / "workbench" / "in_memory_department_workbench_repository.py",
+    PROJECT_ROOT / "department" / "roles" / "audit_role_definition.py",
+    PROJECT_ROOT / "department" / "roles" / "bookkeeping_role_definition.py",
+    PROJECT_ROOT / "department" / "roles" / "cashier_role_definition.py",
+    PROJECT_ROOT / "department" / "roles" / "coordinator_role_definition.py",
+    PROJECT_ROOT / "department" / "roles" / "policy_research_role_definition.py",
+    PROJECT_ROOT / "department" / "roles" / "tax_role_definition.py",
     # 自研记忆模块（已被 DeerFlow 原生记忆接管）
     PROJECT_ROOT / "memory" / "markdown_memory_store_repository.py",
     PROJECT_ROOT / "memory" / "memory_chunk.py",
@@ -84,6 +93,7 @@ REMOVED_PATHS = [
     PROJECT_ROOT / "memory" / "store_memory_tool.py",
     # 工具使用策略（依赖方已随记忆迁移一并移除）
     PROJECT_ROOT / "conversation" / "tool_use_policy.py",
+    PROJECT_ROOT / "department" / "finance_department_constants.py",
 ]
 
 
@@ -99,7 +109,7 @@ class ArchitectureConstraintsTest(unittest.TestCase):
         """验证仓库中没有垃圾桶文件。"""
         forbidden_files = []
         for file_path in PROJECT_ROOT.rglob("*.py"):
-            if ".venv" in file_path.parts:
+            if ".venv" in file_path.parts or "vendor" in file_path.parts:
                 continue
             if file_path.name in {"utils.py", "helpers.py"}:
                 forbidden_files.append(str(file_path))
@@ -119,7 +129,7 @@ class ArchitectureConstraintsTest(unittest.TestCase):
     def test_readme_and_agents_no_legacy_fallback_claim(self):
         """验证文档不再声称 collaborate_with_department_role 仍保留作为 legacy fallback。
 
-        阶段 3：legacy 工具已从 tool catalog 移除，文档应与实际实现一致。
+        legacy 工具已从 tool catalog 移除，文档应与实际实现一致。
         本测试防止"collaborate_with_department_role 仍保留"这类旧描述回退到 README/AGENTS。
         """
         readme = (PROJECT_ROOT / "README.md").read_text(encoding="utf-8")
@@ -133,7 +143,7 @@ class ArchitectureConstraintsTest(unittest.TestCase):
 
         # README 和 AGENTS 工具列表中均不应声称 collaborate_with_department_role 仍使用
         for doc_name, doc_content in [("README.md", readme), ("AGENTS.md", agents)]:
-            # 允许出现在"阶段 3 已移除"的描述中，但不允许出现在"仍保留"/"legacy fallback"语境
+            # 允许出现在"已移除"的描述中，但不允许出现在"仍保留"/"legacy fallback"语境
             if "collaborate_with_department_role" in doc_content:
                 self.assertNotIn(
                     "仍保留",

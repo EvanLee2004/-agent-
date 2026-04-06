@@ -16,9 +16,9 @@ class DeerFlowRuntimeAssets:
         config_path: DeerFlow 主配置文件路径。
         extensions_config_path: DeerFlow 扩展配置文件路径。
         runtime_home: DeerFlow 运行期状态根目录（memory 等）。
-        skills_path: DeerFlow skills 根目录路径。
         available_skills: 当前运行时允许暴露给 Agent 的 skill 名称集合。
         environment_variables: 运行时需要注入 DeerFlow 进程环境的变量集合。
+            其中 DEER_FLOW_SKILLS_PATH 携带了 skills 根目录的绝对路径。
         runtime_configuration: 当前 DeerFlow runtime 开关配置。
     """
 
@@ -26,7 +26,6 @@ class DeerFlowRuntimeAssets:
     config_path: Path
     extensions_config_path: Path
     runtime_home: Path
-    skills_path: Path
     available_skills: set[str]
     environment_variables: dict[str, str]
     runtime_configuration: DeerFlowRuntimeConfiguration

@@ -1,0 +1,26 @@
+{
+  "mcpServers": {},
+  "skills": {
+    "audit": {
+      "enabled": true
+    },
+    "bookkeeping": {
+      "enabled": true
+    },
+    "cashier": {
+      "enabled": true
+    },
+    "coordinator": {
+      "enabled": true
+    },
+    "finance-core": {
+      "enabled": true
+    },
+    "policy-research": {
+      "enabled": true
+    },
+    "tax": {
+      "enabled": true
+    }
+  }
+}

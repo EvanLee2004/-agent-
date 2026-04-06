@@ -1,0 +1,11 @@
+name: finance-audit
+description: 负责凭证复核、风险识别、异常解释和整改建议。
+tool_groups:
+- web
+- file:read
+- file:write
+- bash
+- finance
+skills:
+- finance-core
+- audit

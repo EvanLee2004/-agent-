@@ -2,28 +2,50 @@
 
 长期稳定的用户偏好、事实和决策。
 
-## 2026-04-05 产品化收口
+## 2026-04-05 架构收口完成
 
-### 当前主链路
+### 当前主链路（长期有效）
 
-1. **入口边界**
+1. **调用链**
+   - `CLI / API → AppConversationHandler / CliConversationHandler → ConversationRouter → ConversationService → FinanceDepartmentService → DeerFlowDepartmentRoleRuntimeRepository → DeerFlowClient`
+   - `FinanceDepartmentService` 在 DeerFlow 调用后，通过 `CollaborationStepFactory + DepartmentWorkbenchService` 完成协作摘要投影与历史持久化
+
+2. **入口边界**
    - API 使用 `AppConversationHandler`，CLI 使用 `CliConversationHandler`
-   - 请求级 `open_context_scope()` 放在 app 层，不再放在 `conversation/`
-   - `conversation/` 只保留会话路由、响应清洗和错误抽象
+   - `open_context_scope()` 在 app 层，请求级上下文通过 `FinanceDepartmentToolContextRegistry` 管理
+   - `conversation/` 是纯净层：只做会话路由、响应清洗，不含 runtime/deerflow 依赖
 
-2. **DeerFlow-first 架构**
-   - DeerFlow 负责 runtime / task / memory / stream
-   - 本项目负责财务工具、业务规则、工作台持久化、API/CLI 入口和审计查询
-   - 多步协作主路径为 `generate_fiscal_task_prompt` + `task(..., subagent_type="general-purpose")`
+3. **DeerFlow 负责范围**
+   - runtime / task / memory / stream
+   - `stream()` 事件收集 → `execution_events`
+   - `reset_agent()` 确保 memory/skills 上下文刷新
+   - `create_and_run_client(assets, ...)` 语义：caller 提供已准备好的 assets，不内部重复 prepare
 
-3. **工作台与历史**
-   - `DepartmentWorkbenchService` 负责当前回合初始化、协作步骤记录和最终落库
-   - SQLite 工作台已支持多回合 `turns / collaboration_steps / execution_events` 查询
+4. **本项目负责范围**
+   - 财务工具：`record_voucher`、`query_vouchers`、`record_cash_transaction`、`query_cash_transactions`、`calculate_tax`、`audit_voucher`、`reply_with_rules`、`generate_fiscal_task_prompt`
+   - 业务规则、API/CLI 入口、工作台持久化、审计查询
+   - `CollaborationStepFactory` 负责 `execution_events` → `collaboration_steps` 投影（用户可见）
+
+5. **并发安全**
+   - `os.environ` 快照恢复只缩小污染窗口，不保证多线程并发安全
+   - 部署推荐：`uvicorn --workers 1`
+   - 不同 `thread_id` 通过 DeerFlow runtime checkpoint 自动隔离
+
+6. **工作台边界**
+   - `DepartmentWorkbenchService` 负责当前回合初始化、协作步骤记录和落库
+   - SQLite 工作台支持多回合 `turns / collaboration_steps / execution_events` 查询
    - `execution_events` 是内部遥测，`collaboration_steps` 是用户可见投影
 
-4. **历史说明**
-   - 早期 `department/collaboration/department_collaboration_service.py` 等旧协作层已经移除
-   - 2026-04-04 中关于旧协作层的记录仅保留为历史，不代表当前主链路
+7. **已删除的旧路径（历史记录）**
+   - `department/collaboration/department_collaboration_service.py` 等旧协作层已移除
+   - 自研记忆模块（`memory/` 目录）已删除，由 DeerFlow 原生记忆接管
+   - 旧协作工具 `collaborate_with_department_role` 已从静态 DeerFlow tools 配置移除
+
+---
+
+## 2026-04-04 产品化收口（历史）
+
+### 当前主链路
 
 ## 2026-04-04 Bug 修复
 

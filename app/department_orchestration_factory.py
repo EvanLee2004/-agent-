@@ -6,20 +6,14 @@ from typing import Optional
 from configuration.llm_configuration import LlmConfiguration
 from conversation.reply_text_sanitizer import ReplyTextSanitizer
 from department.department_runtime_context import DepartmentRuntimeContext
-from department.finance_department_agent_assets_service import (
-    FinanceDepartmentAgentAssetsService,
-)
 from department.finance_department_role_catalog import FinanceDepartmentRoleCatalog
 from department.finance_department_service import FinanceDepartmentService
 from department.workbench.department_workbench_service import DepartmentWorkbenchService
-from department.workbench.in_memory_department_workbench_repository import (
-    InMemoryDepartmentWorkbenchRepository,
-)
 from department.workbench.sqlite_department_workbench_repository import (
     SQLiteDepartmentWorkbenchRepository,
 )
 from department.workbench.collaboration_step_factory import CollaborationStepFactory
-from department.workbench.role_trace_summary_builder import RoleTraceSummaryBuilder
+from department.workbench.final_reply_summary_builder import FinalReplySummaryBuilder
 from runtime.deerflow.deerflow_client_factory import DeerFlowClientFactory
 from runtime.deerflow.deerflow_department_role_runtime_repository import (
     DeerFlowDepartmentRoleRuntimeRepository,
@@ -40,10 +34,10 @@ class DepartmentOrchestrationFactory:
     把这些对象集中在一个工厂中，是为了让会话入口不再理解部门内部的中间部件。
 
     并发安全说明：
-    每个 build() 调用会产生独立的运行时资产集合（通过独立的 runtime_root）。
-    在 CLI 单线程场景下，所有请求共享同一个 factory 实例和 runtime_root，无问题。
-    在 API 并发场景下，应该为每个请求/用户会话创建独立的 factory 实例或
-    在 build() 时传入不同的 runtime_root，以确保 config/checkpoint/home 不会冲突。
+    DeerFlowInvocationRunner 通过全局串行锁（threading.Lock）确保同进程内所有
+    DeerFlow 调用严格串行执行，防止 checkpoint/memory 文件被并发写入，也防止
+    os.environ 快照被并发破坏。每个 build() 调用产生的独立 runtime_root
+    仍用于资产路径隔离（config/checkpoint/home 文件不会冲突）。
     """
 
     def __init__(
@@ -73,16 +67,14 @@ class DepartmentOrchestrationFactory:
             对外暴露的部门入口服务（通过 DeerFlow 原生 task 实现多 agent 协作）。
         """
         runtime_assets_service = DeerFlowRuntimeAssetsService(
-            FinanceDepartmentAgentAssetsService(self._role_catalog),
+            self._role_catalog,
             runtime_root=self._runtime_root,
         )
         invocation_runner = DeerFlowInvocationRunner(
             client_factory=DeerFlowClientFactory(),
-            runtime_assets_service=runtime_assets_service,
-            configuration=self._configuration,
         )
         runtime_context = DepartmentRuntimeContext()
-        collaboration_step_factory = CollaborationStepFactory(RoleTraceSummaryBuilder())
+        collaboration_step_factory = CollaborationStepFactory(FinalReplySummaryBuilder())
         role_runtime_repository = DeerFlowDepartmentRoleRuntimeRepository(
             configuration=self._configuration,
             runtime_assets_service=runtime_assets_service,

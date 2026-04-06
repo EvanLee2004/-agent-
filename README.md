@@ -27,7 +27,7 @@
 
 ## 交付状态
 
-当前版本已经完成：
+### 已完成
 
 - DeerFlow 公开嵌入客户端接入
 - DeerFlow runtime 基础工具组接入
@@ -36,15 +36,15 @@
 - 财务工具注册到 DeerFlow runtime
 - DeerFlow skill 资产落地
 - 财务部门六角色目录落地
-- DeerFlow 自定义角色资产自动生成
+- DeerFlow 静态角色资产落地（`.agent_assets/deerflow_config/`）
 - 协作主路径切换到 DeerFlow 原生 `task` / `subagent`
 - 协作摘要基于 DeerFlow stream 事件落地
 - FastAPI 多回合持久化与历史查询
 
-当前版本**尚未**完成：
+### 产品路线
 
-- 基于真实业务状态的复杂多角色协同策略
-- 正式税务申报
+- 基于真实业务状态的复杂多角色协同策略（规划中）
+- 正式税务申报（规划中）
 
 ## DeerFlow 能力状态
 
@@ -126,7 +126,7 @@ SQLite 业务仓储 + DeerFlow Native Memory / Checkpointer
 ├── runtime/                         # 第三方运行时适配层（当前为 DeerFlow）
 ├── department/                      # 财务部门主域
 │   ├── collaboration/               # 角色协作协议与协作工具
-│   ├── roles/                       # 六个财务角色的独立定义
+│   ├── roles/                       # 默认角色注册表（最小角色元数据）
 │   └── workbench/                   # 协作工作台：execution_events → collaboration_steps
 ├── accounting/                      # 记账与凭证查询
 ├── cashier/                         # 出纳事实与资金收付
@@ -211,7 +211,7 @@ MINIMAX_API_KEY=your_key_here
 python main.py
 ```
 
-运行时会自动在 `.runtime/deerflow/` 下生成 DeerFlow 配置与状态目录；该目录为本地运行资产，已被忽略，不应提交到远端。
+运行时会自动在 `.runtime/deerflow/` 下生成 DeerFlow 状态目录（如 `home/`、checkpoint、workbench.db）；主配置与 agent 资产的静态事实来源是 `.agent_assets/deerflow_config/`。`.runtime/` 为本地运行资产，已被忽略，不应提交到远端。
 
 ### 4. 启动 API 服务
 

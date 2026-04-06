@@ -1,15 +1,17 @@
 """FiscalRolePromptBuilder 集成测试——验证主链路真实消费 builder。
 
-阶段 3 变更：DepartmentCollaborationService 已移除，GenerateFiscalTaskPromptRouter
-改为自包含组件（直接持有 FiscalRolePromptBuilder）。本测试文件验证：
-1. GenerateFiscalTaskPromptRouter 是自包含的，直接持有 builder
-2. 工具上下文不再包含 collaborate_with_department_role_router
-3. 工具catalog 不再包含 collaborate_with_department_role
-4. 工具返回契约（纯 prompt 字符串）仍然有效
+验证 GenerateFiscalTaskPromptRouter 作为自包含组件的正确性：
+1. GenerateFiscalTaskPromptRouter 直接持有 FiscalRolePromptBuilder，无需外部服务注入
+2. 工具上下文不包含 collaborate_with_department_role_router（legacy 工具已移除）
+3. 静态 DeerFlow 工具配置不包含 collaborate_with_department_role（legacy 工具已移除）
+4. 工具返回契约（纯 prompt 字符串）符合 DeerFlow task(prompt=...) 参数格式
 """
 
 import unittest
+from pathlib import Path
 from unittest.mock import MagicMock
+
+import yaml
 
 from department.collaboration.generate_fiscal_task_prompt_router import (
     GenerateFiscalTaskPromptRouter,
@@ -17,11 +19,13 @@ from department.collaboration.generate_fiscal_task_prompt_router import (
 from department.subagent.fiscal_role_mode import FiscalRoleMode
 from department.subagent.fiscal_role_prompt_builder import FiscalRolePromptBuilder
 
+STATIC_CONFIG_PATH = Path(".agent_assets/deerflow_config/config.yaml")
+
 
 class TestRouterIsSelfContained(unittest.TestCase):
-    """验证 GenerateFiscalTaskPromptRouter 是自包含组件，不依赖 DepartmentCollaborationService。
+    """验证 GenerateFiscalTaskPromptRouter 是自包含组件，直接持有 FiscalRolePromptBuilder。
 
-    阶段 3 核心验证：router 直接持有 FiscalRolePromptBuilder，不再需要外部协作服务注入。
+    自包含设计：router 内部实例化 builder，不依赖外部服务注入。
     """
 
     def test_router_constructor_takes_no_arguments(self):
@@ -100,9 +104,9 @@ class TestAllFiveModes(unittest.TestCase):
 
 
 class TestToolContextExcludesLegacyCollaboration(unittest.TestCase):
-    """验证 FinanceDepartmentToolContext 不再包含 legacy 协作路由。
+    """验证 FinanceDepartmentToolContext 不包含 legacy 协作路由。
 
-    阶段 3 验证：collaborate_with_department_role_router 已从工具上下文中移除。
+    collaborate_with_department_role_router 已从工具上下文中移除（legacy 协作工具已废弃）。
     """
 
     def test_tool_context_has_no_collaborate_with_department_role_router(self):
@@ -122,17 +126,16 @@ class TestToolContextExcludesLegacyCollaboration(unittest.TestCase):
         self.assertIn("generate_fiscal_task_prompt_router", field_names)
 
 
-class TestToolCatalogExcludesLegacyCollaboration(unittest.TestCase):
-    """验证 DeerFlowToolCatalog 不再包含 collaborate_with_department_role。
+class TestStaticToolConfigExcludesLegacyCollaboration(unittest.TestCase):
+    """验证静态 DeerFlow 工具配置不包含 collaborate_with_department_role。
 
-    阶段 3 验证：legacy 协作工具已从 catalog 中移除。
+    legacy 协作工具已从静态 config.yaml 的 tools 段中移除。
     """
 
-    def test_tool_catalog_does_not_contain_legacy_collaboration_tool(self):
-        """验证工具 catalog 不包含 collaborate_with_department_role。"""
-        from runtime.deerflow.deerflow_tool_catalog import DeerFlowToolCatalog
-        catalog = DeerFlowToolCatalog()
-        tool_names = {spec.name for spec in catalog.list_specs()}
+    def test_static_config_does_not_contain_legacy_collaboration_tool(self):
+        """验证静态 config.yaml tools 段不包含 collaborate_with_department_role。"""
+        config = yaml.safe_load(STATIC_CONFIG_PATH.read_text(encoding="utf-8"))
+        tool_names = {tool["name"] for tool in config.get("tools", [])}
         self.assertNotIn("collaborate_with_department_role", tool_names)
 
 

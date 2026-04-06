@@ -1,4 +1,7 @@
-"""最终回复摘要构造器。"""
+"""最终回复摘要构造器。
+
+把 DeerFlow 最终回复文本压缩为可展示的协作摘要。
+"""
 
 from typing import Optional
 
@@ -8,12 +11,12 @@ MIN_SENTENCE_SUMMARY_CHARS = 24
 SENTENCE_ENDINGS = ("。", "！", "？", "!", "?", "\n")
 
 
-class RoleTraceSummaryBuilder:
+class FinalReplySummaryBuilder:
     """把 DeerFlow 最终回复文本压缩为可展示的协作摘要。
 
     DeerFlow 对外回复面向最终用户，长度和语气都可能更完整；而协作摘要需要的是
-    "本轮系统得出什么结论"的简短文本。把摘要收敛为独立构造器，可以避免在
-    CollaborationStepFactory 和展示层各自重复裁剪逻辑。
+    "本轮系统得出什么结论"的简短文本。独立构造器可避免在 CollaborationStepFactory
+    和展示层各自重复裁剪逻辑。
     """
 
     def build(self, reply_text: str) -> str:
