@@ -1,29 +1,33 @@
-"""CLI 路由入口测试。"""
+"""CLI 路由测试。"""
 
-import io
 import unittest
-from contextlib import redirect_stdout
+from io import StringIO
+from unittest.mock import patch
 
 from app.cli_router import CliRouter
 
 
-class StubConfigurationService:
-    """CLI 测试用配置服务替身。"""
+class FakeConfigurationService:
+    """测试用配置服务。"""
 
 
 class CliRouterTest(unittest.TestCase):
-    """验证 CLI 路由入口的用户体验边界。"""
+    """验证 CLI 对外文案已收敛到会计部门。"""
 
-    def test_run_handles_keyboard_interrupt_gracefully(self):
-        """验证 Ctrl+C 会安静退出，而不是抛出 Python 栈。"""
-        router = CliRouter(StubConfigurationService())
+    def test_banner_mentions_only_accounting_scope(self):
+        """启动横幅只展示当前支持的会计核算能力。"""
+        router = CliRouter(FakeConfigurationService())
 
-        def raise_keyboard_interrupt() -> None:
-            raise KeyboardInterrupt()
+        with patch("sys.stdout", new_callable=StringIO) as stdout:
+            router._print_banner()
 
-        router._run_event_loop = raise_keyboard_interrupt  # type: ignore[method-assign]
-        output_buffer = io.StringIO()
-        with redirect_stdout(output_buffer):
-            router.run()
-        self.assertIn("再见！", output_buffer.getvalue())
+        text = stdout.getvalue()
+        self.assertIn("智能会计部门已启动", text)
+        self.assertIn("凭证录入", text)
+        self.assertIn("科目查询", text)
+        self.assertNotIn("税", text)
+        self.assertNotIn("出纳", text)
 
+
+if __name__ == "__main__":
+    unittest.main()

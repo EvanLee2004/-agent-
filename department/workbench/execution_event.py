@@ -1,8 +1,8 @@
 """执行事件模型。
 
-描述 DeerFlow stream 过程中产生的、可用于生成用户可见协作摘要的单个事件。
+描述 crewAI 会计部门执行过程中产生的、可用于生成用户可见协作摘要的单个事件。
 
-这些事件从 DeerFlow stream() 中提取，不包含原始长文本 thinking，只包含
+这些事件由固定任务投影和 crewAI 工具包装器记录，不包含原始长文本 thinking，只包含
 对用户有意义的结构化信息：工具调用名称、任务委托动作、系统结论等。
 """
 
@@ -13,7 +13,7 @@ from department.workbench.execution_event_type import ExecutionEventType
 
 @dataclass(frozen=True)
 class ExecutionEvent:
-    """描述 DeerFlow stream 中的一个可摘要事件。
+    """描述 crewAI 会计部门中的一个可摘要事件。
 
     Attributes:
         event_type: 事件类型，区分工具调用、任务委托、最终回复等。

@@ -4,7 +4,7 @@ from typing import Any
 
 from configuration.configuration_error import ConfigurationError
 from configuration.configuration_repository import ConfigurationRepository
-from configuration.deerflow_runtime_configuration import DeerFlowRuntimeConfiguration
+from configuration.crewai_runtime_configuration import CrewAIRuntimeConfiguration
 from configuration.llm_configuration import LlmConfiguration
 from configuration.llm_model_profile import LlmModelProfile
 from configuration.provider_catalog import ProviderCatalog
@@ -15,27 +15,17 @@ MODEL_REQUIRED_KEYS = ("name", "provider", "model", "base_url", "api_key_env")
 
 
 def _build_default_runtime_document() -> dict[str, Any]:
-    """构造默认 DeerFlow runtime 文档。
+    """构造默认 crewAI runtime 文档。
 
-    `deerflow_runtime` 段虽然允许省略，但运行时最终仍然必须拿到一套完整配置。
-    这里集中提供默认值，避免 DeerFlow client 工厂、配置工厂和测试各自维护一份。
+    `crewai_runtime` 段虽然允许省略，但运行时最终仍然必须拿到一套完整配置。
+    这里集中提供默认值，避免 crewAI 编排工厂、配置保存和测试各自维护一份。
     """
-    runtime_configuration = DeerFlowRuntimeConfiguration()
+    runtime_configuration = CrewAIRuntimeConfiguration()
     return {
-        "client": {
-            "thinking_enabled": runtime_configuration.thinking_enabled,
-            "subagent_enabled": runtime_configuration.subagent_enabled,
-            "plan_mode": runtime_configuration.plan_mode,
-        },
-        "tool_search": {
-            "enabled": runtime_configuration.tool_search_enabled,
-        },
-        "sandbox": {
-            "use": runtime_configuration.sandbox_use_path,
-            "allow_host_bash": runtime_configuration.sandbox_allow_host_bash,
-            "bash_output_max_chars": runtime_configuration.sandbox_bash_output_max_chars,
-            "read_file_output_max_chars": runtime_configuration.sandbox_read_file_output_max_chars,
-        },
+        "process": runtime_configuration.process,
+        "memory_enabled": runtime_configuration.memory_enabled,
+        "cache_enabled": runtime_configuration.cache_enabled,
+        "verbose": runtime_configuration.verbose,
     }
 
 
@@ -45,9 +35,8 @@ class ConfigurationService:
     该服务负责把交互式配置、配置校验和配置恢复收敛到同一层，
     避免 CLI、LLM 网关和启动流程各自维护一套校验逻辑。
 
-    当前阶段配置结构已经明确收口为 DeerFlow 风格的 `default_model + models[]`。
-    因此这里不再接受历史单模型格式，避免配置层继续维持一条已经不打算长期保留的
-    兼容路径。
+    当前阶段配置结构已经明确收口为 `default_model + models[] + crewai_runtime`。
+    因此这里不再接受历史单模型格式，避免配置层继续维持已经不打算长期保留的兼容路径。
     """
 
     def __init__(
@@ -76,7 +65,7 @@ class ConfigurationService:
             models=model_profiles,
             default_model_name=normalized_config["default_model"],
             runtime_configuration=self._build_runtime_configuration(
-                normalized_config["deerflow_runtime"]
+                normalized_config["crewai_runtime"]
             ),
         )
 
@@ -93,7 +82,7 @@ class ConfigurationService:
                     self._build_persisted_model_document(model)
                     for model in configuration.list_models()
                 ],
-                "deerflow_runtime": self._build_persisted_runtime_document(
+                "crewai_runtime": self._build_persisted_runtime_document(
                     configuration.runtime_configuration
                 ),
             }
@@ -116,7 +105,7 @@ class ConfigurationService:
         self._require_dict(config_data)
         if not isinstance(config_data.get("models"), list):
             raise ConfigurationError(
-                "配置格式错误：当前版本只支持 DeerFlow 风格的 default_model + models[] 结构"
+                "配置格式错误：当前版本只支持 default_model + models[] 结构"
             )
         default_model_name = str(config_data.get("default_model") or "").strip()
         if not default_model_name:
@@ -134,8 +123,8 @@ class ConfigurationService:
         return {
             "default_model": default_model_name,
             "models": normalized_models,
-            "deerflow_runtime": self._validate_runtime_document(
-                config_data.get("deerflow_runtime")
+            "crewai_runtime": self._validate_runtime_document(
+                config_data.get("crewai_runtime")
             ),
         }
 
@@ -176,7 +165,7 @@ class ConfigurationService:
             "base_url": str(raw_model["base_url"]).strip(),
             "api_key_env": str(raw_model["api_key_env"]).strip(),
             "display_name": str(raw_model.get("display_name") or model_name).strip(),
-            "use": str(raw_model.get("use") or "langchain_openai:ChatOpenAI").strip(),
+            "use": str(raw_model.get("use") or "crewai:LLM").strip(),
             "supports_thinking": bool(raw_model.get("supports_thinking", True)),
             "supports_vision": bool(raw_model.get("supports_vision", False)),
             "request_timeout": float(raw_model.get("request_timeout", 600.0)),
@@ -240,42 +229,25 @@ class ConfigurationService:
     def _build_runtime_configuration(
         self,
         runtime_document: dict[str, Any],
-    ) -> DeerFlowRuntimeConfiguration:
-        """把规范化 DeerFlow runtime 文档转换为运行期对象。"""
-        client_document = runtime_document["client"]
-        tool_search_document = runtime_document["tool_search"]
-        sandbox_document = runtime_document["sandbox"]
-        return DeerFlowRuntimeConfiguration(
-            thinking_enabled=client_document["thinking_enabled"],
-            subagent_enabled=client_document["subagent_enabled"],
-            plan_mode=client_document["plan_mode"],
-            tool_search_enabled=tool_search_document["enabled"],
-            sandbox_use_path=sandbox_document["use"],
-            sandbox_allow_host_bash=sandbox_document["allow_host_bash"],
-            sandbox_bash_output_max_chars=sandbox_document["bash_output_max_chars"],
-            sandbox_read_file_output_max_chars=sandbox_document["read_file_output_max_chars"],
+    ) -> CrewAIRuntimeConfiguration:
+        """把规范化 crewAI runtime 文档转换为运行期对象。"""
+        return CrewAIRuntimeConfiguration(
+            process=runtime_document["process"],
+            memory_enabled=runtime_document["memory_enabled"],
+            cache_enabled=runtime_document["cache_enabled"],
+            verbose=runtime_document["verbose"],
         )
 
     def _build_persisted_runtime_document(
         self,
-        runtime_configuration: DeerFlowRuntimeConfiguration,
+        runtime_configuration: CrewAIRuntimeConfiguration,
     ) -> dict[str, Any]:
-        """把运行期 DeerFlow runtime 配置转换为可持久化结构。"""
+        """把运行期 crewAI runtime 配置转换为可持久化结构。"""
         return {
-            "client": {
-                "thinking_enabled": runtime_configuration.thinking_enabled,
-                "subagent_enabled": runtime_configuration.subagent_enabled,
-                "plan_mode": runtime_configuration.plan_mode,
-            },
-            "tool_search": {
-                "enabled": runtime_configuration.tool_search_enabled,
-            },
-            "sandbox": {
-                "use": runtime_configuration.sandbox_use_path,
-                "allow_host_bash": runtime_configuration.sandbox_allow_host_bash,
-                "bash_output_max_chars": runtime_configuration.sandbox_bash_output_max_chars,
-                "read_file_output_max_chars": runtime_configuration.sandbox_read_file_output_max_chars,
-            },
+            "process": runtime_configuration.process,
+            "memory_enabled": runtime_configuration.memory_enabled,
+            "cache_enabled": runtime_configuration.cache_enabled,
+            "verbose": runtime_configuration.verbose,
         }
 
     def _require_dict(self, config_data: dict[str, Any]) -> None:
@@ -284,87 +256,44 @@ class ConfigurationService:
             raise ConfigurationError("配置格式错误：config.json 必须是对象")
 
     def _validate_runtime_document(self, raw_runtime: Any) -> dict[str, Any]:
-        """校验 DeerFlow runtime 配置。
+        """校验 crewAI runtime 配置。
 
-        这里允许 `deerflow_runtime` 整段缺失，因为老配置文件还没有这个结构。
-        但一旦用户显式提供了该字段，就必须保证它能无损映射到 DeerFlow client
-        参数和 `config.yaml` 的对应段，避免出现“配置里写了开关但运行时没吃到”的假象。
+        这里允许 `crewai_runtime` 整段缺失，因为用户本地可能仍是迁移前配置。
+        但一旦用户显式提供了该字段，就必须保证它能无损映射到 crewAI 编排参数。
         """
         if raw_runtime is None:
             return _build_default_runtime_document()
         if not isinstance(raw_runtime, dict):
-            raise ConfigurationError("deerflow_runtime 必须是对象")
-        raw_client_document = raw_runtime.get("client")
-        raw_tool_search_document = raw_runtime.get("tool_search")
-        raw_sandbox_document = raw_runtime.get("sandbox")
-        if raw_client_document is not None and not isinstance(raw_client_document, dict):
-            raise ConfigurationError("deerflow_runtime.client 必须是对象")
-        if raw_tool_search_document is not None and not isinstance(raw_tool_search_document, dict):
-            raise ConfigurationError("deerflow_runtime.tool_search 必须是对象")
-        if raw_sandbox_document is not None and not isinstance(raw_sandbox_document, dict):
-            raise ConfigurationError("deerflow_runtime.sandbox 必须是对象")
+            raise ConfigurationError("crewai_runtime 必须是对象")
         default_runtime_document = _build_default_runtime_document()
-        default_client_document = default_runtime_document["client"]
-        default_tool_search_document = default_runtime_document["tool_search"]
-        default_sandbox_document = default_runtime_document["sandbox"]
-        client_document = raw_client_document or {}
-        tool_search_document = raw_tool_search_document or {}
-        sandbox_document = raw_sandbox_document or {}
+        process = self._read_string_field(
+            raw_runtime,
+            "process",
+            default_runtime_document["process"],
+            "crewai_runtime",
+        )
+        if process != "sequential":
+            raise ConfigurationError("crewai_runtime.process 当前只支持 sequential")
         return {
-            "client": {
-                "thinking_enabled": self._read_bool_field(
-                    client_document,
-                    "thinking_enabled",
-                    default_client_document["thinking_enabled"],
-                    "deerflow_runtime.client",
-                ),
-                "subagent_enabled": self._read_bool_field(
-                    client_document,
-                    "subagent_enabled",
-                    default_client_document["subagent_enabled"],
-                    "deerflow_runtime.client",
-                ),
-                "plan_mode": self._read_bool_field(
-                    client_document,
-                    "plan_mode",
-                    default_client_document["plan_mode"],
-                    "deerflow_runtime.client",
-                ),
-            },
-            "tool_search": {
-                "enabled": self._read_bool_field(
-                    tool_search_document,
-                    "enabled",
-                    default_tool_search_document["enabled"],
-                    "deerflow_runtime.tool_search",
-                ),
-            },
-            "sandbox": {
-                "use": self._read_string_field(
-                    sandbox_document,
-                    "use",
-                    default_sandbox_document["use"],
-                    "deerflow_runtime.sandbox",
-                ),
-                "allow_host_bash": self._read_bool_field(
-                    sandbox_document,
-                    "allow_host_bash",
-                    default_sandbox_document["allow_host_bash"],
-                    "deerflow_runtime.sandbox",
-                ),
-                "bash_output_max_chars": self._read_int_field(
-                    sandbox_document,
-                    "bash_output_max_chars",
-                    default_sandbox_document["bash_output_max_chars"],
-                    "deerflow_runtime.sandbox",
-                ),
-                "read_file_output_max_chars": self._read_int_field(
-                    sandbox_document,
-                    "read_file_output_max_chars",
-                    default_sandbox_document["read_file_output_max_chars"],
-                    "deerflow_runtime.sandbox",
-                ),
-            },
+            "process": process,
+            "memory_enabled": self._read_bool_field(
+                raw_runtime,
+                "memory_enabled",
+                default_runtime_document["memory_enabled"],
+                "crewai_runtime",
+            ),
+            "cache_enabled": self._read_bool_field(
+                raw_runtime,
+                "cache_enabled",
+                default_runtime_document["cache_enabled"],
+                "crewai_runtime",
+            ),
+            "verbose": self._read_bool_field(
+                raw_runtime,
+                "verbose",
+                default_runtime_document["verbose"],
+                "crewai_runtime",
+            ),
         }
 
     def _read_bool_field(
@@ -384,21 +313,6 @@ class ConfigurationService:
         field_value = document[field_name]
         if not isinstance(field_value, bool):
             raise ConfigurationError(f"{section_name}.{field_name} 必须是布尔值")
-        return field_value
-
-    def _read_int_field(
-        self,
-        document: dict[str, Any],
-        field_name: str,
-        default_value: int,
-        section_name: str,
-    ) -> int:
-        """读取整数配置并拒绝布尔值冒充整数。"""
-        if field_name not in document:
-            return default_value
-        field_value = document[field_name]
-        if isinstance(field_value, bool) or not isinstance(field_value, int):
-            raise ConfigurationError(f"{section_name}.{field_name} 必须是整数")
         return field_value
 
     def _read_string_field(

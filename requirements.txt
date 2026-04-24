@@ -1,7 +1,5 @@
--e ./vendor/deer-flow/backend/packages/harness
-langchain==1.2.10
-pydantic==2.12.5
-python-dotenv==1.2.2
+crewai[litellm]==1.14.2
+python-dotenv==1.1.1
 PyYAML==6.0.3
 fastapi==0.115.0
 uvicorn==0.32.0

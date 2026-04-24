@@ -1,4 +1,4 @@
-"""财务部门工作台仓储接口。"""
+"""会计部门工作台仓储接口。"""
 
 from abc import ABC, abstractmethod
 from typing import Optional
@@ -26,7 +26,7 @@ class DepartmentWorkbenchRepository(ABC):
         """保存当前线程的工作台暂存态。
 
         设计原因：
-        DeerFlow stream 事件是逐步投影为协作步骤的，因此在最终回复落库前，
+        crewAI 工具事件是逐步投影为协作步骤的，因此在最终回复落库前，
         需要一个“当前回合暂存区”累积步骤。SQLite 实现中，此方法只写 pending
         workbench；真正的历史持久化由 finalize_turn -> save_turn() 负责。
         """

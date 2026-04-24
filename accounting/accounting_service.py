@@ -7,7 +7,7 @@ from accounting.query_vouchers_query import QueryVouchersQuery
 from accounting.record_voucher_command import RecordVoucherCommand
 
 
-DEFAULT_RECORDED_BY = "智能财务部门"
+DEFAULT_RECORDED_BY = "智能会计部门"
 
 
 class AccountingService:

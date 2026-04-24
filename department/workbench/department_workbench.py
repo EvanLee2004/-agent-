@@ -1,4 +1,4 @@
-"""财务部门共享工作台模型。"""
+"""会计部门共享工作台模型。"""
 
 from dataclasses import dataclass, field
 
@@ -14,7 +14,7 @@ class DepartmentWorkbench:
         thread_id: 线程标识。
         original_user_input: 原始用户输入。
         collaboration_steps: 本回合协作步骤列表（用户可见投影）。
-        reply_text: DeerFlow 最终回复文本（用于审计持久化，不直接暴露给用户）。
+        reply_text: crewAI 会计部门最终回复文本（用于审计持久化，不直接暴露给用户）。
         usage: 本回合 LLM token 使用量（内部遥测，不暴露给用户）。
     """
 

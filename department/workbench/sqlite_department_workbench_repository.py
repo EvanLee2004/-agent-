@@ -1,4 +1,4 @@
-"""SQLite 财务部门工作台仓储实现（多回合版本）。
+"""SQLite 会计部门工作台仓储实现（多回合版本）。
 
 支持按线程存储多回合历史，包括：
 - 每轮的原始用户输入、最终回复、token 使用量
@@ -164,7 +164,7 @@ class SQLiteDepartmentWorkbenchRepository(DepartmentWorkbenchRepository):
         Args:
             thread_id: 线程标识。
             original_user_input: 原始用户输入。
-            reply_text: DeerFlow 最终回复文本。
+            reply_text: crewAI 会计部门最终回复文本。
             usage: LLM token 使用量（内部遥测）。
             collaboration_steps: 协作步骤列表（用户可见投影）。
             execution_events: 执行事件列表（内部遥测）。

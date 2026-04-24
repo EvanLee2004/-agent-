@@ -1,4 +1,4 @@
-"""财务部门共享工作台服务。
+"""会计部门共享工作台服务。
 
 当前生产主路径统一通过仓储接口管理“本回合暂存 + 回合落库”两段生命周期：
 - start_turn / record_collaboration_step 阶段：先写入仓储的当前回合暂存区
@@ -20,13 +20,13 @@ from department.workbench.execution_event import ExecutionEvent
 class DepartmentWorkbenchService:
     """管理部门共享工作台。
 
-    共享工作台是"DeerFlow 原生协作过程"的单一事实来源。它不参与角色决策，
-    只负责保存当前回合的用户任务和需要展示给用户的协作摘要。
+    共享工作台是"会计部门协作历史"的单一事实来源。它不参与角色决策，
+    只负责保存当前回合的用户任务、工具事件和需要展示给用户的协作摘要。
 
     注意：当前实现中，execution_events 不经过 in-memory 工作台，
-    直接由 FinanceDepartmentService 在调用 finalize_turn() 时传入。
-    这样设计是因为 execution_events 产生于 DeerFlow stream 解析，
-    在 FinanceDepartmentService 层已有完整数据。
+    直接由 AccountingDepartmentService 在调用 finalize_turn() 时传入。
+    这样设计是因为 execution_events 产生于 crewAI 工具包装器和固定任务投影，
+    在部门服务层已有完整数据，继续绕一圈内存工作台只会增加状态分叉。
     """
 
     def __init__(self, repository: DepartmentWorkbenchRepository):
@@ -65,15 +65,15 @@ class DepartmentWorkbenchService:
 
         Args:
             thread_id: 线程标识。
-            reply_text: DeerFlow 最终回复文本。
+            reply_text: crewAI 会计部门最终回复文本。
             usage: LLM token 使用量（可为 None）。
-            execution_events: 内部执行事件列表（来自 DeerFlow stream 解析，
+            execution_events: 内部执行事件列表（来自 crewAI 工具包装器，
                 不暴露给用户，但会持久化用于审计查询）。
         """
         workbench = self._require_workbench(thread_id)
         # execution_events 为 None 时使用空列表。
         # 这里保留 None 兼容，是为了让测试替身仓储或最小接线场景不必伪造
-        # DeerFlow stream 事件；生产主路径仍会显式传入真实 execution_events。
+        # crewAI 工具事件；生产主路径仍会显式传入真实 execution_events。
         evts = execution_events if execution_events is not None else []
         self._repository.save_turn(
             thread_id=thread_id,
@@ -100,5 +100,5 @@ class DepartmentWorkbenchService:
         """读取工作台并确保其存在。"""
         workbench = self._repository.get(thread_id)
         if workbench is None:
-            raise DepartmentError("当前线程尚未初始化财务部门工作台")
+            raise DepartmentError("当前线程尚未初始化会计部门工作台")
         return workbench

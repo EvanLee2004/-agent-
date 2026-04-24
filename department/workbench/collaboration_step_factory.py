@@ -9,30 +9,23 @@ from department.workbench.final_reply_summary_builder import FinalReplySummaryBu
 
 # 工具名称到中文动作描述的映射（用于 TOOL_CALL / TASK_CALL 步骤）
 _TOOL_CALL_SUMMARY_MAP = {
-    "generate_fiscal_task_prompt": "生成财务任务 prompt",
-    "task": "委托子代理任务",
+    "accounting_intake": "判断会计任务",
+    "accounting_execution": "执行会计处理",
+    "accounting_review": "复核并生成回复",
     "record_voucher": "记录凭证",
     "query_vouchers": "查询凭证",
-    "calculate_tax": "计算税款",
     "audit_voucher": "审核凭证",
-    "record_cash_transaction": "记录资金变动",
-    "query_cash_transactions": "查询资金变动",
-    "reply_with_rules": "查询规则",
+    "query_chart_of_accounts": "查询会计科目",
 }
 
 # 工具名称到中文结果摘要的映射（用于 TOOL_RESULT 步骤）
 # 注意：TOOL_RESULT 展示的是"动作已完成"的结论，而非原始返回内容。
 # 这确保协作摘要不暴露内部 JSON/prompt 等执行细节。
 _TOOL_RESULT_SUMMARY_MAP = {
-    "generate_fiscal_task_prompt": "财务任务 prompt 已生成",
-    "task": "子代理任务已返回结果",
     "record_voucher": "凭证已记录",
     "query_vouchers": "凭证已查询",
-    "calculate_tax": "税款已计算",
     "audit_voucher": "凭证已审核",
-    "record_cash_transaction": "资金变动已记录",
-    "query_cash_transactions": "资金变动已查询",
-    "reply_with_rules": "规则已查询",
+    "query_chart_of_accounts": "会计科目已查询",
 }
 
 
@@ -85,9 +78,11 @@ class CollaborationStepFactory:
                     event.tool_name, f"调用 {event.tool_name}"
                 )
             elif event.event_type == ExecutionEventType.TASK_CALL:
-                # TASK_CALL：展示"正在委托子代理"
+                # TASK_CALL：展示固定会计流程步骤。
+                # 这里不使用 crewAI 原始 task 文本，是为了让用户历史保持产品语义，
+                # 避免第三方运行时字段变化影响协作摘要。
                 summary = _TOOL_CALL_SUMMARY_MAP.get(
-                    event.tool_name, f"委托 {event.tool_name}"
+                    event.tool_name, f"执行 {event.tool_name}"
                 )
             elif event.event_type == ExecutionEventType.TOOL_RESULT:
                 # TOOL_RESULT：展示"工具执行完毕"的结论，不暴露原始返回内容

@@ -8,9 +8,9 @@ from conversation.conversation_error import ConversationError
 from conversation.conversation_request import ConversationRequest
 from conversation.conversation_response import ConversationResponse
 from conversation.reply_text_sanitizer import ReplyTextSanitizer
+from department.accounting_department_request import AccountingDepartmentRequest
+from department.accounting_department_service import AccountingDepartmentService
 from department.department_error import DepartmentError
-from department.finance_department_request import FinanceDepartmentRequest
-from department.finance_department_service import FinanceDepartmentService
 
 
 class ConversationService:
@@ -20,22 +20,22 @@ class ConversationService:
     - 业务编排层转发
     - 响应清洗
 
-    注意：本服务不依赖 runtime/deerflow/* 模块，保持业务编排层纯净。
+    注意：本服务不依赖 runtime/crewai/* 模块，保持业务编排层纯净。
     请求级工具上下文作用域和错误翻译由调用方的 app 层组件负责。
     """
 
     def __init__(
         self,
-        finance_department_service: FinanceDepartmentService,
+        accounting_department_service: AccountingDepartmentService,
         reply_text_sanitizer: ReplyTextSanitizer,
     ):
         """构造会话服务。
 
         Args:
-            finance_department_service: 财务部门主服务。
+            accounting_department_service: 会计部门主服务。
             reply_text_sanitizer: 回复文本清洗器。
         """
-        self._finance_department_service = finance_department_service
+        self._accounting_department_service = accounting_department_service
         self._reply_text_sanitizer = reply_text_sanitizer
 
     def reply(self, request: ConversationRequest) -> ConversationResponse:
@@ -48,8 +48,8 @@ class ConversationService:
             用户可见的会话响应。
         """
         try:
-            department_response = self._finance_department_service.reply(
-                FinanceDepartmentRequest(
+            department_response = self._accounting_department_service.reply(
+                AccountingDepartmentRequest(
                     user_input=request.user_input,
                     thread_id=request.thread_id,
                 )
