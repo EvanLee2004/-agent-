@@ -50,6 +50,14 @@ class ChartOfAccountsService:
                     f"科目编码与名称不匹配: {line.subject_code} 应对应 {subject.name}"
                 )
 
+    def list_subjects(self) -> list[AccountSubject]:
+        """列出当前可用会计科目。
+
+        Returns:
+            科目列表，供 crewAI 工具查询和凭证录入前校验使用。
+        """
+        return self._chart_of_accounts_repository.list_subjects()
+
     def build_subject_catalog_prompt(self) -> str:
         """构造会计科目目录提示。
 

@@ -16,7 +16,7 @@ class DepartmentRoleResponse:
         collaboration_depth: 产生本次结果时所处的协作深度。
         execution_events: 本次调用过程中收集到的执行事件列表，
             用于生成用户可见的协作摘要。不包含原始长文本 thinking。
-        usage: 本次 DeerFlow turn 的 LLM token 使用量（内部遥测，不暴露给用户）。
+        usage: 本次 crewAI turn 的 LLM token 使用量（内部遥测，不暴露给用户）。
     """
 
     role_name: str
@@ -24,4 +24,3 @@ class DepartmentRoleResponse:
     collaboration_depth: int
     execution_events: list[ExecutionEvent] = field(default_factory=list)
     usage: LlmUsage | None = None
-

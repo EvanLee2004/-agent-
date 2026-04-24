@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 
 
 class ConversationReplyRequest(BaseModel):
-    """POST /api/conversations/{thread_id}/reply 请求体。
+    """POST /api/accounting/{thread_id}/reply 请求体。
 
     thread_id 通过路径参数传入，不在 body 中重复。
     """
@@ -25,12 +25,20 @@ class CollaborationStepResponse(BaseModel):
     summary: str
 
 
-class ConversationReplyResponse(BaseModel):
-    """POST /api/conversations/{thread_id}/reply 响应体。"""
+class AccountingReplyResponse(BaseModel):
+    """POST /api/accounting/{thread_id}/reply 响应体。
 
-    thread_id: str
+    API 响应面向“会计核算结果”而不是通用聊天消息。reply_text 保留给用户的
+    完整自然语言回复；steps 是可展示的协作过程；voucher_ids 和 audit_summary
+    是会计业务上最常被上游系统消费的结构化字段；errors 预留给后续批量处理或
+    局部失败场景，当前正常路径为空列表。
+    """
+
     reply_text: str
-    collaboration_steps: list[CollaborationStepResponse]
+    steps: list[CollaborationStepResponse]
+    voucher_ids: list[int] = Field(default_factory=list)
+    audit_summary: str | None = None
+    errors: list[str] = Field(default_factory=list)
 
 
 class TurnHistoryItem(BaseModel):

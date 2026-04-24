@@ -1,4 +1,4 @@
-"""财务部门运行时上下文。"""
+"""会计部门运行时上下文。"""
 
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -21,9 +21,13 @@ CURRENT_COLLABORATION_DEPTH: ContextVar[int] = ContextVar(
 class DepartmentRuntimeContext:
     """保存当前角色调用的线程上下文。
 
-    DeerFlow 工具执行发生在同一 Python 进程里，但工具函数签名并不会自动带上
+    crewAI 工具执行发生在同一 Python 进程里，但工具函数签名并不会自动带上
     “当前是谁在调用、属于哪条线程、当前协作深度是多少”。这层上下文把这些最小
-    必要事实显式暴露出来，供协作工具读取，同时避免把角色信息塞回全局单例。
+    必要事实显式暴露出来，供工具包装器读取，同时避免把角色信息塞回全局单例。
+
+    当前会计部门不启用 crewAI memory，所以 thread_id 的主要用途是把工具幂等、
+    工作台历史和 SQLite 业务事实串起来。这样既保留会话审计能力，也不会让运行时
+    记忆成为账簿之外的第二事实来源。
     """
 
     @contextmanager
@@ -61,7 +65,7 @@ class DepartmentRuntimeContext:
         """
         role_name = CURRENT_ROLE_NAME.get()
         if not role_name:
-            raise DepartmentError("当前没有可用的财务角色上下文")
+            raise DepartmentError("当前没有可用的会计角色上下文")
         return role_name
 
     def require_current_thread_id(self) -> str:

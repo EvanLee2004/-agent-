@@ -17,7 +17,7 @@ class ConversationRouter:
     - 请求转发（ConversationRequest → ConversationService → ConversationResponse）
     - 不负责异常处理、作用域管理或错误翻译
 
-    注意：本类不依赖 runtime/deerflow/* 模块，保持业务编排层纯净。
+    注意：本类不依赖 runtime/crewai/* 模块，保持业务编排层纯净。
     请求级工具上下文作用域和异常翻译由调用方的 app 层组件负责。
     """
 

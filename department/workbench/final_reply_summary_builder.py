@@ -1,29 +1,31 @@
 """最终回复摘要构造器。
 
-把 DeerFlow 最终回复文本压缩为可展示的协作摘要。
+把 crewAI 会计部门最终回复文本压缩为可展示的协作摘要。
 """
 
 from typing import Optional
 
 
 MAX_SUMMARY_CHARS = 180
-MIN_SENTENCE_SUMMARY_CHARS = 24
+# 会计核算回复经常是“凭证已记录，凭证号为 1。”这类短结论。
+# 这里把首句阈值设低，是为了优先保留明确结论，避免协作摘要重复展示后续建议。
+MIN_SENTENCE_SUMMARY_CHARS = 10
 SENTENCE_ENDINGS = ("。", "！", "？", "!", "?", "\n")
 
 
 class FinalReplySummaryBuilder:
-    """把 DeerFlow 最终回复文本压缩为可展示的协作摘要。
+    """把 crewAI 最终回复文本压缩为可展示的协作摘要。
 
-    DeerFlow 对外回复面向最终用户，长度和语气都可能更完整；而协作摘要需要的是
+    crewAI 对外回复面向最终用户，长度和语气都可能更完整；而协作摘要需要的是
     "本轮系统得出什么结论"的简短文本。独立构造器可避免在 CollaborationStepFactory
     和展示层各自重复裁剪逻辑。
     """
 
     def build(self, reply_text: str) -> str:
-        """根据 DeerFlow 回复生成摘要文本。
+        """根据 crewAI 回复生成摘要文本。
 
         Args:
-            reply_text: DeerFlow 原始最终回复文本。
+            reply_text: crewAI 原始最终回复文本。
 
         Returns:
             适合作为协作摘要的单段文本。

@@ -2,16 +2,16 @@
 
 from typing import Optional
 
-from configuration.deerflow_runtime_configuration import DeerFlowRuntimeConfiguration
+from configuration.crewai_runtime_configuration import CrewAIRuntimeConfiguration
 from configuration.llm_model_profile import LlmModelProfile
 
 
 class LlmConfiguration:
     """描述当前项目可用的 LLM 模型池及默认模型。
 
-    当前项目已经明确以 DeerFlow 的 `default_model + models[]` 结构为底座，因此这里
-    不再保留单模型时代的兼容构造方式。这样做虽然会要求所有调用方都使用模型池结构，
-    但能够确保运行时、配置文件、测试和文档围绕同一事实来源工作，不再长期背负过时分支。
+    当前项目使用 crewAI 作为会计部门运行时，但模型配置继续保留
+    `default_model + models[]` 结构。这样做不是为了兼容旧运行时，而是为了让
+    多角色会计部门未来可以按角色或任务选择不同模型，同时避免再回到历史单模型配置。
     """
 
     def __init__(
@@ -19,12 +19,11 @@ class LlmConfiguration:
         *,
         models: tuple[LlmModelProfile, ...],
         default_model_name: str,
-        runtime_configuration: DeerFlowRuntimeConfiguration | None = None,
+        runtime_configuration: CrewAIRuntimeConfiguration | None = None,
     ):
-        # DeerFlow runtime 开关与模型池一样，都是“运行时事实”的一部分。
-        # 这里在配置对象初始化时一次性固定下来，避免上层不同装配点各自维护默认值，
-        # 造成 `config.yaml`、DeerFlowClient 和测试期望三处发生漂移。
-        self._runtime_configuration = runtime_configuration or DeerFlowRuntimeConfiguration()
+        # crewAI runtime 开关与模型池一样，都是“运行时事实”的一部分。
+        # 这里在配置对象初始化时一次性固定下来，避免上层不同装配点各自维护默认值。
+        self._runtime_configuration = runtime_configuration or CrewAIRuntimeConfiguration()
         self._models = self._build_models_from_pool(models)
         self._default_model_name = self._resolve_default_model_name(default_model_name, self._models)
 
@@ -34,11 +33,11 @@ class LlmConfiguration:
         return self._default_model_name
 
     @property
-    def runtime_configuration(self) -> DeerFlowRuntimeConfiguration:
-        """返回 DeerFlow runtime 配置。
+    def runtime_configuration(self) -> CrewAIRuntimeConfiguration:
+        """返回 crewAI runtime 配置。
 
         之所以把 runtime 配置挂在统一配置对象上，而不是让运行时层自行读取零散字段，
-        是为了保证“当前项目到底怎么启动 DeerFlow”只有一个事实来源。
+        是为了保证“当前项目到底怎么启动 crewAI 会计部门”只有一个事实来源。
         """
         return self._runtime_configuration
 
@@ -47,11 +46,10 @@ class LlmConfiguration:
         return self._models
 
     def list_models_in_runtime_order(self) -> tuple[LlmModelProfile, ...]:
-        """返回 DeerFlow 运行时应使用的模型顺序。
+        """返回 crewAI 运行时应使用的模型顺序。
 
-        DeerFlow 未显式指定 `model_name` 时会优先使用 `config.yaml` 中的第一条模型。
-        因此这里必须把默认模型排到最前面，避免“配置里的默认模型”和 DeerFlow 实际
-        选择的模型发生偏移。
+        crewAI 初版使用默认模型驱动全部会计角色。保留该顺序方法是为了后续扩展
+        “按角色选择模型”时仍有稳定入口。
         """
         default_model = self.get_default_model()
         remaining_models = [model for model in self._models if model.name != default_model.name]
