@@ -66,7 +66,7 @@ class CrewAIAccountingToolTest(unittest.TestCase):
         context = _build_context()
         runtime_context = DepartmentRuntimeContext()
 
-        with runtime_context.open_scope("voucher-accountant", "thread-1", 0):
+        with runtime_context.open_scope("thread-1"):
             with AccountingToolContextRegistry.open_context_scope(context):
                 with open_execution_event_scope() as events:
                     result_text = record_voucher_tool._run(
@@ -122,7 +122,7 @@ class CrewAIAccountingToolTest(unittest.TestCase):
             ],
         }
 
-        with runtime_context.open_scope("voucher-accountant", "thread-1", 0):
+        with runtime_context.open_scope("thread-1"):
             with AccountingToolContextRegistry.open_context_scope(context):
                 with open_execution_event_scope():
                     record_voucher_tool._run(**arguments)

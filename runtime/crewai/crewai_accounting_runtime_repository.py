@@ -19,9 +19,6 @@ from runtime.crewai.query_vouchers_tool import query_vouchers_tool
 from runtime.crewai.record_voucher_tool import record_voucher_tool
 
 
-ACCOUNTING_MANAGER_ROLE = "accounting-manager"
-
-
 class CrewAIAccountingRuntimeRepository(DepartmentRoleRuntimeRepository):
     """基于 crewAI 执行一轮会计部门协作。
 
@@ -48,11 +45,7 @@ class CrewAIAccountingRuntimeRepository(DepartmentRoleRuntimeRepository):
     def reply(self, request: DepartmentRoleRequest) -> DepartmentRoleResponse:
         """调用 crewAI 会计部门并返回最终回复。"""
         try:
-            with self._runtime_context.open_scope(
-                role_name=request.role_name,
-                thread_id=request.thread_id,
-                collaboration_depth=request.collaboration_depth,
-            ):
+            with self._runtime_context.open_scope(thread_id=request.thread_id):
                 with open_execution_event_scope() as execution_events:
                     self._append_accounting_task_events(execution_events)
                     crew = self._build_crew()

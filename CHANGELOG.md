@@ -10,3 +10,4 @@
 - 响应模型调整为 `reply_text`、`steps`、`voucher_ids`、`audit_summary`、`errors`
 - 删除旧财务扩展模块、旧运行时适配层和不再使用的静态资产
 - crewAI memory/cache 初版默认关闭，会计事实继续以 SQLite 为准
+- 精简 app 装配层、运行时上下文和模型配置字段，删除不再承载业务边界的转发代码
