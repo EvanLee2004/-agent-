@@ -23,6 +23,12 @@ class JournalVoucher:
         anomaly_reason: 异常原因。
         created_at: 创建时间。
         lines: 分录行集合。
+        period_name: 会计期间。
+        voucher_sequence: 期间内连续编号。
+        source_voucher_id: 红冲/更正来源凭证 ID。
+        lifecycle_action: 生命周期动作，normal/reversal/correction。
+        posted_at: 过账时间。
+        voided_at: 作废时间。
     """
 
     voucher_id: int
@@ -37,6 +43,12 @@ class JournalVoucher:
     anomaly_reason: Optional[str]
     created_at: str
     lines: list[JournalLine]
+    period_name: str = ""
+    voucher_sequence: int = 0
+    source_voucher_id: Optional[int] = None
+    lifecycle_action: str = "normal"
+    posted_at: Optional[str] = None
+    voided_at: Optional[str] = None
 
     def get_total_amount(self) -> float:
         """计算凭证总金额。

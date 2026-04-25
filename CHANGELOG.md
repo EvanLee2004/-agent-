@@ -1,5 +1,16 @@
 # Changelog
 
+## 最终版财务闭环后端
+
+- 新增会计期间 `open/closed`，已结账期间禁止继续写入或修改凭证
+- 凭证编号升级为期间内连续号 `JV-YYYYMM-0001`，并通过迁移兼容旧库
+- 新增凭证过账、作废、红冲和更正能力；红冲通过反向凭证抵减，不删除原凭证
+- 新增科目余额表、总账/明细账、试算平衡表和账簿完整性检查
+- 新增 `schema_migrations` 与启动幂等迁移，集中管理 SQLite schema 演进
+- 新增确定性业务 API：期间管理、凭证生命周期、报表、银行对账和银行流水入账建议
+- API 错误统一返回 `error_code`、`message`、`request_id`、`details`
+- 出纳对账要求关联已过账凭证，重复对账前必须先解除对账
+
 ## 生产级财务内核
 
 - 启用受控 crewAI memory，本地存储到 `.runtime/crewai/memory`，并使用 `local_hash` embedding 避免默认外部 embedding 依赖

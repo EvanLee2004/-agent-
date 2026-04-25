@@ -34,11 +34,17 @@ def _serialize_voucher(voucher) -> dict:
     return {
         "voucher_id": voucher.voucher_id,
         "voucher_number": voucher.voucher_number,
+        "period_name": voucher.period_name,
+        "voucher_sequence": voucher.voucher_sequence,
         "voucher_date": voucher.voucher_date,
         "summary": voucher.summary,
         "total_amount": voucher.get_total_amount(),
         "status": voucher.status,
         "recorded_by": voucher.recorded_by,
+        "source_voucher_id": voucher.source_voucher_id,
+        "lifecycle_action": voucher.lifecycle_action,
+        "posted_at": voucher.posted_at,
+        "voided_at": voucher.voided_at,
         "lines": [_serialize_line(line) for line in voucher.lines],
     }
 

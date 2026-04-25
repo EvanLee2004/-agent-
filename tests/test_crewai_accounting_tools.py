@@ -15,10 +15,16 @@ from runtime.crewai.execution_event_scope import open_execution_event_scope
 from runtime.crewai.idempotency_tracker import clear_idempotency
 from runtime.crewai.query_bank_transactions_tool import query_bank_transactions_tool
 from runtime.crewai.query_chart_of_accounts_tool import query_chart_of_accounts_tool
+from runtime.crewai.query_account_balance_tool import query_account_balance_tool
+from runtime.crewai.query_ledger_entries_tool import query_ledger_entries_tool
+from runtime.crewai.query_trial_balance_tool import query_trial_balance_tool
 from runtime.crewai.query_vouchers_tool import query_vouchers_tool
 from runtime.crewai.reconcile_bank_transaction_tool import reconcile_bank_transaction_tool
+from runtime.crewai.post_voucher_tool import post_voucher_tool
 from runtime.crewai.record_bank_transaction_tool import record_bank_transaction_tool
 from runtime.crewai.record_voucher_tool import record_voucher_tool
+from runtime.crewai.reverse_voucher_tool import reverse_voucher_tool
+from runtime.crewai.void_voucher_tool import void_voucher_tool
 
 
 class FakeRouter:
@@ -52,6 +58,30 @@ def _build_context() -> AccountingToolContext:
             "query_chart_of_accounts",
             {"count": 1, "items": [{"code": "1001", "name": "库存现金"}]},
         ),
+        post_voucher_router=FakeRouter(
+            "post_voucher",
+            {"voucher_id": 1, "status": "posted"},
+        ),
+        void_voucher_router=FakeRouter(
+            "void_voucher",
+            {"voucher_id": 1, "status": "voided"},
+        ),
+        reverse_voucher_router=FakeRouter(
+            "reverse_voucher",
+            {"voucher_id": 2, "source_voucher_id": 1, "status": "posted"},
+        ),
+        query_account_balance_router=FakeRouter(
+            "query_account_balance",
+            {"count": 1, "items": []},
+        ),
+        query_ledger_entries_router=FakeRouter(
+            "query_ledger_entries",
+            {"count": 1, "items": []},
+        ),
+        query_trial_balance_router=FakeRouter(
+            "query_trial_balance",
+            {"balanced": True, "items": []},
+        ),
         record_bank_transaction_router=FakeRouter(
             "record_bank_transaction",
             {"transaction_id": 1, "status": "unreconciled"},
@@ -63,6 +93,14 @@ def _build_context() -> AccountingToolContext:
         reconcile_bank_transaction_router=FakeRouter(
             "reconcile_bank_transaction",
             {"transaction_id": 1, "status": "reconciled"},
+        ),
+        unreconcile_bank_transaction_router=FakeRouter(
+            "unreconcile_bank_transaction",
+            {"transaction_id": 1, "status": "unreconciled"},
+        ),
+        voucher_suggestion_router=FakeRouter(
+            "suggest_voucher_from_bank_transaction",
+            {"transaction_id": 1, "suggested_voucher": {}},
         ),
     )
 
@@ -154,10 +192,39 @@ class CrewAIAccountingToolTest(unittest.TestCase):
                 query_vouchers_tool._run(limit=5, status="pending")
                 audit_voucher_tool._run(target="voucher_id", voucher_id=1)
                 query_chart_of_accounts_tool._run()
+                query_account_balance_tool._run(period_name="202601")
+                query_ledger_entries_tool._run(subject_code="1002")
+                query_trial_balance_tool._run(period_name="202601")
 
         self.assertEqual(context.query_vouchers_router.calls[0]["limit"], 5)
         self.assertEqual(context.audit_voucher_router.calls[0]["voucher_id"], 1)
         self.assertEqual(context.query_chart_of_accounts_router.calls[0], {})
+        self.assertEqual(
+            context.query_account_balance_router.calls[0]["period_name"],
+            "202601",
+        )
+        self.assertEqual(
+            context.query_ledger_entries_router.calls[0]["subject_code"],
+            "1002",
+        )
+        self.assertEqual(
+            context.query_trial_balance_router.calls[0]["period_name"],
+            "202601",
+        )
+
+    def test_voucher_lifecycle_tools_route_to_expected_router(self):
+        """凭证生命周期工具应调用对应业务路由。"""
+        context = _build_context()
+
+        with AccountingToolContextRegistry.open_context_scope(context):
+            with open_execution_event_scope():
+                post_voucher_tool._run(voucher_id=1)
+                void_voucher_tool._run(voucher_id=2)
+                reverse_voucher_tool._run(voucher_id=3, reversal_date="2026-01-31")
+
+        self.assertEqual(context.post_voucher_router.calls[0]["voucher_id"], 1)
+        self.assertEqual(context.void_voucher_router.calls[0]["voucher_id"], 2)
+        self.assertEqual(context.reverse_voucher_router.calls[0]["voucher_id"], 3)
 
     def test_bank_tools_route_to_expected_router(self):
         """出纳/银行工具应调用对应业务路由。"""

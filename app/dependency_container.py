@@ -16,8 +16,18 @@ from accounting.journal_repository import JournalRepository
 from accounting.query_chart_of_accounts_router import QueryChartOfAccountsRouter
 from accounting.query_vouchers_router import QueryVouchersRouter
 from accounting.record_voucher_router import RecordVoucherRouter
+from accounting.report_routers import (
+    QueryAccountBalanceRouter,
+    QueryLedgerEntriesRouter,
+    QueryTrialBalanceRouter,
+)
 from accounting.sqlite_chart_of_accounts_repository import SQLiteChartOfAccountsRepository
 from accounting.sqlite_journal_repository import SQLiteJournalRepository
+from accounting.voucher_lifecycle_routers import (
+    PostVoucherRouter,
+    ReverseVoucherRouter,
+    VoidVoucherRouter,
+)
 from app.application_bootstrapper import ApplicationBootstrapper
 from app.application_bootstrapper_factory import ApplicationBootstrapperFactory
 from app.cli_conversation_handler import CliConversationHandler
@@ -32,6 +42,8 @@ from cashier.query_bank_transactions_router import QueryBankTransactionsRouter
 from cashier.reconcile_bank_transaction_router import ReconcileBankTransactionRouter
 from cashier.record_bank_transaction_router import RecordBankTransactionRouter
 from cashier.sqlite_cashier_repository import SQLiteCashierRepository
+from cashier.unreconcile_bank_transaction_router import UnreconcileBankTransactionRouter
+from cashier.voucher_suggestion_router import VoucherSuggestionRouter
 from configuration.configuration_service import ConfigurationService
 from configuration.file_configuration_repository import FileConfigurationRepository
 from configuration.llm_configuration import LlmConfiguration
@@ -143,6 +155,23 @@ class AppServiceFactory:
             cashier_repository=cashier_repo,
         )
 
+    def build_accounting_service(self) -> AccountingService:
+        """构造确定性业务 API 使用的会计服务。"""
+        chart_repository, journal_repository, _ = self._get_repositories()
+        return AccountingService(
+            journal_repository=journal_repository,
+            chart_of_accounts_service=ChartOfAccountsService(chart_repository),
+            recorded_by=self._role_catalog.get_department_display_name(),
+        )
+
+    def build_cashier_service(self) -> CashierService:
+        """构造确定性业务 API 使用的出纳服务。"""
+        _, journal_repository, cashier_repository = self._get_repositories()
+        return CashierService(
+            cashier_repository=cashier_repository,
+            journal_repository=journal_repository,
+        )
+
     def _build_conversation_router(
         self,
         accounting_department_service: AccountingDepartmentService,
@@ -179,17 +208,27 @@ class AppServiceFactory:
             chart_of_accounts_service=chart_service,
             recorded_by=self._role_catalog.get_department_display_name(),
         )
-        cashier_service = CashierService(cashier_repository)
+        cashier_service = CashierService(cashier_repository, journal_repository)
         return AccountingToolContext(
             record_voucher_router=RecordVoucherRouter(accounting_service),
             query_vouchers_router=QueryVouchersRouter(accounting_service),
             audit_voucher_router=AuditVoucherRouter(AuditService(journal_repository)),
             query_chart_of_accounts_router=QueryChartOfAccountsRouter(chart_service),
+            post_voucher_router=PostVoucherRouter(accounting_service),
+            void_voucher_router=VoidVoucherRouter(accounting_service),
+            reverse_voucher_router=ReverseVoucherRouter(accounting_service),
+            query_account_balance_router=QueryAccountBalanceRouter(accounting_service),
+            query_ledger_entries_router=QueryLedgerEntriesRouter(accounting_service),
+            query_trial_balance_router=QueryTrialBalanceRouter(accounting_service),
             record_bank_transaction_router=RecordBankTransactionRouter(cashier_service),
             query_bank_transactions_router=QueryBankTransactionsRouter(cashier_service),
             reconcile_bank_transaction_router=ReconcileBankTransactionRouter(
                 cashier_service
             ),
+            unreconcile_bank_transaction_router=UnreconcileBankTransactionRouter(
+                cashier_service
+            ),
+            voucher_suggestion_router=VoucherSuggestionRouter(cashier_service),
         )
 
     @staticmethod

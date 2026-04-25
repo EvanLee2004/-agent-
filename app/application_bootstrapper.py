@@ -14,6 +14,7 @@ from accounting.sqlite_journal_repository import (
 )
 from cashier.cashier_repository import CashierRepository
 from cashier.sqlite_cashier_repository import CREATE_BANK_TRANSACTION_TABLE_SQL
+from configuration.schema_migration_service import SchemaMigrationService
 from configuration.sqlite_database_runtime import prepare_sqlite_connection
 
 
@@ -46,6 +47,7 @@ class ApplicationBootstrapper:
             connection.execute(CREATE_LINE_TABLE_SQL)
             connection.execute(CREATE_BANK_TRANSACTION_TABLE_SQL)
             connection.commit()
+        SchemaMigrationService(db_path).migrate()
         self._chart_of_accounts_service.initialize_default_subjects()
         if self._cashier_repository is not None:
             self._cashier_repository.initialize_storage()

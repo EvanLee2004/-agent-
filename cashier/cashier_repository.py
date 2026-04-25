@@ -36,3 +36,7 @@ class CashierRepository(ABC):
         linked_voucher_id: int | None,
     ) -> None:
         """标记银行流水已对账。"""
+
+    @abstractmethod
+    def mark_unreconciled(self, transaction_id: int) -> None:
+        """解除银行流水对账。"""

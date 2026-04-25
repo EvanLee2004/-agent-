@@ -5,10 +5,22 @@ from dataclasses import dataclass
 from accounting.query_chart_of_accounts_router import QueryChartOfAccountsRouter
 from accounting.query_vouchers_router import QueryVouchersRouter
 from accounting.record_voucher_router import RecordVoucherRouter
+from accounting.report_routers import (
+    QueryAccountBalanceRouter,
+    QueryLedgerEntriesRouter,
+    QueryTrialBalanceRouter,
+)
+from accounting.voucher_lifecycle_routers import (
+    PostVoucherRouter,
+    ReverseVoucherRouter,
+    VoidVoucherRouter,
+)
 from audit.audit_voucher_router import AuditVoucherRouter
 from cashier.query_bank_transactions_router import QueryBankTransactionsRouter
 from cashier.reconcile_bank_transaction_router import ReconcileBankTransactionRouter
 from cashier.record_bank_transaction_router import RecordBankTransactionRouter
+from cashier.unreconcile_bank_transaction_router import UnreconcileBankTransactionRouter
+from cashier.voucher_suggestion_router import VoucherSuggestionRouter
 
 
 @dataclass(frozen=True)
@@ -26,6 +38,14 @@ class AccountingToolContext:
     query_vouchers_router: QueryVouchersRouter
     audit_voucher_router: AuditVoucherRouter
     query_chart_of_accounts_router: QueryChartOfAccountsRouter
+    post_voucher_router: PostVoucherRouter
+    void_voucher_router: VoidVoucherRouter
+    reverse_voucher_router: ReverseVoucherRouter
+    query_account_balance_router: QueryAccountBalanceRouter
+    query_ledger_entries_router: QueryLedgerEntriesRouter
+    query_trial_balance_router: QueryTrialBalanceRouter
     record_bank_transaction_router: RecordBankTransactionRouter
     query_bank_transactions_router: QueryBankTransactionsRouter
     reconcile_bank_transaction_router: ReconcileBankTransactionRouter
+    unreconcile_bank_transaction_router: UnreconcileBankTransactionRouter
+    voucher_suggestion_router: VoucherSuggestionRouter

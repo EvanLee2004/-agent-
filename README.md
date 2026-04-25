@@ -9,12 +9,16 @@
 - 凭证录入：`record_voucher`
 - 凭证查询：`query_vouchers`
 - 凭证复核：`audit_voucher`
+- 凭证过账：`post_voucher`
+- 凭证作废：`void_voucher`
+- 凭证红冲：`reverse_voucher`
 - 会计科目查询：`query_chart_of_accounts`
+- 科目余额、明细账、试算平衡查询
 - 银行流水记录：`record_bank_transaction`
 - 银行流水查询：`query_bank_transactions`
 - 银行流水对账：`reconcile_bank_transaction`
 
-税务、报表、政策研究和通用财务咨询不在当前版本主链路内。出纳模块只维护资金流水和对账状态，不直接篡改总账；需要生成凭证时必须通过会计工具完成。
+税务申报、权限系统、复杂现金流量表自动编制、政策研究和通用财务咨询不在当前版本主链路内。出纳模块只维护资金流水和对账状态，不直接篡改总账；需要生成凭证时必须通过会计工具完成。
 
 ## 架构
 
@@ -42,6 +46,7 @@ AccountingDepartmentService
 - crewAI 负责 Agent/Task/Crew 编排和受控会话 memory，不保存权威财务事实。
 - 会计事实、银行流水和审核状态以本项目 SQLite 仓储为准，涉及金额、科目、状态时必须调用工具确认。
 - crewAI memory 默认开启，但只用于“刚才那张凭证”“上一笔流水”等上下文引用和偏好理解。
+- SQLite 启动时执行 `schema_migrations` 幂等迁移，旧库会补齐会计期间、凭证生命周期和期间内凭证号。
 - `execution_events` 是内部遥测，`collaboration_steps` 是用户可见历史。
 - 固定采用 `Process.sequential`，保证“任务判断 → 会计执行 → 出纳执行 → 复核回复”的流程稳定可审计。
 
@@ -131,6 +136,14 @@ echo "MINIMAX_API_KEY=your_key" > .env
 主要接口：
 
 - `POST /api/accounting/{thread_id}/reply`
+- `GET|POST /api/accounting/periods...`
+- `POST /api/accounting/vouchers/{voucher_id}/post|void|reverse|correct`
+- `GET /api/accounting/reports/account-balances`
+- `GET /api/accounting/reports/ledger-entries`
+- `GET /api/accounting/reports/trial-balance`
+- `GET /api/accounting/integrity-check`
+- `POST /api/accounting/bank-transactions/{transaction_id}/reconcile|unreconcile`
+- `GET /api/accounting/bank-transactions/{transaction_id}/voucher-suggestion`
 - `GET /api/accounting/{thread_id}/turns`
 - `GET /api/accounting/{thread_id}/collaboration-steps`
 - `GET /api/accounting/{thread_id}/events`

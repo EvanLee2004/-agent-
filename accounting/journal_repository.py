@@ -3,9 +3,14 @@
 from abc import ABC, abstractmethod
 from typing import Optional
 
+from accounting.account_balance import AccountBalance
+from accounting.accounting_period import AccountingPeriod
 from accounting.journal_voucher import JournalVoucher
+from accounting.ledger_entry import LedgerEntry
 from accounting.record_voucher_command import RecordVoucherCommand
 from accounting.query_vouchers_query import QueryVouchersQuery
+from accounting.reverse_voucher_command import ReverseVoucherCommand
+from accounting.trial_balance_report import TrialBalanceReport
 
 
 class JournalRepository(ABC):
@@ -86,4 +91,55 @@ class JournalRepository(ABC):
             status: 新状态。
             reviewed_by: 审核人。
         """
+        raise NotImplementedError
+
+    def list_periods(self) -> list[AccountingPeriod]:
+        """列出全部会计期间。"""
+        raise NotImplementedError
+
+    def open_period(self, period_name: str) -> AccountingPeriod:
+        """打开或创建会计期间。"""
+        raise NotImplementedError
+
+    def close_period(self, period_name: str) -> AccountingPeriod:
+        """关闭会计期间。"""
+        raise NotImplementedError
+
+    def post_voucher(self, voucher_id: int) -> JournalVoucher:
+        """将凭证标记为已过账。"""
+        raise NotImplementedError
+
+    def void_voucher(self, voucher_id: int) -> JournalVoucher:
+        """作废未过账凭证。"""
+        raise NotImplementedError
+
+    def reverse_voucher(self, command: ReverseVoucherCommand) -> JournalVoucher:
+        """创建红冲凭证。"""
+        raise NotImplementedError
+
+    def list_account_balances(
+        self,
+        period_name: str | None = None,
+    ) -> list[AccountBalance]:
+        """查询科目余额。"""
+        raise NotImplementedError
+
+    def list_ledger_entries(
+        self,
+        period_name: str | None = None,
+        subject_code: str | None = None,
+        limit: int = 200,
+    ) -> list[LedgerEntry]:
+        """查询总账/明细账行。"""
+        raise NotImplementedError
+
+    def build_trial_balance(
+        self,
+        period_name: str | None = None,
+    ) -> TrialBalanceReport:
+        """生成试算平衡报告。"""
+        raise NotImplementedError
+
+    def run_integrity_check(self) -> list[str]:
+        """执行账簿完整性检查。"""
         raise NotImplementedError

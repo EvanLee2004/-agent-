@@ -36,6 +36,15 @@ class ToolResultResponse(BaseModel):
     context_refs: list[str] = Field(default_factory=list)
 
 
+class ErrorResponse(BaseModel):
+    """统一 API 错误响应。"""
+
+    error_code: str
+    message: str
+    request_id: str
+    details: dict = Field(default_factory=dict)
+
+
 class AccountingReplyResponse(BaseModel):
     """POST /api/accounting/{thread_id}/reply 响应体。
 
@@ -78,3 +87,120 @@ class HealthResponse(BaseModel):
 
     status: str = "ok"
     version: str = "1.0.0"
+
+
+class PeriodResponse(BaseModel):
+    """会计期间响应。"""
+
+    period_name: str
+    start_date: str
+    end_date: str
+    status: str
+    closed_at: str | None = None
+
+
+class VoucherActionResponse(BaseModel):
+    """凭证生命周期动作响应。"""
+
+    voucher_id: int
+    voucher_number: str
+    period_name: str
+    voucher_date: str
+    summary: str
+    status: str
+    source_voucher_id: int | None = None
+    lifecycle_action: str
+    posted_at: str | None = None
+    voided_at: str | None = None
+
+
+class ReverseVoucherRequest(BaseModel):
+    """凭证红冲请求。"""
+
+    reversal_date: str | None = Field(default=None, description="红冲日期 YYYY-MM-DD")
+
+
+class CorrectVoucherRequest(BaseModel):
+    """凭证更正请求。"""
+
+    replacement_voucher: dict
+    reversal_date: str | None = Field(default=None, description="红冲日期 YYYY-MM-DD")
+
+
+class CorrectVoucherResponse(BaseModel):
+    """凭证更正响应。"""
+
+    reversal_voucher_id: int
+    replacement_voucher_id: int
+
+
+class AccountBalanceResponse(BaseModel):
+    """科目余额响应。"""
+
+    subject_code: str
+    subject_name: str
+    normal_balance: str
+    debit_total: float
+    credit_total: float
+    balance_direction: str
+    balance_amount: float
+
+
+class LedgerEntryResponse(BaseModel):
+    """总账/明细账响应。"""
+
+    voucher_id: int
+    voucher_number: str
+    voucher_date: str
+    period_name: str
+    subject_code: str
+    subject_name: str
+    debit_amount: float
+    credit_amount: float
+    summary: str
+    description: str
+
+
+class TrialBalanceResponse(BaseModel):
+    """试算平衡响应。"""
+
+    period_name: str | None = None
+    debit_total: float
+    credit_total: float
+    difference: float
+    balanced: bool
+    rows: list[AccountBalanceResponse] = Field(default_factory=list)
+
+
+class ReconcileBankTransactionRequest(BaseModel):
+    """银行流水对账请求。"""
+
+    linked_voucher_id: int | None = None
+
+
+class BankTransactionResponse(BaseModel):
+    """银行流水响应。"""
+
+    transaction_id: int
+    transaction_date: str
+    direction: str
+    amount: float
+    account_name: str
+    counterparty: str
+    summary: str
+    status: str
+    linked_voucher_id: int | None = None
+
+
+class VoucherSuggestionResponse(BaseModel):
+    """银行流水入账建议响应。"""
+
+    transaction_id: int
+    suggested_voucher: dict
+
+
+class IntegrityCheckResponse(BaseModel):
+    """账簿完整性检查响应。"""
+
+    ok: bool
+    issues: list[str] = Field(default_factory=list)

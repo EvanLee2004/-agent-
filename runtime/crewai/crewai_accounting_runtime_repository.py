@@ -16,12 +16,18 @@ from department.workbench.execution_event_type import ExecutionEventType
 from runtime.crewai.audit_voucher_tool import audit_voucher_tool
 from runtime.crewai.execution_event_scope import open_execution_event_scope
 from runtime.crewai.local_hash_embedding_function import LocalHashEmbeddingFunction
+from runtime.crewai.post_voucher_tool import post_voucher_tool
+from runtime.crewai.query_account_balance_tool import query_account_balance_tool
 from runtime.crewai.query_chart_of_accounts_tool import query_chart_of_accounts_tool
 from runtime.crewai.query_bank_transactions_tool import query_bank_transactions_tool
+from runtime.crewai.query_ledger_entries_tool import query_ledger_entries_tool
+from runtime.crewai.query_trial_balance_tool import query_trial_balance_tool
 from runtime.crewai.query_vouchers_tool import query_vouchers_tool
 from runtime.crewai.reconcile_bank_transaction_tool import reconcile_bank_transaction_tool
 from runtime.crewai.record_bank_transaction_tool import record_bank_transaction_tool
 from runtime.crewai.record_voucher_tool import record_voucher_tool
+from runtime.crewai.reverse_voucher_tool import reverse_voucher_tool
+from runtime.crewai.void_voucher_tool import void_voucher_tool
 
 
 class CrewAIAccountingRuntimeRepository(DepartmentRoleRuntimeRepository):
@@ -122,7 +128,8 @@ class CrewAIAccountingRuntimeRepository(DepartmentRoleRuntimeRepository):
             goal="判断用户请求是否属于会计核算，并给出明确处理路径。",
             backstory=(
                 "你是小企业财务部门负责人，只处理凭证录入、凭证查询、凭证复核、"
-                "会计科目查询、银行流水记录、银行流水查询和银行流水对账。"
+                "凭证过账、凭证作废、凭证红冲、会计科目查询、账簿报表、"
+                "银行流水记录、银行流水查询和银行流水对账。"
                 "遇到税务、政策研究或非财务核算问题时，必须明确说明当前版本不处理。"
             ),
             llm=llm,
@@ -131,16 +138,23 @@ class CrewAIAccountingRuntimeRepository(DepartmentRoleRuntimeRepository):
         )
         voucher_accountant = Agent(
             role="voucher-accountant",
-            goal="基于工具完成凭证录入、凭证查询和会计科目查询。",
+            goal="基于工具完成凭证录入、生命周期处理、账簿查询和会计科目查询。",
             backstory=(
                 "你是总账会计。所有凭证录入必须调用 record_voucher；查询凭证必须调用 "
-                "query_vouchers；不确定科目时先调用 query_chart_of_accounts，不能编造科目。"
+                "query_vouchers；过账、作废、红冲必须调用对应工具；查询余额表、明细账、"
+                "试算平衡必须调用报表工具；不确定科目时先调用 query_chart_of_accounts。"
             ),
             llm=llm,
             tools=[
                 record_voucher_tool,
                 query_vouchers_tool,
                 query_chart_of_accounts_tool,
+                post_voucher_tool,
+                void_voucher_tool,
+                reverse_voucher_tool,
+                query_account_balance_tool,
+                query_ledger_entries_tool,
+                query_trial_balance_tool,
             ],
             allow_delegation=False,
             verbose=runtime_configuration.verbose,
@@ -170,7 +184,12 @@ class CrewAIAccountingRuntimeRepository(DepartmentRoleRuntimeRepository):
                 "不能声称完成未调用工具的写入或审核动作。"
             ),
             llm=llm,
-            tools=[audit_voucher_tool, query_vouchers_tool],
+            tools=[
+                audit_voucher_tool,
+                query_vouchers_tool,
+                query_trial_balance_tool,
+                query_account_balance_tool,
+            ],
             allow_delegation=False,
             verbose=runtime_configuration.verbose,
         )
@@ -181,7 +200,8 @@ class CrewAIAccountingRuntimeRepository(DepartmentRoleRuntimeRepository):
                 "分析用户请求：{user_input}\n"
                 "受控历史上下文：\n{conversation_context}\n"
                 "只判断其是否属于凭证录入、查账、凭证复核、会计科目查询、"
-                "银行流水记录、银行流水查询或银行流水对账。"
+                "凭证过账、凭证作废、凭证红冲、报表查询、银行流水记录、"
+                "银行流水查询或银行流水对账。"
                 "如果属于税务、政策研究或其他范围，输出当前版本不处理的边界说明。"
                 "如果用户使用“刚才、上一笔、最近一张”等指代，只能把上下文中的候选凭证当作线索。"
             ),

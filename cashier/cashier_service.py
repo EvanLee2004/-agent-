@@ -1,5 +1,6 @@
 """出纳/银行服务。"""
 
+from accounting.journal_repository import JournalRepository
 from cashier.bank_transaction import BankTransaction
 from cashier.cashier_error import CashierError
 from cashier.cashier_repository import CashierRepository
@@ -20,8 +21,13 @@ class CashierService:
     通过 `record_voucher` 工具生成凭证，保持资金流水和总账事实边界清楚。
     """
 
-    def __init__(self, cashier_repository: CashierRepository):
+    def __init__(
+        self,
+        cashier_repository: CashierRepository,
+        journal_repository: JournalRepository | None = None,
+    ):
         self._cashier_repository = cashier_repository
+        self._journal_repository = journal_repository
 
     def record_transaction(self, command: RecordBankTransactionCommand) -> int:
         """记录银行流水。
@@ -73,6 +79,15 @@ class CashierService:
         """
         if command.transaction_id <= 0:
             raise CashierError("transaction_id 必须大于 0")
+        current = self._cashier_repository.get_transaction_by_id(command.transaction_id)
+        if current is None:
+            raise CashierError(f"银行流水 {command.transaction_id} 不存在")
+        if current.status == "reconciled":
+            if current.linked_voucher_id == command.linked_voucher_id:
+                return current
+            raise CashierError("已对账流水不能重复关联其他凭证，请先解除对账")
+        if command.linked_voucher_id is not None:
+            self._validate_linked_voucher(command.linked_voucher_id)
         self._cashier_repository.mark_reconciled(
             transaction_id=command.transaction_id,
             linked_voucher_id=command.linked_voucher_id,
@@ -83,6 +98,73 @@ class CashierService:
         if transaction is None:
             raise CashierError(f"银行流水 {command.transaction_id} 不存在")
         return transaction
+
+    def unreconcile_transaction(self, transaction_id: int) -> BankTransaction:
+        """解除银行流水对账。
+
+        Args:
+            transaction_id: 银行流水 ID。
+
+        Returns:
+            更新后的银行流水。
+        """
+        if transaction_id <= 0:
+            raise CashierError("transaction_id 必须大于 0")
+        self._cashier_repository.mark_unreconciled(transaction_id)
+        transaction = self._cashier_repository.get_transaction_by_id(transaction_id)
+        if transaction is None:
+            raise CashierError(f"银行流水 {transaction_id} 不存在")
+        return transaction
+
+    def build_voucher_suggestion(self, transaction_id: int) -> dict:
+        """根据银行流水生成待入账凭证建议。
+
+        该方法只生成建议，不写入总账。真正入账仍必须走会计凭证工具，
+        从而保持出纳和总账的职责边界。
+        """
+        transaction = self._cashier_repository.get_transaction_by_id(transaction_id)
+        if transaction is None:
+            raise CashierError(f"银行流水 {transaction_id} 不存在")
+        if transaction.direction == "inflow":
+            lines = [
+                {
+                    "subject_code": "1002",
+                    "subject_name": "银行存款",
+                    "debit_amount": transaction.amount,
+                    "credit_amount": 0,
+                    "description": transaction.summary,
+                },
+                {
+                    "subject_code": "5001",
+                    "subject_name": "主营业务收入",
+                    "debit_amount": 0,
+                    "credit_amount": transaction.amount,
+                    "description": transaction.counterparty,
+                },
+            ]
+        else:
+            lines = [
+                {
+                    "subject_code": "6602",
+                    "subject_name": "管理费用",
+                    "debit_amount": transaction.amount,
+                    "credit_amount": 0,
+                    "description": transaction.summary,
+                },
+                {
+                    "subject_code": "1002",
+                    "subject_name": "银行存款",
+                    "debit_amount": 0,
+                    "credit_amount": transaction.amount,
+                    "description": transaction.counterparty,
+                },
+            ]
+        return {
+            "voucher_date": transaction.transaction_date,
+            "summary": transaction.summary,
+            "source_text": f"银行流水 {transaction.transaction_id}: {transaction.summary}",
+            "lines": lines,
+        }
 
     def _validate_record_command(self, command: RecordBankTransactionCommand) -> None:
         """校验银行流水记录命令。"""
@@ -109,3 +191,13 @@ class CashierService:
             raise CashierError("status 只能是 unreconciled 或 reconciled")
         if query.limit <= 0 or query.limit > MAX_QUERY_LIMIT:
             raise CashierError("limit 必须在 1 到 100 之间")
+
+    def _validate_linked_voucher(self, voucher_id: int) -> None:
+        """校验银行流水关联的凭证必须存在且已过账。"""
+        if self._journal_repository is None:
+            return
+        voucher = self._journal_repository.get_voucher_by_id(voucher_id)
+        if voucher is None:
+            raise CashierError(f"关联凭证 {voucher_id} 不存在")
+        if voucher.status not in ("posted", "reversed"):
+            raise CashierError("银行流水只能关联已过账凭证")

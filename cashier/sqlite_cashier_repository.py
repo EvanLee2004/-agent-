@@ -155,3 +155,19 @@ class SQLiteCashierRepository(CashierRepository):
             if cursor.rowcount == 0:
                 raise CashierError(f"银行流水 {transaction_id} 不存在")
             connection.commit()
+
+    def mark_unreconciled(self, transaction_id: int) -> None:
+        """解除银行流水对账。"""
+        with sqlite3.connect(self._database_path) as connection:
+            prepare_sqlite_connection(connection)
+            cursor = connection.execute(
+                """
+                UPDATE bank_transaction
+                SET status = 'unreconciled', linked_voucher_id = NULL
+                WHERE id = ?
+                """,
+                (transaction_id,),
+            )
+            if cursor.rowcount == 0:
+                raise CashierError(f"银行流水 {transaction_id} 不存在")
+            connection.commit()

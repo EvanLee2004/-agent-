@@ -23,6 +23,7 @@ AccountingDepartmentService
 - `conversation/` 不依赖 crewAI。
 - `runtime/crewai/` 是唯一运行时适配层。
 - `accounting/`、`audit/` 和 `cashier/` 保存业务规则，不依赖 crewAI。
+- 会计期间、凭证过账/作废/红冲、更正、账簿报表和 schema migration 属于确定性业务层，不经过 LLM。
 - 会计事实和银行流水以 SQLite 账簿为准，crewAI memory 默认开启但只用于受控会话上下文。
 - API / CLI 错误翻译在 `app/` 层完成。
 
@@ -41,6 +42,12 @@ AccountingDepartmentService
 - `query_vouchers`
 - `audit_voucher`
 - `query_chart_of_accounts`
+- `post_voucher`
+- `void_voucher`
+- `reverse_voucher`
+- `query_account_balance`
+- `query_ledger_entries`
+- `query_trial_balance`
 - `record_bank_transaction`
 - `query_bank_transactions`
 - `reconcile_bank_transaction`
@@ -70,4 +77,4 @@ AccountingDepartmentService
 - 保持高内聚低耦合：业务逻辑在业务模块，运行时桥接在 `runtime/crewai/`。
 - 新增核心代码必须有中文注释，解释设计原因、边界和与 crewAI 的协作点。
 - 不新增横切 `utils.py` / `helpers.py`。
-- 删除不在主路径内的旧模块，避免文档或测试继续暗示税务、报表或政策研究已经可用。
+- 删除不在主路径内的旧模块，避免文档或测试继续暗示税务、权限系统或政策研究已经可用。

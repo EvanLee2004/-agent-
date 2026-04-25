@@ -7,6 +7,7 @@
 - 主链路：`CLI/API → Handler → ConversationRouter → ConversationService → AccountingDepartmentService → CrewAIAccountingRuntimeRepository`
 - 运行时适配层唯一入口：`runtime/crewai/`
 - 财务事实来源：SQLite 账簿、银行流水表与工作台数据库
+- 确定性业务 API：期间管理、凭证生命周期、账簿报表、银行对账，不经过 LLM
 - crewAI memory：默认开启，但只用于受控会话上下文和偏好
 - crewAI cache：默认关闭
 - 流程：`Process.sequential`
@@ -17,6 +18,12 @@
 - `query_vouchers`
 - `audit_voucher`
 - `query_chart_of_accounts`
+- `post_voucher`
+- `void_voucher`
+- `reverse_voucher`
+- `query_account_balance`
+- `query_ledger_entries`
+- `query_trial_balance`
 - `record_bank_transaction`
 - `query_bank_transactions`
 - `reconcile_bank_transaction`
