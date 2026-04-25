@@ -51,7 +51,6 @@ def _build_config(runtime: dict | None = None) -> dict:
                 "model": "MiniMax-M1",
                 "base_url": "https://api.minimax.chat/v1",
                 "api_key_env": "MINIMAX_API_KEY",
-                "use": "crewai:LLM",
             }
         ],
     }
@@ -71,7 +70,7 @@ class ConfigurationServiceTest(unittest.TestCase):
         configuration = service.ensure_configuration()
 
         self.assertEqual(configuration.default_model_name, "minimax")
-        self.assertEqual(configuration.get_default_model().use_path, "crewai:LLM")
+        self.assertEqual(configuration.get_default_model().model_name, "MiniMax-M1")
         self.assertEqual(
             configuration.runtime_configuration,
             CrewAIRuntimeConfiguration(
@@ -121,6 +120,11 @@ class ConfigurationServiceTest(unittest.TestCase):
         self.assertFalse(runtime_data["memory_enabled"])
         self.assertFalse(runtime_data["cache_enabled"])
         self.assertTrue(runtime_data["verbose"])
+        model_data = repository.saved_config_data["models"][0]
+        self.assertNotIn("use", model_data)
+        self.assertNotIn("supports_thinking", model_data)
+        self.assertNotIn("supports_vision", model_data)
+        self.assertNotIn("max_retries", model_data)
 
 
 if __name__ == "__main__":

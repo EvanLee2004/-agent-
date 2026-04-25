@@ -165,11 +165,7 @@ class ConfigurationService:
             "base_url": str(raw_model["base_url"]).strip(),
             "api_key_env": str(raw_model["api_key_env"]).strip(),
             "display_name": str(raw_model.get("display_name") or model_name).strip(),
-            "use": str(raw_model.get("use") or "crewai:LLM").strip(),
-            "supports_thinking": bool(raw_model.get("supports_thinking", True)),
-            "supports_vision": bool(raw_model.get("supports_vision", False)),
             "request_timeout": float(raw_model.get("request_timeout", 600.0)),
-            "max_retries": int(raw_model.get("max_retries", 2)),
             "max_tokens": int(raw_model.get("max_tokens", 4096)),
             "temperature": (
                 float(raw_model["temperature"])
@@ -199,29 +195,24 @@ class ConfigurationService:
             api_key_env=api_key_env,
             api_key=api_key,
             display_name=model_document["display_name"],
-            use_path=model_document["use"],
-            supports_thinking=model_document["supports_thinking"],
-            supports_vision=model_document["supports_vision"],
             request_timeout=model_document["request_timeout"],
-            max_retries=model_document["max_retries"],
             max_tokens=model_document["max_tokens"],
             temperature=model_document["temperature"],
         )
 
     def _build_persisted_model_document(self, model: LlmModelProfile) -> dict[str, Any]:
         """把运行期模型配置转换为可持久化结构。"""
+        # 持久化文档只保留 crewAI runtime 真正消费的字段。
+        # 迁移前的 `use`、能力标记和重试字段属于旧运行时/配置口径，
+        # 保留它们会让配置契约看起来比实际架构更复杂，也会诱导后续代码继续依赖死字段。
         return {
             "name": model.name,
             "provider": model.provider_name,
             "model": model.model_name,
             "base_url": model.base_url,
             "api_key_env": model.api_key_env,
-            "display_name": model.get_display_name(),
-            "use": model.use_path,
-            "supports_thinking": model.supports_thinking,
-            "supports_vision": model.supports_vision,
+            "display_name": model.display_name or model.model_name,
             "request_timeout": model.request_timeout,
-            "max_retries": model.max_retries,
             "max_tokens": model.max_tokens,
             "temperature": model.temperature,
         }

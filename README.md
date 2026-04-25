@@ -107,8 +107,7 @@ echo "MINIMAX_API_KEY=your_key" > .env
       "provider": "minimax",
       "model": "MiniMax-M1",
       "base_url": "https://api.minimax.chat/v1",
-      "api_key_env": "MINIMAX_API_KEY",
-      "use": "crewai:LLM"
+      "api_key_env": "MINIMAX_API_KEY"
     }
   ],
   "crewai_runtime": {

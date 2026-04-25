@@ -1,7 +1,5 @@
 """LLM 配置集合。"""
 
-from typing import Optional
-
 from configuration.crewai_runtime_configuration import CrewAIRuntimeConfiguration
 from configuration.llm_model_profile import LlmModelProfile
 
@@ -23,9 +21,14 @@ class LlmConfiguration:
     ):
         # crewAI runtime 开关与模型池一样，都是“运行时事实”的一部分。
         # 这里在配置对象初始化时一次性固定下来，避免上层不同装配点各自维护默认值。
-        self._runtime_configuration = runtime_configuration or CrewAIRuntimeConfiguration()
+        self._runtime_configuration = (
+            runtime_configuration or CrewAIRuntimeConfiguration()
+        )
         self._models = self._build_models_from_pool(models)
-        self._default_model_name = self._resolve_default_model_name(default_model_name, self._models)
+        self._default_model_name = self._resolve_default_model_name(
+            default_model_name,
+            self._models,
+        )
 
     @property
     def default_model_name(self) -> str:
@@ -45,16 +48,6 @@ class LlmConfiguration:
         """返回全部模型配置。"""
         return self._models
 
-    def list_models_in_runtime_order(self) -> tuple[LlmModelProfile, ...]:
-        """返回 crewAI 运行时应使用的模型顺序。
-
-        crewAI 初版使用默认模型驱动全部会计角色。保留该顺序方法是为了后续扩展
-        “按角色选择模型”时仍有稳定入口。
-        """
-        default_model = self.get_default_model()
-        remaining_models = [model for model in self._models if model.name != default_model.name]
-        return (default_model, *remaining_models)
-
     def get_default_model(self) -> LlmModelProfile:
         """返回默认模型配置。"""
         default_model = self.get_model(self._default_model_name)
@@ -62,7 +55,7 @@ class LlmConfiguration:
             raise ValueError(f"未找到默认模型: {self._default_model_name}")
         return default_model
 
-    def get_model(self, profile_name: str) -> Optional[LlmModelProfile]:
+    def get_model(self, profile_name: str) -> LlmModelProfile | None:
         """按稳定配置名获取模型配置。"""
         for model in self._models:
             if model.name == profile_name:
