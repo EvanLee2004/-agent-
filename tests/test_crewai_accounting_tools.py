@@ -13,8 +13,11 @@ from runtime.crewai.accounting_tool_context_registry import (
 from runtime.crewai.audit_voucher_tool import audit_voucher_tool
 from runtime.crewai.execution_event_scope import open_execution_event_scope
 from runtime.crewai.idempotency_tracker import clear_idempotency
+from runtime.crewai.query_bank_transactions_tool import query_bank_transactions_tool
 from runtime.crewai.query_chart_of_accounts_tool import query_chart_of_accounts_tool
 from runtime.crewai.query_vouchers_tool import query_vouchers_tool
+from runtime.crewai.reconcile_bank_transaction_tool import reconcile_bank_transaction_tool
+from runtime.crewai.record_bank_transaction_tool import record_bank_transaction_tool
 from runtime.crewai.record_voucher_tool import record_voucher_tool
 
 
@@ -48,6 +51,18 @@ def _build_context() -> AccountingToolContext:
         query_chart_of_accounts_router=FakeRouter(
             "query_chart_of_accounts",
             {"count": 1, "items": [{"code": "1001", "name": "库存现金"}]},
+        ),
+        record_bank_transaction_router=FakeRouter(
+            "record_bank_transaction",
+            {"transaction_id": 1, "status": "unreconciled"},
+        ),
+        query_bank_transactions_router=FakeRouter(
+            "query_bank_transactions",
+            {"count": 1, "items": [{"transaction_id": 1}]},
+        ),
+        reconcile_bank_transaction_router=FakeRouter(
+            "reconcile_bank_transaction",
+            {"transaction_id": 1, "status": "reconciled"},
         ),
     )
 
@@ -143,6 +158,60 @@ class CrewAIAccountingToolTest(unittest.TestCase):
         self.assertEqual(context.query_vouchers_router.calls[0]["limit"], 5)
         self.assertEqual(context.audit_voucher_router.calls[0]["voucher_id"], 1)
         self.assertEqual(context.query_chart_of_accounts_router.calls[0], {})
+
+    def test_bank_tools_route_to_expected_router(self):
+        """出纳/银行工具应调用对应业务路由。"""
+        context = _build_context()
+
+        with AccountingToolContextRegistry.open_context_scope(context):
+            with open_execution_event_scope():
+                record_bank_transaction_tool._run(
+                    transaction_date="2026-01-01",
+                    direction="inflow",
+                    amount=100,
+                    account_name="基本户",
+                    counterparty="客户A",
+                    summary="收款",
+                )
+                query_bank_transactions_tool._run(status="unreconciled")
+                reconcile_bank_transaction_tool._run(
+                    transaction_id=1,
+                    linked_voucher_id=2,
+                )
+
+        self.assertEqual(
+            context.record_bank_transaction_router.calls[0]["direction"],
+            "inflow",
+        )
+        self.assertEqual(
+            context.query_bank_transactions_router.calls[0]["status"],
+            "unreconciled",
+        )
+        self.assertEqual(
+            context.reconcile_bank_transaction_router.calls[0]["linked_voucher_id"],
+            2,
+        )
+
+    def test_record_bank_transaction_is_idempotent_in_same_thread(self):
+        """同线程相同银行流水记录参数不会重复调用写路由。"""
+        context = _build_context()
+        runtime_context = DepartmentRuntimeContext()
+        arguments = {
+            "transaction_date": "2026-01-01",
+            "direction": "inflow",
+            "amount": 100,
+            "account_name": "基本户",
+            "counterparty": "客户A",
+            "summary": "收款",
+        }
+
+        with runtime_context.open_scope("thread-1"):
+            with AccountingToolContextRegistry.open_context_scope(context):
+                with open_execution_event_scope():
+                    record_bank_transaction_tool._run(**arguments)
+                    record_bank_transaction_tool._run(**arguments)
+
+        self.assertEqual(len(context.record_bank_transaction_router.calls), 1)
 
 
 if __name__ == "__main__":

@@ -1,17 +1,20 @@
-# 智能会计部门
+# 智能财务部门
 
-面向小企业会计核算场景的多 Agent 系统。当前版本以 **crewAI** 作为底层运行时，本项目只维护会计业务规则、会计工具、协作摘要投影、历史持久化，以及 CLI / API 产品边界。
+面向小企业本地私有部署的多 Agent 财务后端。当前版本以 **crewAI** 作为底层运行时，本项目只维护会计业务规则、出纳/银行流水规则、工具边界、协作摘要投影、历史持久化，以及 CLI / API 产品边界。
 
 ## 产品边界
 
-当前版本只覆盖纯会计核算：
+当前版本先做生产级会计内核，并提供出纳/银行流水的基础主链路：
 
 - 凭证录入：`record_voucher`
 - 凭证查询：`query_vouchers`
 - 凭证复核：`audit_voucher`
 - 会计科目查询：`query_chart_of_accounts`
+- 银行流水记录：`record_bank_transaction`
+- 银行流水查询：`query_bank_transactions`
+- 银行流水对账：`reconcile_bank_transaction`
 
-税务、出纳付款、政策研究和通用财务咨询不在当前版本主链路内。遇到这些请求时，会计部门应明确说明当前版本只支持会计核算，不假装处理。
+税务、报表、政策研究和通用财务咨询不在当前版本主链路内。出纳模块只维护资金流水和对账状态，不直接篡改总账；需要生成凭证时必须通过会计工具完成。
 
 ## 架构
 
@@ -27,25 +30,27 @@ ConversationService
 AccountingDepartmentService
   ├─ CrewAIAccountingRuntimeRepository
   │   ↓
-  │ crewAI Crew / Agent / Task
+  │ crewAI Crew / Agent / Task / Memory
   └─ CollaborationStepFactory + DepartmentWorkbenchService
       ↓
-      execution_events → collaboration_steps → SQLite
+      execution_events → collaboration_steps → SQLite / 查询接口
 ```
 
 关键原则：
 
 - `conversation/` 是纯净层，不直接依赖 `runtime/crewai/*`。
-- crewAI 只负责 Agent/Task/Crew 编排，不保存会计事实。
-- 会计事实以本项目 SQLite 仓储为准，crewAI memory 初版关闭。
+- crewAI 负责 Agent/Task/Crew 编排和受控会话 memory，不保存权威财务事实。
+- 会计事实、银行流水和审核状态以本项目 SQLite 仓储为准，涉及金额、科目、状态时必须调用工具确认。
+- crewAI memory 默认开启，但只用于“刚才那张凭证”“上一笔流水”等上下文引用和偏好理解。
 - `execution_events` 是内部遥测，`collaboration_steps` 是用户可见历史。
-- 固定采用 `Process.sequential`，保证“判断任务 → 执行业务工具 → 复核回复”的流程稳定可审计。
+- 固定采用 `Process.sequential`，保证“任务判断 → 会计执行 → 出纳执行 → 复核回复”的流程稳定可审计。
 
 ## 目录
 
 ```text
 accounting/      会计科目、凭证录入与凭证查询
 audit/           凭证审核
+cashier/         银行流水记录、查询与对账
 runtime/crewai/  crewAI 运行时适配层与工具包装器
 department/      会计部门服务、角色目录与工作台
 conversation/    会话边界与用户可见响应
@@ -112,7 +117,9 @@ echo "MINIMAX_API_KEY=your_key" > .env
   ],
   "crewai_runtime": {
     "process": "sequential",
-    "memory_enabled": false,
+    "memory_enabled": true,
+    "memory_storage_path": ".runtime/crewai/memory",
+    "memory_embedding_provider": "local_hash",
     "cache_enabled": false,
     "verbose": false
   }
@@ -135,8 +142,12 @@ echo "MINIMAX_API_KEY=your_key" > .env
 {
   "reply_text": "...",
   "steps": [],
+  "tool_results": [],
   "voucher_ids": [],
   "audit_summary": null,
+  "context_refs": [],
   "errors": []
 }
 ```
+
+`voucher_ids`、`audit_summary`、`errors` 等结构化字段来自工具结果 envelope，不再从自然语言回复里正则提取。这样 API、CLI 和测试都走同一条后端链路。

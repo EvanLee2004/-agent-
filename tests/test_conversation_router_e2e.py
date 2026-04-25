@@ -11,6 +11,7 @@ from conversation.reply_text_sanitizer import ReplyTextSanitizer
 from department.accounting_department_request import AccountingDepartmentRequest
 from department.accounting_department_role_catalog import AccountingDepartmentRoleCatalog
 from department.accounting_department_service import AccountingDepartmentService
+from department.conversation_context_service import ConversationContextService
 from department.department_role_response import DepartmentRoleResponse
 from department.department_role_runtime_repository import DepartmentRoleRuntimeRepository
 from department.workbench.collaboration_step_factory import CollaborationStepFactory
@@ -77,6 +78,9 @@ class AccountingConversationRouterE2ETest(unittest.TestCase):
                 workbench_service=workbench_service,
                 collaboration_step_factory=CollaborationStepFactory(
                     FinalReplySummaryBuilder()
+                ),
+                conversation_context_service=ConversationContextService(
+                    workbench_service
                 ),
             )
             router = ConversationRouter(

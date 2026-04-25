@@ -1,19 +1,20 @@
 # Agent 开发指南
 
-本文档面向在本仓库中工作的 AI Agent。当前项目目标是以 **crewAI** 作为底层运行时，实现一个边界清晰、可持续演进的**智能会计部门**。
+本文档面向在本仓库中工作的 AI Agent。当前项目目标是以 **crewAI** 作为底层运行时，实现一个边界清晰、可持续演进的**智能财务部门后端**。
 
-crewAI 负责 Agent / Task / Crew 编排；本项目负责会计业务规则、会计工具、角色目录、协作摘要投影、历史持久化，以及 CLI / API 产品边界。不要在本项目里再造通用 Agent 框架。
+crewAI 负责 Agent / Task / Crew / Memory 编排；本项目负责会计业务规则、出纳/银行流水规则、工具目录、角色目录、协作摘要投影、历史持久化，以及 CLI / API 产品边界。不要在本项目里再造通用 Agent 框架。
 
 ## 当前阶段定位
 
-- 产品定位：纯会计核算部门，不是通用财务助手
+- 产品定位：小企业本地私有部署的智能财务部门，当前主路径是会计内核 + 出纳/银行基础能力
 - 技术路线：crewAI runtime + 本项目自维护会计域逻辑
 - 主流程：`Process.sequential`
-- 记忆策略：crewAI memory 初版关闭，会计事实以 SQLite 账簿为准
+- 记忆策略：crewAI memory 开启但受控，只用于会话上下文和偏好；会计事实、银行流水和审核状态以 SQLite 账簿/工具查询为准
 - 明确禁区：
-  - 不恢复旧财务部门、出纳、税务、规则问答主链路
+  - 不恢复旧税务、规则问答、政策研究或通用财务咨询主链路
   - 不新增平行 runtime 或自研 ToolLoop
   - 不把 crewAI 细节泄漏进 `conversation/` 或具体业务模块
+  - 不允许出纳模块直接篡改总账；需要生成凭证时必须通过会计工具完成
 
 ## 快速命令
 
@@ -52,7 +53,7 @@ ConversationService
 AccountingDepartmentService
   ├─ CrewAIAccountingRuntimeRepository
   │   ↓
-  │ crewAI Crew / Agent / Task
+  │ crewAI Crew / Agent / Task / Memory
   └─ CollaborationStepFactory + DepartmentWorkbenchService
       ↓
       execution_events → collaboration_steps → SQLite / 查询接口
@@ -62,10 +63,11 @@ AccountingDepartmentService
 
 - `conversation/` 是纯净层，不依赖 `runtime/crewai/*`
 - 请求级工具上下文由 `AccountingToolContextRegistry.open_context_scope()` 在 `app/` 层管理
-- `AccountingDepartmentService` 只负责开启一回合会计部门协作，不理解 crewAI 内部实现
+- `AccountingDepartmentService` 只负责开启一回合财务部门协作，不理解 crewAI 内部实现
 - crewAI 工具包装器记录 `tool_call` / `tool_result`
-- 固定会计任务投影为 `accounting_intake` / `accounting_execution` / `accounting_review`
+- 固定任务投影为 `accounting_intake` / `accounting_execution` / `cashier_execution` / `accounting_review`
 - `CollaborationStepFactory` 把内部事件投影成用户可见 `collaboration_steps`
+- `tool_result` 必须是结构化 envelope，API 不再从自然语言回复里正则提取业务字段
 
 ## 目录与边界
 
@@ -76,12 +78,14 @@ AccountingDepartmentService
 - `runtime/crewai/`：crewAI 适配层，只做“把 crewAI 桥接到本项目”
 - `accounting/`：会计科目、凭证记录、凭证查询
 - `audit/`：凭证审核
+- `cashier/`：银行流水记录、查询与对账，不直接修改总账
 - `configuration/`：模型池、provider 元数据和 crewAI runtime 配置
 
 ## 当前角色体系
 
 - `accounting-manager`：入口角色，判断请求是否属于会计核算
 - `voucher-accountant`：凭证录入、凭证查询、会计科目查询
+- `cashier-agent`：银行流水记录、查询和对账
 - `ledger-reviewer`：凭证复核和最终回复
 
 入口角色必须唯一；当前默认入口角色是 `accounting-manager`。
@@ -92,8 +96,11 @@ AccountingDepartmentService
 - `query_vouchers`
 - `audit_voucher`
 - `query_chart_of_accounts`
+- `record_bank_transaction`
+- `query_bank_transactions`
+- `reconcile_bank_transaction`
 
-工具包装器只放在 `runtime/crewai/`。具体业务规则仍在 `accounting/` 或 `audit/`，遵循 `router → service → repository → model` 分层。
+工具包装器只放在 `runtime/crewai/`。具体业务规则仍在 `accounting/`、`audit/` 或 `cashier/`，遵循 `router → service → repository → model` 分层。
 
 ## 配置约束
 
@@ -102,7 +109,9 @@ AccountingDepartmentService
 - `config.json` 中的 `crewai_runtime` 是运行时唯一事实来源
 - 当前默认配置：
   - `process = sequential`
-  - `memory_enabled = false`
+  - `memory_enabled = true`
+  - `memory_storage_path = .runtime/crewai/memory`
+  - `memory_embedding_provider = local_hash`
   - `cache_enabled = false`
   - `verbose = false`
 
@@ -175,4 +184,5 @@ AccountingDepartmentService
 - `CLAUDE.md`
 - 对应测试断言
 
-文档中不得声称旧财务部门、出纳、税务、规则问答或其他非会计核算模块仍是当前主路径。
+文档中不得声称旧财务部门、税务、规则问答、政策研究或报表模块仍是当前主路径。
+文档可以说明当前出纳/银行模块是新主路径，但必须同时说明它只维护资金流水和对账状态，不直接改总账。

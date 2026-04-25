@@ -7,6 +7,7 @@ from typing import Optional
 from accounting.account_subject import AccountSubject
 from accounting.chart_of_accounts_repository import ChartOfAccountsRepository
 from configuration.defaults import DEFAULT_DB
+from configuration.sqlite_database_runtime import prepare_sqlite_connection
 
 CREATE_ACCOUNT_SUBJECT_TABLE_SQL = """
 CREATE TABLE IF NOT EXISTS account_subject (
@@ -45,6 +46,7 @@ class SQLiteChartOfAccountsRepository(ChartOfAccountsRepository):
         """初始化科目表。"""
         Path(self._database_path).parent.mkdir(parents=True, exist_ok=True)
         with sqlite3.connect(self._database_path) as connection:
+            prepare_sqlite_connection(connection, enable_wal=True)
             connection.execute(CREATE_ACCOUNT_SUBJECT_TABLE_SQL)
 
     def save_subjects(self, subjects: list[AccountSubject]) -> None:
@@ -53,6 +55,7 @@ class SQLiteChartOfAccountsRepository(ChartOfAccountsRepository):
             return
 
         with sqlite3.connect(self._database_path) as connection:
+            prepare_sqlite_connection(connection)
             connection.executemany(
                 """
                 INSERT INTO account_subject (code, name, category, normal_balance, description)
@@ -70,6 +73,7 @@ class SQLiteChartOfAccountsRepository(ChartOfAccountsRepository):
     def list_subjects(self) -> list[AccountSubject]:
         """列出全部科目。"""
         with sqlite3.connect(self._database_path) as connection:
+            prepare_sqlite_connection(connection)
             connection.row_factory = sqlite3.Row
             rows = connection.execute(
                 """
@@ -83,6 +87,7 @@ class SQLiteChartOfAccountsRepository(ChartOfAccountsRepository):
     def get_subject_by_code(self, subject_code: str) -> Optional[AccountSubject]:
         """按编码读取科目。"""
         with sqlite3.connect(self._database_path) as connection:
+            prepare_sqlite_connection(connection)
             connection.row_factory = sqlite3.Row
             row = connection.execute(
                 """

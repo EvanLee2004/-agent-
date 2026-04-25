@@ -25,10 +25,21 @@ class CollaborationStepResponse(BaseModel):
     summary: str
 
 
+class ToolResultResponse(BaseModel):
+    """结构化工具结果响应。"""
+
+    tool_name: str
+    success: bool
+    payload: dict
+    error_message: str | None = None
+    voucher_ids: list[int] = Field(default_factory=list)
+    context_refs: list[str] = Field(default_factory=list)
+
+
 class AccountingReplyResponse(BaseModel):
     """POST /api/accounting/{thread_id}/reply 响应体。
 
-    API 响应面向“会计核算结果”而不是通用聊天消息。reply_text 保留给用户的
+    API 响应面向“财务部门处理结果”而不是通用聊天消息。reply_text 保留给用户的
     完整自然语言回复；steps 是可展示的协作过程；voucher_ids 和 audit_summary
     是会计业务上最常被上游系统消费的结构化字段；errors 预留给后续批量处理或
     局部失败场景，当前正常路径为空列表。
@@ -36,8 +47,10 @@ class AccountingReplyResponse(BaseModel):
 
     reply_text: str
     steps: list[CollaborationStepResponse]
+    tool_results: list[ToolResultResponse] = Field(default_factory=list)
     voucher_ids: list[int] = Field(default_factory=list)
     audit_summary: str | None = None
+    context_refs: list[str] = Field(default_factory=list)
     errors: list[str] = Field(default_factory=list)
 
 

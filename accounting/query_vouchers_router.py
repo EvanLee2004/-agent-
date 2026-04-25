@@ -65,4 +65,6 @@ class QueryVouchersRouter(ToolRouter):
             tool_name="query_vouchers",
             success=True,
             payload=_build_payload(vouchers),
+            voucher_ids=[voucher.voucher_id for voucher in vouchers],
+            context_refs=[f"voucher:{voucher.voucher_id}" for voucher in vouchers],
         )

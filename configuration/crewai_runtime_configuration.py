@@ -12,13 +12,17 @@ class CrewAIRuntimeConfiguration:
 
     1. `process` 固定默认 sequential，原因是会计核算强调可复核的步骤顺序，
        不适合在初版就让 manager 动态改写角色协作路径。
-    2. `memory_enabled` 默认关闭，原因是会计事实应以本项目 SQLite 账簿为准；
-       如果同时启用 crewAI 记忆，容易出现“模型记住的事实”和账簿事实冲突。
+    2. `memory_enabled` 默认开启，但 memory 只保存受控会话上下文和偏好；
+       会计事实仍以本项目 SQLite 账簿为准，Agent 必须通过工具查账确认。
     3. `cache_enabled` 默认关闭，原因是记账/审核工具具有业务副作用或依赖最新账簿，
        不能让工具结果被运行时缓存后静默复用。
+    4. memory storage 与 embedding provider 必须显式配置，避免本地私有部署中
+       因 crewAI 默认配置静默调用外部 embedding 服务。
     """
 
     process: str = "sequential"
-    memory_enabled: bool = False
+    memory_enabled: bool = True
+    memory_storage_path: str = ".runtime/crewai/memory"
+    memory_embedding_provider: str = "local_hash"
     cache_enabled: bool = False
     verbose: bool = False

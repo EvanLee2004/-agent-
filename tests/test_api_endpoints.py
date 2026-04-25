@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 
 from api.accounting_app import create_app
 from conversation.conversation_response import ConversationResponse
+from conversation.tool_router_response import ToolRouterResponse
 from department.workbench.collaboration_step import CollaborationStep
 from department.workbench.collaboration_step_type import CollaborationStepType
 from department.workbench.execution_event import ExecutionEvent
@@ -31,6 +32,16 @@ class FakeConversationHandler:
                     summary="记录凭证",
                 )
             ],
+            tool_results=[
+                ToolRouterResponse(
+                    tool_name="record_voucher",
+                    success=True,
+                    payload={"voucher_id": 12},
+                    voucher_ids=[12],
+                    context_refs=["voucher:12"],
+                )
+            ],
+            context_refs=["voucher:12"],
         )
 
 
@@ -107,6 +118,8 @@ class AccountingApiEndpointTest(unittest.TestCase):
         self.assertEqual(data["voucher_ids"], [12])
         self.assertEqual(data["errors"], [])
         self.assertIsNone(data["audit_summary"])
+        self.assertEqual(data["tool_results"][0]["tool_name"], "record_voucher")
+        self.assertEqual(data["context_refs"], ["voucher:12"])
         self.assertEqual(data["steps"][0]["tool_name"], "record_voucher")
         self.assertEqual(self.handler.requests[0].thread_id, "thread-1")
 

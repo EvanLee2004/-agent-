@@ -24,6 +24,8 @@ def _build_default_runtime_document() -> dict[str, Any]:
     return {
         "process": runtime_configuration.process,
         "memory_enabled": runtime_configuration.memory_enabled,
+        "memory_storage_path": runtime_configuration.memory_storage_path,
+        "memory_embedding_provider": runtime_configuration.memory_embedding_provider,
         "cache_enabled": runtime_configuration.cache_enabled,
         "verbose": runtime_configuration.verbose,
     }
@@ -225,6 +227,8 @@ class ConfigurationService:
         return CrewAIRuntimeConfiguration(
             process=runtime_document["process"],
             memory_enabled=runtime_document["memory_enabled"],
+            memory_storage_path=runtime_document["memory_storage_path"],
+            memory_embedding_provider=runtime_document["memory_embedding_provider"],
             cache_enabled=runtime_document["cache_enabled"],
             verbose=runtime_document["verbose"],
         )
@@ -237,6 +241,8 @@ class ConfigurationService:
         return {
             "process": runtime_configuration.process,
             "memory_enabled": runtime_configuration.memory_enabled,
+            "memory_storage_path": runtime_configuration.memory_storage_path,
+            "memory_embedding_provider": runtime_configuration.memory_embedding_provider,
             "cache_enabled": runtime_configuration.cache_enabled,
             "verbose": runtime_configuration.verbose,
         }
@@ -265,12 +271,24 @@ class ConfigurationService:
         )
         if process != "sequential":
             raise ConfigurationError("crewai_runtime.process 当前只支持 sequential")
-        return {
+        normalized_runtime = {
             "process": process,
             "memory_enabled": self._read_bool_field(
                 raw_runtime,
                 "memory_enabled",
                 default_runtime_document["memory_enabled"],
+                "crewai_runtime",
+            ),
+            "memory_storage_path": self._read_string_field(
+                raw_runtime,
+                "memory_storage_path",
+                default_runtime_document["memory_storage_path"],
+                "crewai_runtime",
+            ),
+            "memory_embedding_provider": self._read_string_field(
+                raw_runtime,
+                "memory_embedding_provider",
+                default_runtime_document["memory_embedding_provider"],
                 "crewai_runtime",
             ),
             "cache_enabled": self._read_bool_field(
@@ -286,6 +304,22 @@ class ConfigurationService:
                 "crewai_runtime",
             ),
         }
+        self._validate_memory_document(normalized_runtime)
+        return normalized_runtime
+
+    def _validate_memory_document(self, runtime_document: dict[str, Any]) -> None:
+        """校验 crewAI memory 显式配置。
+
+        本地私有部署不能在开启 memory 时落入 crewAI 默认 OpenAI embedding。
+        当前生产口径只允许本项目提供的 local_hash embedding；未来如接入本地
+        embedding 服务，应在这里显式扩展白名单和配置字段。
+        """
+        if not runtime_document["memory_enabled"]:
+            return
+        if runtime_document["memory_embedding_provider"] != "local_hash":
+            raise ConfigurationError(
+                "crewai_runtime.memory_embedding_provider 当前只支持 local_hash"
+            )
 
     def _read_bool_field(
         self,

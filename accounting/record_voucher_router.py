@@ -58,6 +58,8 @@ class RecordVoucherRouter(ToolRouter):
                 tool_name="record_voucher",
                 success=True,
                 payload=_build_success_payload(voucher_draft, voucher_id),
+                voucher_ids=[voucher_id],
+                context_refs=[f"voucher:{voucher_id}"],
             )
         except AccountingError as error:
             return ToolRouterResponse(

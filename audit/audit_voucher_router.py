@@ -44,6 +44,11 @@ class AuditVoucherRouter(ToolRouter):
                 tool_name="audit_voucher",
                 success=True,
                 payload=_build_success_payload(result),
+                voucher_ids=result.audited_voucher_ids,
+                context_refs=[
+                    f"voucher:{voucher_id}"
+                    for voucher_id in result.audited_voucher_ids
+                ],
             )
         except AuditError as error:
             return ToolRouterResponse(

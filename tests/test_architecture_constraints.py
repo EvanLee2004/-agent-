@@ -8,12 +8,11 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
 class ArchitectureConstraintTest(unittest.TestCase):
-    """验证项目已经收敛为 crewAI 会计部门。"""
+    """验证项目已经收敛为 crewAI 财务部门后端。"""
 
     def test_removed_legacy_directories_do_not_exist(self):
         """旧扩展能力和旧运行时目录不应继续存在。"""
         removed_paths = [
-            "cash" + "ier",
             "t" + "ax",
             "ru" + "les",
             "vendor",
@@ -42,7 +41,7 @@ class ArchitectureConstraintTest(unittest.TestCase):
         self.assertEqual(runtime_children, {"crewai"})
 
     def test_current_public_api_module_exists(self):
-        """API 入口应使用会计部门命名。"""
+        """API 入口继续保留会计前缀模块以稳定已有调用方。"""
         self.assertTrue((PROJECT_ROOT / "api" / "accounting_app.py").exists())
         self.assertFalse((PROJECT_ROOT / "api" / ("deer" + "flow_app.py")).exists())
 

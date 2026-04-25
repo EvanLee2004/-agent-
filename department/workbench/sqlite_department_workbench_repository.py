@@ -30,6 +30,7 @@ from department.workbench.department_workbench import DepartmentWorkbench
 from department.workbench.department_workbench_repository import DepartmentWorkbenchRepository
 from department.workbench.execution_event import ExecutionEvent
 from department.workbench.execution_event_type import ExecutionEventType
+from configuration.sqlite_database_runtime import prepare_sqlite_connection
 
 
 # Schema: 多回合历史表
@@ -145,7 +146,9 @@ class SQLiteDepartmentWorkbenchRepository(DepartmentWorkbenchRepository):
 
     def _get_connection(self) -> sqlite3.Connection:
         """获取数据库连接。"""
-        return sqlite3.connect(str(self._database_path))
+        connection = sqlite3.connect(str(self._database_path))
+        prepare_sqlite_connection(connection, enable_wal=True)
+        return connection
 
     def save_turn(
         self,

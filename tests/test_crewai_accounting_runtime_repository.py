@@ -75,7 +75,13 @@ class CrewAIAccountingRuntimeRepositoryTest(unittest.TestCase):
                 )
             )
 
-        self.assertEqual(fake_crew.inputs, {"user_input": "记录一笔收入"})
+        self.assertEqual(
+            fake_crew.inputs,
+            {
+                "user_input": "记录一笔收入",
+                "conversation_context": "无可用历史上下文。",
+            },
+        )
         self.assertEqual(response.reply_text, "凭证已记录，凭证号为 1。")
         self.assertEqual(response.usage.total_tokens, 18)
         self.assertEqual(
@@ -84,12 +90,18 @@ class CrewAIAccountingRuntimeRepositoryTest(unittest.TestCase):
                 ExecutionEventType.TASK_CALL,
                 ExecutionEventType.TASK_CALL,
                 ExecutionEventType.TASK_CALL,
+                ExecutionEventType.TASK_CALL,
                 ExecutionEventType.FINAL_REPLY,
             ],
         )
         self.assertEqual(
-            [event.tool_name for event in response.execution_events[:3]],
-            ["accounting_intake", "accounting_execution", "accounting_review"],
+            [event.tool_name for event in response.execution_events[:4]],
+            [
+                "accounting_intake",
+                "accounting_execution",
+                "cashier_execution",
+                "accounting_review",
+            ],
         )
 
 

@@ -7,6 +7,7 @@ from configuration.llm_configuration import LlmConfiguration
 from conversation.reply_text_sanitizer import ReplyTextSanitizer
 from department.accounting_department_role_catalog import AccountingDepartmentRoleCatalog
 from department.accounting_department_service import AccountingDepartmentService
+from department.conversation_context_service import ConversationContextService
 from department.department_runtime_context import DepartmentRuntimeContext
 from department.workbench.department_workbench_service import DepartmentWorkbenchService
 from department.workbench.sqlite_department_workbench_repository import (
@@ -17,6 +18,7 @@ from department.workbench.final_reply_summary_builder import FinalReplySummaryBu
 from runtime.crewai.crewai_accounting_runtime_repository import (
     CrewAIAccountingRuntimeRepository,
 )
+from runtime.crewai.idempotency_tracker import configure_idempotency_store
 
 from app.department_orchestration_bundle import DepartmentOrchestrationBundle
 
@@ -57,6 +59,7 @@ class DepartmentOrchestrationFactory:
         """
         runtime_context = DepartmentRuntimeContext()
         collaboration_step_factory = CollaborationStepFactory(FinalReplySummaryBuilder())
+        configure_idempotency_store(self._runtime_root / "idempotency.db")
         role_runtime_repository = CrewAIAccountingRuntimeRepository(
             configuration=self._configuration,
             runtime_context=runtime_context,
@@ -71,6 +74,7 @@ class DepartmentOrchestrationFactory:
             role_runtime_repository=role_runtime_repository,
             workbench_service=workbench_service,
             collaboration_step_factory=collaboration_step_factory,
+            conversation_context_service=ConversationContextService(workbench_service),
         )
         return DepartmentOrchestrationBundle(
             accounting_department_service=accounting_department_service,

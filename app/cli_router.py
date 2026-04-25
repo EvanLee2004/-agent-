@@ -70,7 +70,7 @@ class CliRouter:
             当前进程唯一的线程 ID。
         """
         # CLI 会话内复用同一个 thread_id，才能让账簿查询、协作摘要和会话历史
-        # 落在同一条用户线程下。crewAI 初版不启用 memory，会计事实仍以 SQLite 为准。
+        # 落在同一条用户线程下。crewAI memory 只辅助上下文理解，财务事实仍以 SQLite 为准。
         return f"cli-{uuid.uuid4().hex}"
 
     def _read_user_input(self) -> Optional[str]:
@@ -86,5 +86,5 @@ class CliRouter:
     def _print_banner(self) -> None:
         """打印启动信息。"""
         print("=" * 50)
-        print("智能会计部门已启动 - 凭证录入 / 查账 / 科目查询 / 凭证复核（quit 退出）")
+        print("智能财务部门已启动 - 凭证录入 / 查账 / 科目查询 / 凭证复核 / 银行流水（quit 退出）")
         print("=" * 50 + "\n")

@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-智能会计部门 — 面向小企业会计核算场景的多 Agent 系统。底层运行时使用 **crewAI**，会计业务逻辑由本项目自行维护。
+智能财务部门 — 面向小企业本地私有部署的多 Agent 财务后端。底层运行时使用 **crewAI**，会计、审核和出纳/银行业务逻辑由本项目自行维护。
 
 ## 架构摘要
 
@@ -22,8 +22,8 @@ AccountingDepartmentService
 
 - `conversation/` 不依赖 crewAI。
 - `runtime/crewai/` 是唯一运行时适配层。
-- `accounting/` 和 `audit/` 保存业务规则，不依赖 crewAI。
-- 会计事实以 SQLite 账簿为准，crewAI memory 默认关闭。
+- `accounting/`、`audit/` 和 `cashier/` 保存业务规则，不依赖 crewAI。
+- 会计事实和银行流水以 SQLite 账簿为准，crewAI memory 默认开启但只用于受控会话上下文。
 - API / CLI 错误翻译在 `app/` 层完成。
 
 ## 当前角色
@@ -32,6 +32,7 @@ AccountingDepartmentService
 | --- | --- | --- |
 | Manager | `accounting-manager` | 判断请求是否属于会计核算 |
 | Accountant | `voucher-accountant` | 凭证录入、查账、科目查询 |
+| Cashier | `cashier-agent` | 银行流水记录、查询和对账 |
 | Reviewer | `ledger-reviewer` | 凭证复核和最终回复 |
 
 ## 当前工具
@@ -40,6 +41,9 @@ AccountingDepartmentService
 - `query_vouchers`
 - `audit_voucher`
 - `query_chart_of_accounts`
+- `record_bank_transaction`
+- `query_bank_transactions`
+- `reconcile_bank_transaction`
 
 ## 运行命令
 
@@ -59,11 +63,11 @@ AccountingDepartmentService
 - `models[]`
 - `crewai_runtime`
 
-`crewai_runtime.process` 当前只支持 `sequential`。`memory_enabled` 和 `cache_enabled` 默认关闭，避免运行时记忆或缓存与 SQLite 会计事实冲突。
+`crewai_runtime.process` 当前只支持 `sequential`。`memory_enabled` 默认开启，必须显式配置 `memory_storage_path` 和 `memory_embedding_provider=local_hash`；`cache_enabled` 默认关闭，避免有副作用工具被运行时缓存后复用。
 
 ## 维护规则
 
 - 保持高内聚低耦合：业务逻辑在业务模块，运行时桥接在 `runtime/crewai/`。
 - 新增核心代码必须有中文注释，解释设计原因、边界和与 crewAI 的协作点。
 - 不新增横切 `utils.py` / `helpers.py`。
-- 删除不在主路径内的旧模块，避免文档或测试继续暗示旧能力仍存在。
+- 删除不在主路径内的旧模块，避免文档或测试继续暗示税务、报表或政策研究已经可用。

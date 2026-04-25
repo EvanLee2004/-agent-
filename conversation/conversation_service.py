@@ -59,4 +59,6 @@ class ConversationService:
         return ConversationResponse(
             reply_text=self._reply_text_sanitizer.sanitize(department_response.reply_text),
             collaboration_steps=department_response.collaboration_steps,
+            tool_results=department_response.tool_results,
+            context_refs=department_response.context_refs,
         )

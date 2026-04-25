@@ -1,6 +1,6 @@
 """应用服务工厂。
 
-统一创建会计仓储实例，并分别注入到请求处理器和引导器工厂。
+统一创建财务仓储实例，并分别注入到请求处理器和引导器工厂。
 这样做有两点好处：
 1. 所有仓储复用同一组实例，不会因工厂间各自 new 而产生多份连接；
 2. 测试时可以替换为 mock 实例，提升可测试性。
@@ -26,6 +26,12 @@ from app.department_orchestration_bundle import DepartmentOrchestrationBundle
 from app.department_orchestration_factory import DepartmentOrchestrationFactory
 from audit.audit_service import AuditService
 from audit.audit_voucher_router import AuditVoucherRouter
+from cashier.cashier_repository import CashierRepository
+from cashier.cashier_service import CashierService
+from cashier.query_bank_transactions_router import QueryBankTransactionsRouter
+from cashier.reconcile_bank_transaction_router import ReconcileBankTransactionRouter
+from cashier.record_bank_transaction_router import RecordBankTransactionRouter
+from cashier.sqlite_cashier_repository import SQLiteCashierRepository
 from configuration.configuration_service import ConfigurationService
 from configuration.file_configuration_repository import FileConfigurationRepository
 from configuration.llm_configuration import LlmConfiguration
@@ -42,12 +48,12 @@ from runtime.crewai.accounting_tool_context import AccountingToolContext
 class AppServiceFactory:
     """应用服务工厂。
 
-    统一管理会计仓储、部门编排和请求处理器的创建。
+    统一管理财务仓储、部门编排和请求处理器的创建。
 
-    迁移到 crewAI 后，原来的多层 app 工厂已经没有必要继续保留：会计领域服务、
-    工具上下文和会话路由都只在这里装配一次。把装配收口到本类可以减少样板代码，
-    同时仍然保持边界清楚：业务规则在 accounting/audit，crewAI 适配在 runtime/crewai，
-    这里只负责把对象接起来。
+    迁移到 crewAI 后，原来的多层 app 工厂已经没有必要继续保留：会计、审核、
+    出纳领域服务、工具上下文和会话路由都只在这里装配一次。把装配收口到本类可以减少样板代码，
+    同时仍然保持边界清楚：业务规则在 accounting/audit/cashier，
+    crewAI 适配在 runtime/crewai，这里只负责把对象接起来。
     """
 
     def __init__(
@@ -68,6 +74,7 @@ class AppServiceFactory:
         # 延迟创建仓储实例，确保只在真正需要时才初始化
         self._chart_repository: ChartOfAccountsRepository | None = None
         self._journal_repository: JournalRepository | None = None
+        self._cashier_repository: CashierRepository | None = None
         # 延迟创建部门编排 bundle，确保 API handler 与历史查询服务共享同一个工作台实例。
         self._orchestration_bundle: DepartmentOrchestrationBundle | None = None
 
@@ -76,14 +83,17 @@ class AppServiceFactory:
     ) -> tuple[
         ChartOfAccountsRepository,
         JournalRepository,
+        CashierRepository,
     ]:
         """获取或创建仓储实例。"""
         if self._chart_repository is None:
             self._chart_repository = SQLiteChartOfAccountsRepository()
             self._journal_repository = SQLiteJournalRepository()
+            self._cashier_repository = SQLiteCashierRepository()
         return (
             self._chart_repository,
             self._journal_repository,
+            self._cashier_repository,
         )
 
     def _get_or_build_orchestration(self) -> DepartmentOrchestrationBundle:
@@ -126,10 +136,11 @@ class AppServiceFactory:
 
     def build_application_bootstrapper(self) -> ApplicationBootstrapper:
         """构造引导器。"""
-        chart_repo, journal_repo = self._get_repositories()
+        chart_repo, journal_repo, cashier_repo = self._get_repositories()
         return ApplicationBootstrapperFactory().build(
             chart_repository=chart_repo,
             journal_repository=journal_repo,
+            cashier_repository=cashier_repo,
         )
 
     def _build_conversation_router(
@@ -152,22 +163,33 @@ class AppServiceFactory:
     def _build_accounting_tool_context(self) -> AccountingToolContext:
         """构造 crewAI 工具可见的会计业务上下文。
 
-        这里直接装配四个工具路由，而不是再绕一层一次性 factory。原因是当前会计部门
-        工具目录很小，显式构造更容易审查依赖边界：写账/查账只依赖 AccountingService，
-        审核只依赖 JournalRepository，科目查询只依赖 ChartOfAccountsService。
+        这里直接装配工具路由，而不是再绕一层一次性 factory。原因是当前财务部门
+        工具目录仍然很小，显式构造更容易审查依赖边界：写账/查账只依赖 AccountingService，
+        审核只依赖 JournalRepository，科目查询只依赖 ChartOfAccountsService，银行流水
+        只依赖 CashierService。
         """
-        chart_repository, journal_repository = self._get_repositories()
+        (
+            chart_repository,
+            journal_repository,
+            cashier_repository,
+        ) = self._get_repositories()
         chart_service = ChartOfAccountsService(chart_repository)
         accounting_service = AccountingService(
             journal_repository=journal_repository,
             chart_of_accounts_service=chart_service,
             recorded_by=self._role_catalog.get_department_display_name(),
         )
+        cashier_service = CashierService(cashier_repository)
         return AccountingToolContext(
             record_voucher_router=RecordVoucherRouter(accounting_service),
             query_vouchers_router=QueryVouchersRouter(accounting_service),
             audit_voucher_router=AuditVoucherRouter(AuditService(journal_repository)),
             query_chart_of_accounts_router=QueryChartOfAccountsRouter(chart_service),
+            record_bank_transaction_router=RecordBankTransactionRouter(cashier_service),
+            query_bank_transactions_router=QueryBankTransactionsRouter(cashier_service),
+            reconcile_bank_transaction_router=ReconcileBankTransactionRouter(
+                cashier_service
+            ),
         )
 
     @staticmethod

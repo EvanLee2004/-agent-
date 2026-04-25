@@ -75,7 +75,9 @@ class ConfigurationServiceTest(unittest.TestCase):
             configuration.runtime_configuration,
             CrewAIRuntimeConfiguration(
                 process="sequential",
-                memory_enabled=False,
+                memory_enabled=True,
+                memory_storage_path=".runtime/crewai/memory",
+                memory_embedding_provider="local_hash",
                 cache_enabled=False,
                 verbose=False,
             ),
@@ -117,7 +119,9 @@ class ConfigurationServiceTest(unittest.TestCase):
         self.assertIsNotNone(repository.saved_config_data)
         runtime_data = repository.saved_config_data["crewai_runtime"]
         self.assertEqual(runtime_data["process"], "sequential")
-        self.assertFalse(runtime_data["memory_enabled"])
+        self.assertTrue(runtime_data["memory_enabled"])
+        self.assertEqual(runtime_data["memory_storage_path"], ".runtime/crewai/memory")
+        self.assertEqual(runtime_data["memory_embedding_provider"], "local_hash")
         self.assertFalse(runtime_data["cache_enabled"])
         self.assertTrue(runtime_data["verbose"])
         model_data = repository.saved_config_data["models"][0]
@@ -125,6 +129,25 @@ class ConfigurationServiceTest(unittest.TestCase):
         self.assertNotIn("supports_thinking", model_data)
         self.assertNotIn("supports_vision", model_data)
         self.assertNotIn("max_retries", model_data)
+
+    def test_rejects_implicit_external_memory_embedding(self):
+        """开启 memory 时不允许使用未受控的外部 embedding provider。"""
+        repository = FakeConfigurationRepository(
+            _build_config(
+                {
+                    "process": "sequential",
+                    "memory_enabled": True,
+                    "memory_storage_path": ".runtime/crewai/memory",
+                    "memory_embedding_provider": "openai",
+                }
+            )
+        )
+        service = ConfigurationService(repository, ProviderCatalog())
+
+        with self.assertRaises(ConfigurationError) as context:
+            service.ensure_configuration()
+
+        self.assertIn("memory_embedding_provider", str(context.exception))
 
 
 if __name__ == "__main__":

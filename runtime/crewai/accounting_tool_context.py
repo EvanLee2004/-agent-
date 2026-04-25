@@ -6,6 +6,9 @@ from accounting.query_chart_of_accounts_router import QueryChartOfAccountsRouter
 from accounting.query_vouchers_router import QueryVouchersRouter
 from accounting.record_voucher_router import RecordVoucherRouter
 from audit.audit_voucher_router import AuditVoucherRouter
+from cashier.query_bank_transactions_router import QueryBankTransactionsRouter
+from cashier.reconcile_bank_transaction_router import ReconcileBankTransactionRouter
+from cashier.record_bank_transaction_router import RecordBankTransactionRouter
 
 
 @dataclass(frozen=True)
@@ -23,3 +26,6 @@ class AccountingToolContext:
     query_vouchers_router: QueryVouchersRouter
     audit_voucher_router: AuditVoucherRouter
     query_chart_of_accounts_router: QueryChartOfAccountsRouter
+    record_bank_transaction_router: RecordBankTransactionRouter
+    query_bank_transactions_router: QueryBankTransactionsRouter
+    reconcile_bank_transaction_router: ReconcileBankTransactionRouter

@@ -11,6 +11,7 @@ from accounting.journal_voucher import JournalVoucher
 from accounting.query_vouchers_query import QueryVouchersQuery
 from accounting.record_voucher_command import RecordVoucherCommand
 from configuration.defaults import DEFAULT_DB
+from configuration.sqlite_database_runtime import prepare_sqlite_connection
 
 
 CREATE_VOUCHER_TABLE_SQL = """
@@ -177,7 +178,7 @@ class SQLiteJournalRepository(JournalRepository):
         """初始化凭证存储。"""
         _ensure_database_directory(self._database_path)
         with sqlite3.connect(self._database_path) as connection:
-            connection.execute("PRAGMA foreign_keys = ON")
+            prepare_sqlite_connection(connection, enable_wal=True)
             _create_tables(connection)
             self._ensure_reviewed_by_column(connection)
 
@@ -185,7 +186,7 @@ class SQLiteJournalRepository(JournalRepository):
         """创建凭证。"""
         voucher = command.voucher_draft
         with sqlite3.connect(self._database_path) as connection:
-            connection.execute("PRAGMA foreign_keys = ON")
+            prepare_sqlite_connection(connection)
             cursor = connection.execute(
                 INSERT_VOUCHER_SQL,
                 (
@@ -249,6 +250,7 @@ class SQLiteJournalRepository(JournalRepository):
     ) -> None:
         """更新凭证状态。"""
         with sqlite3.connect(self._database_path) as connection:
+            prepare_sqlite_connection(connection)
             cursor = connection.execute(
                 """
                 UPDATE journal_voucher
@@ -269,6 +271,7 @@ class SQLiteJournalRepository(JournalRepository):
     ) -> list[JournalVoucher]:
         """查询凭证及其分录。"""
         with sqlite3.connect(self._database_path) as connection:
+            prepare_sqlite_connection(connection)
             connection.row_factory = sqlite3.Row
             voucher_rows = connection.execute(
                 f"{SELECT_VOUCHER_COLUMNS_SQL} {where_sql} ORDER BY v.id DESC LIMIT ?",

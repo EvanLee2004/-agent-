@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass, field
 
+from conversation.tool_router_response import ToolRouterResponse
 from department.workbench.collaboration_step import CollaborationStep
 
 
@@ -11,3 +12,5 @@ class AccountingDepartmentResponse:
 
     reply_text: str
     collaboration_steps: list[CollaborationStep] = field(default_factory=list)
+    tool_results: list[ToolRouterResponse] = field(default_factory=list)
+    context_refs: list[str] = field(default_factory=list)

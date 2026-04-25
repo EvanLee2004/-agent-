@@ -6,9 +6,9 @@ set -euo pipefail
 # 是为了避免用户在别的路径执行 `./clear_db.sh` 时误删错位置或清理不完整。
 PROJECT_ROOT="$(cd "$(dirname "$0")" && pwd)"
 
-# crewAI 初版不启用运行时记忆，会计事实只以 SQLite 账簿为准。
-# 删除 `.runtime/crewai` 与 `.runtime/api` 是为了清理工作台历史和本地运行态，
-# 避免“账簿清空了，但协作历史还显示上一轮结果”的假一致状态。
+# crewAI memory 现在只保存受控会话上下文，不是财务事实来源。
+# 清理数据库时必须同时删除 `.runtime/crewai` 与 `.runtime/api`，否则账簿已清空，
+# 但记忆、幂等记录或协作历史仍可能让下一轮对话误以为旧凭证还存在。
 rm -f "$PROJECT_ROOT/data/ledger.db"
 rm -rf "$PROJECT_ROOT/.runtime/crewai"
 rm -rf "$PROJECT_ROOT/.runtime/api"

@@ -4,6 +4,7 @@ from accounting.chart_of_accounts_repository import ChartOfAccountsRepository
 from accounting.chart_of_accounts_service import ChartOfAccountsService
 from accounting.journal_repository import JournalRepository
 from app.application_bootstrapper import ApplicationBootstrapper
+from cashier.cashier_repository import CashierRepository
 
 
 class ApplicationBootstrapperFactory:
@@ -17,6 +18,7 @@ class ApplicationBootstrapperFactory:
         self,
         chart_repository: ChartOfAccountsRepository | None = None,
         journal_repository: JournalRepository | None = None,
+        cashier_repository: CashierRepository | None = None,
     ) -> ApplicationBootstrapper:
         """构造引导器实例。
 
@@ -32,12 +34,15 @@ class ApplicationBootstrapperFactory:
             SQLiteChartOfAccountsRepository,
         )
         from accounting.sqlite_journal_repository import SQLiteJournalRepository
+        from cashier.sqlite_cashier_repository import SQLiteCashierRepository
 
         chart_repository = chart_repository or SQLiteChartOfAccountsRepository()
         journal_repository = journal_repository or SQLiteJournalRepository()
+        cashier_repository = cashier_repository or SQLiteCashierRepository()
         chart_service = ChartOfAccountsService(chart_repository)
         return ApplicationBootstrapper(
             chart_repository,
             journal_repository,
             chart_service,
+            cashier_repository,
         )

@@ -15,7 +15,9 @@
   ],
   "crewai_runtime": {
     "process": "sequential",
-    "memory_enabled": false,
+    "memory_enabled": true,
+    "memory_storage_path": ".runtime/crewai/memory",
+    "memory_embedding_provider": "local_hash",
     "cache_enabled": false,
     "verbose": false
   }

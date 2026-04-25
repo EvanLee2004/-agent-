@@ -3,7 +3,7 @@
 from department.accounting_department_role import AccountingDepartmentRole
 
 
-_DEPARTMENT_DISPLAY_NAME = "智能会计部门"
+_DEPARTMENT_DISPLAY_NAME = "智能财务部门"
 
 
 class AccountingDepartmentRoleCatalog:
@@ -13,6 +13,7 @@ class AccountingDepartmentRoleCatalog:
         self._roles = (
             AccountingDepartmentRole("accounting-manager", is_entry_role=True),
             AccountingDepartmentRole("voucher-accountant"),
+            AccountingDepartmentRole("cashier-agent"),
             AccountingDepartmentRole("ledger-reviewer"),
         )
 
